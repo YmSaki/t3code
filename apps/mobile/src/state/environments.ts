@@ -47,6 +47,15 @@ export function useEnvironments() {
   };
 }
 
+/** Connected environments in a stable order, for reads fanned out to every machine. */
+export function useConnectedEnvironmentIds(): ReadonlyArray<EnvironmentId> {
+  const { environments } = useEnvironments();
+  return environments
+    .filter((environment) => environment.connection.phase === "connected")
+    .map((environment) => environment.environmentId)
+    .sort();
+}
+
 /** The user's machines as `@` mention candidates, drawn with their machine kind. */
 export function useMentionableEnvironments(): ReadonlyArray<ComposerEnvironmentCandidate> {
   const { environments } = useEnvironments();
