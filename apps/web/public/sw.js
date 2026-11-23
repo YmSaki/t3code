@@ -29,8 +29,13 @@ self.addEventListener("push", (event) => {
         }
         if (typeof payload.url === "string" && payload.url.length > 0) {
           targetUrl = payload.url;
-        } else if (typeof payload.threadId === "string" && payload.threadId.length > 0) {
-          targetUrl = `/threads/${encodeURIComponent(payload.threadId)}`;
+        } else if (
+          typeof payload.environmentId === "string" &&
+          payload.environmentId.length > 0 &&
+          typeof payload.threadId === "string" &&
+          payload.threadId.length > 0
+        ) {
+          targetUrl = `/${encodeURIComponent(payload.environmentId)}/${encodeURIComponent(payload.threadId)}`;
         }
       }
     } catch {

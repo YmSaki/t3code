@@ -22,7 +22,7 @@ export interface BrowserPushSubscriptionPayload {
   readonly keys: WebPushSubscriptionKeys;
 }
 
-export function urlBase64ToUint8Array(base64Url: string): Uint8Array<ArrayBuffer> {
+function urlBase64ToUint8Array(base64Url: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
   const base64 = (base64Url + padding).replaceAll("-", "+").replaceAll("_", "/");
   const raw = atob(base64);
@@ -34,7 +34,7 @@ export function urlBase64ToUint8Array(base64Url: string): Uint8Array<ArrayBuffer
   return bytes;
 }
 
-export function arrayBufferToBase64Url(buffer: ArrayBuffer | null): string {
+function arrayBufferToBase64Url(buffer: ArrayBuffer | null): string {
   if (buffer === null) return "";
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -78,9 +78,7 @@ export function getWebPushSupportStatus(): WebPushSupportStatus {
   };
 }
 
-export async function registerWebPushServiceWorker(
-  swUrl = "/sw.js",
-): Promise<ServiceWorkerRegistration> {
+async function registerWebPushServiceWorker(swUrl = "/sw.js"): Promise<ServiceWorkerRegistration> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     throw new Error("Service workers are not supported in this browser.");
   }
@@ -88,7 +86,7 @@ export async function registerWebPushServiceWorker(
   return navigator.serviceWorker.ready;
 }
 
-export async function getBrowserPushSubscription(): Promise<PushSubscription | null> {
+async function getBrowserPushSubscription(): Promise<PushSubscription | null> {
   const support = getWebPushSupportStatus();
   if (!support.supported) return null;
   const existingRegistration = await navigator.serviceWorker.getRegistration("/");

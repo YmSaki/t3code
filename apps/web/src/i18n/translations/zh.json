@@ -3259,10 +3259,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "位于打开此页面的计算机上"
-      ]
+      "c": [" ", "位于打开此页面的计算机上"]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3274,10 +3271,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "· 运行它的任何人都会获得此访问权限"
-      ]
+      "c": [" ", "· 运行它的任何人都会获得此访问权限"]
     }
   ],
   "c54cc9c75db9dc58": "请只批准你刚刚发起的登录。",
@@ -6719,18 +6713,10 @@
     },
     " turns"
   ],
-  "3f6165e0831a907c": "Enable PM orchestration mode",
   "4e7b1ec9fd0a1c2a": "Start PM session for {name}",
-  "a4f3d82236add6fc": "Could not update PM kill switch",
-  "d7cea4763da5b828": "Could not stop active PM workers",
   "2bcd83726f29629c": "Could not change thread role",
   "d15872ec61972755": "Toggle PM role for this thread",
-  "4686718cda9b78ce": "PM mode",
   "a591f9613f3f7731": "Start PM Session",
-  "413536667e81c4ba": "Kill switch on",
-  "91c065cb6382904a": "Stop all workers",
-  "7b0d0be595c0d5ce": "Resume delegation",
-  "57802dc90314fa3e": "Pause delegation",
   "3434195c56a433ea": "Worker thread",
   "1bbacb0632211351": "PM thread",
   "32fe2ebd935fa02d": "网络错误",
@@ -9443,8 +9429,8 @@
     },
     "中关联此机器。关闭后会停止所有访客链接。"
   ],
-  "bff0033ea41eb38e": [
-    "让此处的智能体在你的其他机器上工作，也让其他机器的智能体在此处工作。请在每台机器上开启此功能，然后在",
+  "24f7126bcd358d7e": [
+    "让此处的智能体在你的其他机器上工作，也让其他机器的智能体在此处工作。请在每台机器上保持此功能开启，然后在",
     " ",
     {
       "t": "Link",

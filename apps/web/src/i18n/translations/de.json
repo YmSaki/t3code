@@ -3256,10 +3256,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "auf dem Computer, der diese Seite geöffnet hat"
-      ]
+      "c": [" ", "auf dem Computer, der diese Seite geöffnet hat"]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3271,10 +3268,7 @@
     {
       "t": "span",
       "i": 2,
-      "c": [
-        " ",
-        "· wer es ausführt, erhält diesen Zugriff"
-      ]
+      "c": [" ", "· wer es ausführt, erhält diesen Zugriff"]
     }
   ],
   "c54cc9c75db9dc58": "Genehmige nur eine Anmeldung, die du gerade selbst gestartet hast.",
@@ -6709,18 +6703,10 @@
     },
     " turns"
   ],
-  "3f6165e0831a907c": "Enable PM orchestration mode",
   "4e7b1ec9fd0a1c2a": "Start PM session for {name}",
-  "a4f3d82236add6fc": "Could not update PM kill switch",
-  "d7cea4763da5b828": "Could not stop active PM workers",
   "2bcd83726f29629c": "Could not change thread role",
   "d15872ec61972755": "Toggle PM role for this thread",
-  "4686718cda9b78ce": "PM mode",
   "a591f9613f3f7731": "Start PM Session",
-  "413536667e81c4ba": "Kill switch on",
-  "91c065cb6382904a": "Stop all workers",
-  "7b0d0be595c0d5ce": "Resume delegation",
-  "57802dc90314fa3e": "Pause delegation",
   "3434195c56a433ea": "Worker thread",
   "1bbacb0632211351": "PM thread",
   "32fe2ebd935fa02d": "Netzwerkfehler",
@@ -9427,8 +9413,8 @@
     },
     ". Beim Ausschalten werden alle Gastlinks beendet."
   ],
-  "bff0033ea41eb38e": [
-    "Lass Agenten hier auf deinen anderen Rechnern arbeiten und deren Agenten hier. Schalte es für jeden Rechner ein und verknüpfe sie dann unter",
+  "24f7126bcd358d7e": [
+    "Lass Agenten hier auf deinen anderen Rechnern arbeiten und deren Agenten hier. Lass es auf jedem Rechner an und verknüpfe sie dann unter",
     " ",
     {
       "t": "Link",

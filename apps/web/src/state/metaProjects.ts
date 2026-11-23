@@ -1,6 +1,5 @@
 import {
   createMetaProjectEnvironmentAtoms,
-  type MetaProjectContextResult,
   type MetaProjectRollupData,
   type MetaProjectTreeResult,
 } from "@t3tools/client-runtime/state/metaProjects";
@@ -9,7 +8,6 @@ import type {
   MetaProject,
   MetaProjectId,
   MetaProjectListResult,
-  ProjectId,
 } from "@t3tools/contracts";
 
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -81,26 +79,6 @@ export function useMetaProjectRollup(
       : metaProjectEnvironment.rollup({
           environmentId,
           input: { metaProjectId },
-        }),
-  );
-}
-
-export function useMetaProjectContext(
-  environmentId: EnvironmentId | null,
-  input: {
-    readonly metaProjectId?: MetaProjectId | undefined;
-    readonly environmentId?: EnvironmentId | undefined;
-    readonly projectId?: ProjectId | undefined;
-    readonly format?: "hybrid" | "xml" | "markdown" | undefined;
-    readonly maxChars?: number | undefined;
-  } | null,
-): EnvironmentQueryView<MetaProjectContextResult> {
-  return useEnvironmentQuery(
-    environmentId === null || input === null
-      ? null
-      : metaProjectEnvironment.context({
-          environmentId,
-          input,
         }),
   );
 }

@@ -9,9 +9,7 @@ import type { ReactNode } from "react";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 
-export function useSelfHostUiPolicy(
-  requestedEnvironmentId?: EnvironmentId | null,
-): SelfHostUiPolicy {
+function useSelfHostUiPolicy(requestedEnvironmentId?: EnvironmentId | null): SelfHostUiPolicy {
   const settings =
     useAtomValue(
       requestedEnvironmentId

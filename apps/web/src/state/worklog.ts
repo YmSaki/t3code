@@ -23,7 +23,7 @@ import { useEnvironmentQuery } from "./query";
 import { environmentSession, sessionHasScope, useEnvironmentScope } from "./session";
 import { useAtomCommand } from "./use-atom-command";
 
-export const worklogEnvironment = createWorklogEnvironmentAtoms(connectionAtomRuntime);
+const worklogEnvironment = createWorklogEnvironmentAtoms(connectionAtomRuntime);
 
 export interface EnvironmentWorklogStatus {
   readonly environmentId: EnvironmentId;

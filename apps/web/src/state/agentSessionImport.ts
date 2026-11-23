@@ -16,7 +16,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironmentQuery } from "./query";
 import { useAtomCommand } from "./use-atom-command";
 
-export const agentSessionImportEnvironment =
+const agentSessionImportEnvironment =
   createAgentSessionImportEnvironmentAtoms(connectionAtomRuntime);
 
 const NO_IMPORT_PERMISSION_ATOM = Atom.make(false).pipe(

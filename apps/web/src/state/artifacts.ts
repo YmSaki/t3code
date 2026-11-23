@@ -5,7 +5,7 @@ import { connectionAtomRuntime } from "../connection/runtime";
 import { useEnvironmentQuery } from "./query";
 import { useAtomCommand } from "./use-atom-command";
 
-export const artifactEnvironment = createArtifactEnvironmentAtoms(connectionAtomRuntime);
+const artifactEnvironment = createArtifactEnvironmentAtoms(connectionAtomRuntime);
 
 export function useThreadArtifacts(
   environmentId: EnvironmentId | null,

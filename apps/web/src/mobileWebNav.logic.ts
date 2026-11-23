@@ -1,4 +1,4 @@
-export const MOBILE_WEB_BREAKPOINT_PX = 768;
+const MOBILE_WEB_BREAKPOINT_PX = 768;
 
 export const MOBILE_WEB_NAV_TABS = ["threads", "projects", "worklog", "settings"] as const;
 export type MobileWebNavTab = (typeof MOBILE_WEB_NAV_TABS)[number];

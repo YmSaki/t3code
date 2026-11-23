@@ -55,7 +55,7 @@ export function isMetaProjectExpanded(
   return state.expandedMetaProjectIds.includes(metaProjectId);
 }
 
-export function setMetaProjectExpanded(
+function setMetaProjectExpanded(
   state: SidebarMetaProjectExpansionState,
   metaProjectId: string,
   expanded: boolean,

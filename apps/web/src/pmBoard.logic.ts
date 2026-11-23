@@ -73,7 +73,7 @@ export function formatPmWorkerElapsed(startedAt: string | null, nowMs: number): 
   return remMinutes === 0 ? `${hours}h` : `${hours}h ${remMinutes}m`;
 }
 
-export function pmPendingPriority(status: PmWorkerStatus): number {
+function pmPendingPriority(status: PmWorkerStatus): number {
   if (status === "waiting_approval") return 0;
   if (status === "waiting_input") return 1;
   return 2;
