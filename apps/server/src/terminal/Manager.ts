@@ -78,6 +78,13 @@ import { expandHomeVariable } from "@t3tools/provider-core/server/pathExpansion"
 import * as ProcessRunner from "../processRunner.ts";
 import * as PortScanner from "../preview/PortScanner.ts";
 import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClient.ts";
+import {
+  BoundedTerminalHistory,
+  DEFAULT_HISTORY_BYTE_LIMIT,
+  type TerminalHistoryPersistenceCursor,
+  historyFilesToEvict,
+  type HistoryFile,
+} from "./History.core.ts";
 import { terminalOutputStream } from "./OutputProtocol.ts";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 
@@ -97,10 +104,8 @@ export {
 };
 
 const DEFAULT_HISTORY_LINE_LIMIT = 5_000;
-const DEFAULT_HISTORY_BYTE_LIMIT = 8 * 1024 * 1024;
 // eCryptfs permits 143-byte names.
 const MAX_HISTORY_FILENAME_BYTES = 143;
-const MAX_HISTORY_CHUNK_LENGTH = 16 * 1024;
 const DEFAULT_PERSIST_DEBOUNCE_MS = 250;
 const DEFAULT_SUBPROCESS_POLL_INTERVAL_MS = 1_000;
 const MAX_SUBPROCESS_POLL_INTERVAL_MS = 60_000;
@@ -951,248 +956,6 @@ const windowsProcessTableSnapshot = Effect.fn("terminal.windowsProcessTableSnaps
   return processTableSnapshotFromProcesses(processes);
 });
 
-interface TerminalHistoryChunk {
-  data: string;
-  byteLength: number;
-  lineBreaks: number;
-}
-
-interface TerminalHistoryPersistenceCursor {
-  readonly generation: number;
-  readonly offset: number;
-  readonly fileBytes: number;
-}
-
-function countLineBreaks(data: string): number {
-  let lineBreaks = 0;
-  for (let index = data.indexOf("\n"); index !== -1; index = data.indexOf("\n", index + 1)) {
-    lineBreaks += 1;
-  }
-  return lineBreaks;
-}
-
-export class BoundedTerminalHistory {
-  private readonly maxLines: number;
-  private readonly maxBytes: number;
-  private chunks: Array<TerminalHistoryChunk | undefined> = [];
-  private start = 0;
-  private byteLength = 0;
-  private lineBreaks = 0;
-  // Reading the old string's tail on each append can force chunk concatenation.
-  private lastCodeUnit: number | undefined;
-  // The terminal parser's state at the first retained code unit, which is where a replay starts.
-  private sequenceState = TERMINAL_SEQUENCE_GROUND;
-  private cachedValue: string | null = "";
-  private generation = 0;
-  private appendedLength = 0;
-
-  constructor(maxLines: number, initial: string, maxBytes = DEFAULT_HISTORY_BYTE_LIMIT) {
-    this.maxLines = maxLines;
-    this.maxBytes = maxBytes;
-    this.append(initial);
-  }
-
-  append(text: string): void {
-    if (text.length === 0) return;
-    this.appendedLength += text.length;
-    this.cachedValue = null;
-    if (this.maxBytes <= 0 || this.maxLines <= 0) {
-      this.clear();
-      if (this.maxBytes > 0 && text.endsWith("\n")) this.appendChunk("\n");
-      return;
-    }
-
-    let offset = 0;
-    const previous = this.chunks.at(-1);
-    const lastCode = this.lastCodeUnit;
-    const firstCode = text.charCodeAt(0);
-    if (
-      previous &&
-      lastCode !== undefined &&
-      lastCode >= 0xd800 &&
-      lastCode <= 0xdbff &&
-      firstCode >= 0xdc00 &&
-      firstCode <= 0xdfff
-    ) {
-      // Joining a split surrogate changes its UTF-8 size from 3 to 4 bytes.
-      // The previous flush may have encoded the lone surrogate as a replacement character.
-      this.generation += 1;
-      previous.data += text[0];
-      previous.byteLength += 1;
-      this.byteLength += 1;
-      this.lastCodeUnit = firstCode;
-      offset = 1;
-      this.trim();
-    }
-
-    while (offset < text.length) {
-      let end = Math.min(offset + MAX_HISTORY_CHUNK_LENGTH, text.length);
-      const before = text.charCodeAt(end - 1);
-      const after = text.charCodeAt(end);
-      if (before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff) {
-        end -= 1;
-      }
-      const data = text.slice(offset, end);
-      // Detach small chunks from large input strings so evicted prefixes can be collected.
-      this.appendChunk(
-        text.length > MAX_HISTORY_CHUNK_LENGTH
-          ? Buffer.from(data, "utf16le").toString("utf16le")
-          : data,
-      );
-      this.trim();
-      offset = end;
-    }
-  }
-
-  private appendChunk(data: string): void {
-    const byteLength = Buffer.byteLength(data);
-    const lineBreaks = countLineBreaks(data);
-    const previous = this.chunks.at(-1);
-    if (previous && previous.data.length + data.length <= MAX_HISTORY_CHUNK_LENGTH) {
-      previous.data += data;
-      previous.byteLength += byteLength;
-      previous.lineBreaks += lineBreaks;
-    } else {
-      this.chunks.push({ data, byteLength, lineBreaks });
-    }
-    this.byteLength += byteLength;
-    this.lineBreaks += lineBreaks;
-    this.lastCodeUnit = data.charCodeAt(data.length - 1);
-    this.cachedValue = null;
-  }
-
-  private discardChunk(): void {
-    const first = this.chunks[this.start]!;
-    this.sequenceState = terminalSequenceStateAfter(this.sequenceState, first.data);
-    this.byteLength -= first.byteLength;
-    this.lineBreaks -= first.lineBreaks;
-    this.chunks[this.start++] = undefined;
-  }
-
-  private trimChunk(offset: number, byteLength: number, lineBreaks: number): void {
-    const first = this.chunks[this.start]!;
-    if (offset === first.data.length) {
-      this.discardChunk();
-      return;
-    }
-    this.sequenceState = terminalSequenceStateAfter(this.sequenceState, first.data, 0, offset);
-    first.data = first.data.slice(offset);
-    first.byteLength -= byteLength;
-    first.lineBreaks -= lineBreaks;
-    this.byteLength -= byteLength;
-    this.lineBreaks -= lineBreaks;
-  }
-
-  private trim(): void {
-    const trailingNewline = this.lastCodeUnit === 10;
-    let linesToDrop = this.lineBreaks + (trailingNewline ? 0 : 1) - this.maxLines;
-    while (linesToDrop > 0) {
-      const first = this.chunks[this.start]!;
-      if (first.lineBreaks < linesToDrop) {
-        linesToDrop -= first.lineBreaks;
-        this.discardChunk();
-        continue;
-      }
-      let offset = 0;
-      for (let line = 0; line < linesToDrop; line += 1) {
-        offset = first.data.indexOf("\n", offset) + 1;
-      }
-      this.trimChunk(offset, Buffer.byteLength(first.data.slice(0, offset)), linesToDrop);
-      linesToDrop = 0;
-    }
-
-    while (this.byteLength > this.maxBytes) {
-      const first = this.chunks[this.start]!;
-      const bytesToDrop = this.byteLength - this.maxBytes;
-      if (first.byteLength <= bytesToDrop) {
-        this.discardChunk();
-        continue;
-      }
-      if (first.byteLength === first.data.length && first.lineBreaks === 0) {
-        this.trimChunk(bytesToDrop, bytesToDrop, 0);
-        continue;
-      }
-      let offset = 0;
-      let bytes = 0;
-      let lineBreaks = 0;
-      while (bytes < bytesToDrop) {
-        const codePoint = first.data.codePointAt(offset)!;
-        bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
-        offset += codePoint <= 0xffff ? 1 : 2;
-        if (codePoint === 10) lineBreaks += 1;
-      }
-      this.trimChunk(offset, bytes, lineBreaks);
-    }
-    // A cut inside a control sequence would replay the rest of it as text.
-    while (this.sequenceState !== TERMINAL_SEQUENCE_GROUND && this.start < this.chunks.length) {
-      const first = this.chunks[this.start]!;
-      const dropped = first.data.slice(0, terminalSequenceEnd(this.sequenceState, first.data));
-      this.trimChunk(dropped.length, Buffer.byteLength(dropped), countLineBreaks(dropped));
-    }
-    if (
-      this.start === this.chunks.length ||
-      (this.start > 2_048 && this.start * 2 >= this.chunks.length)
-    ) {
-      this.chunks = this.chunks.slice(this.start);
-      this.start = 0;
-      if (this.chunks.length === 0) this.lastCodeUnit = undefined;
-    }
-  }
-
-  clear(): void {
-    this.generation += 1;
-    this.appendedLength = 0;
-    this.chunks = [];
-    this.start = 0;
-    this.byteLength = 0;
-    this.lineBreaks = 0;
-    this.lastCodeUnit = undefined;
-    this.sequenceState = TERMINAL_SEQUENCE_GROUND;
-    this.cachedValue = "";
-  }
-
-  persistenceUpdate(previous?: TerminalHistoryPersistenceCursor) {
-    const offset = this.appendedLength;
-    let data: string | undefined;
-    if (previous?.generation === this.generation) {
-      let remaining = offset - previous.offset;
-      const tail: string[] = [];
-      for (let index = this.chunks.length - 1; remaining > 0 && index >= this.start; index -= 1) {
-        const chunk = this.chunks[index]!.data;
-        const suffix = chunk.slice(Math.max(0, chunk.length - remaining));
-        tail.push(suffix);
-        remaining -= suffix.length;
-      }
-      if (remaining === 0) data = tail.toReversed().join("");
-    }
-    // Keep the on-disk log bounded while amortizing compaction across new output.
-    // Readers already cap the plain-text tail by bytes and lines.
-    const append =
-      data !== undefined &&
-      previous !== undefined &&
-      previous.fileBytes + Buffer.byteLength(data) <= this.maxBytes * 2;
-    const output = append && data !== undefined ? data : this.value();
-    return {
-      data: output,
-      append,
-      cursor: {
-        generation: this.generation,
-        offset,
-        fileBytes: (append ? previous.fileBytes : 0) + Buffer.byteLength(output),
-      },
-    };
-  }
-
-  value(): string {
-    if (this.cachedValue !== null) return this.cachedValue;
-    this.cachedValue = this.chunks
-      .slice(this.start)
-      .map((chunk) => chunk!.data)
-      .join("");
-    return this.cachedValue;
-  }
-}
-
 // Pop beyond Ghostty's eight-entry Kitty stacks on both screens before clearing
 // flags. A 1049 round trip preserves the main cursor, text, and scrollback.
 const INHERITED_INPUT_RESET =
@@ -1693,6 +1456,8 @@ interface TerminalManagerOptions {
   logsDir: string;
   historyLineLimit?: number;
   historyByteLimit?: number;
+  historyTotalByteLimit?: number;
+  historyFileLimit?: number;
   ptyAdapter: PtyAdapter.PtyAdapter["Service"];
   shellResolver?: () => string;
   env?: NodeJS.ProcessEnv;
@@ -2282,6 +2047,28 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     yield* registerKillFiber(process, fiber);
   });
 
+  const historyFiles = new Map<string, HistoryFile>();
+  const historyDiskLock = yield* KeyedLock.make<string>();
+  const historyTotalByteLimit = Math.max(
+    historyByteLimit * 2,
+    options.historyTotalByteLimit ?? 128 * 1024 * 1024,
+  );
+  const historyFileLimit = Math.max(1, options.historyFileLimit ?? 512);
+  let historyRevision = 0;
+  const recordHistoryFile = (filePath: string, bytes: number) => {
+    historyFiles.set(filePath, { path: filePath, bytes, modifiedAt: ++historyRevision });
+  };
+  const rotateHistory = Effect.fn("terminal.rotateHistory")(function* () {
+    for (const filePath of historyFilesToEvict(
+      [...historyFiles.values()],
+      historyTotalByteLimit,
+      historyFileLimit,
+    )) {
+      yield* fileSystem.remove(filePath, { force: true });
+      historyFiles.delete(filePath);
+    }
+  });
+
   const persistedHistory = new WeakMap<BoundedTerminalHistory, TerminalHistoryPersistenceCursor>();
   const persistWorker = yield* makeKeyedCoalescingWorker<
     string,
@@ -2303,19 +2090,34 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         return;
       }
 
-      const update = request.history.persistenceUpdate(
-        request.immediate ? undefined : persistedHistory.get(request.history),
-      );
-      if (update.append && update.data.length === 0) return;
-      // An append may partially succeed before failing. Retry from a full snapshot,
-      // never from an uncertain file offset.
-      persistedHistory.delete(request.history);
-      yield* fileSystem
-        .writeFileString(historyPath(threadId, terminalId), update.data, {
-          flag: update.append ? "a" : "w",
-        })
+      yield* historyDiskLock
+        .withLock(
+          "disk",
+          Effect.gen(function* () {
+            const update = request.history.persistenceUpdate(
+              request.immediate || !historyFiles.has(historyPath(threadId, terminalId))
+                ? undefined
+                : persistedHistory.get(request.history),
+            );
+            if (update.append && update.data.length === 0) return;
+            // An append may partially succeed before failing. Retry from a full snapshot,
+            // never from an uncertain file offset.
+            persistedHistory.delete(request.history);
+            const filePath = historyPath(threadId, terminalId);
+            // A failed truncate can leave the old file intact, so reserve its size until success.
+            recordHistoryFile(
+              filePath,
+              Math.max(historyFiles.get(filePath)?.bytes ?? 0, update.cursor.fileBytes),
+            );
+            yield* rotateHistory();
+            yield* fileSystem.writeFileString(filePath, update.data, {
+              flag: update.append ? "a" : "w",
+            });
+            recordHistoryFile(filePath, update.cursor.fileBytes);
+            persistedHistory.set(request.history, update.cursor);
+          }),
+        )
         .pipe(
-          Effect.tap(() => Effect.sync(() => persistedHistory.set(request.history, update.cursor))),
           Effect.catch((error) =>
             Effect.logWarning("failed to persist terminal history", {
               threadId,
@@ -2401,6 +2203,20 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     };
   });
 
+  for (const name of yield* fileSystem.readDirectory(logsDir)) {
+    const filePath = path.join(logsDir, name);
+    if (name.startsWith(".history-")) {
+      yield* fileSystem.remove(filePath, { force: true }).pipe(Effect.orDie);
+    } else if (name.endsWith(".log")) {
+      const info = yield* fileSystem.stat(filePath).pipe(Effect.orDie);
+      if (info.type !== "File") continue;
+      const modifiedAt = Option.getOrUndefined(info.mtime)?.getTime() ?? 0;
+      historyFiles.set(filePath, { path: filePath, bytes: Number(info.size), modifiedAt });
+      historyRevision = Math.max(historyRevision, modifiedAt);
+    }
+  }
+  yield* rotateHistory().pipe(Effect.orDie);
+
   const readHistory = Effect.fn("terminal.readHistory")(function* (
     threadId: string,
     terminalId: string,
@@ -2426,25 +2242,31 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       const history = new BoundedTerminalHistory(historyLineLimit, raw, historyByteLimit);
       const capped = history.value();
       if (migrating || truncated || capped !== raw) {
-        const write = Effect.gen(function* () {
-          const temporaryPath = yield* fileSystem.makeTempFileScoped({
-            directory: logsDir,
-            prefix: ".history-",
-          });
-          yield* fileSystem.writeFileString(temporaryPath, capped);
-          yield* fileSystem.rename(temporaryPath, nextPath);
-        }).pipe(
-          Effect.scoped,
-          Effect.mapError(
-            (cause) =>
-              new TerminalHistoryError({
-                operation: migrating ? "migrate" : "truncate",
-                threadId,
-                terminalId,
-                cause,
-              }),
-          ),
-        );
+        const write = historyDiskLock
+          .withLock(
+            "disk",
+            Effect.gen(function* () {
+              const temporaryPath = yield* fileSystem.makeTempFileScoped({
+                directory: logsDir,
+                prefix: ".history-",
+              });
+              yield* fileSystem.writeFileString(temporaryPath, capped);
+              yield* fileSystem.rename(temporaryPath, nextPath);
+              recordHistoryFile(nextPath, Buffer.byteLength(capped));
+              yield* rotateHistory();
+            }).pipe(Effect.scoped),
+          )
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new TerminalHistoryError({
+                  operation: migrating ? "migrate" : "truncate",
+                  threadId,
+                  terminalId,
+                  cause,
+                }),
+            ),
+          );
         yield* migrating
           ? write
           : write.pipe(
@@ -2459,6 +2281,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       }
       if (migrating) {
         yield* fileSystem.remove(sourcePath, { force: true }).pipe(
+          Effect.tap(() => Effect.sync(() => historyFiles.delete(sourcePath))),
           Effect.catch((error) =>
             Effect.logWarning("failed to remove legacy terminal history", {
               threadId,
@@ -2483,6 +2306,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         Effect.gen(function* () {
           if (yield* historyExists(filePath)) {
             yield* fileSystem.remove(filePath, { force: true });
+            historyFiles.delete(filePath);
           }
         }).pipe(
           Effect.catch((error) =>
@@ -2512,6 +2336,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       ),
       (name) =>
         fileSystem.remove(path.join(logsDir, name), { force: true }).pipe(
+          Effect.tap(() => Effect.sync(() => historyFiles.delete(path.join(logsDir, name)))),
           Effect.catch((error) =>
             Effect.logWarning("failed to delete terminal histories for thread", {
               threadId,
@@ -3266,6 +3091,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         session: TerminalSessionState,
       ) {
         cleanupProcessHandles(session);
+        yield* persistHistory(session.threadId, session.terminalId, session.history);
         if (!session.process) return;
         yield* clearKillFiber(session.process);
         yield* runKillEscalation(session.process, session.threadId, session.terminalId);
