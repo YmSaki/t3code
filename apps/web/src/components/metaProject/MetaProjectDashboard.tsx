@@ -1,3 +1,4 @@
+import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type {
   EnvironmentId,
@@ -11,10 +12,10 @@ import type {
   RollupPullRequestEntry,
   RollupThreadEntry,
 } from "@t3tools/shared/metaProjectRollup.core";
+import { useNavigate } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
 import {
   AlertCircleIcon,
-  BotIcon,
   ExternalLinkIcon,
   FolderGit2Icon,
   LayersIcon,
@@ -27,8 +28,9 @@ import {
   UploadIcon,
   RadarIcon,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 
+import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import {
@@ -38,7 +40,10 @@ import {
 } from "../../state/metaProjects";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
+import { UnifiedImportWizard } from "../import/UnifiedImportWizard";
+import { PmSessionLaunchButton } from "../pm/PmLaunchControls";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
+import { RepoMonitorPanel } from "../repoMonitor/RepoMonitorPanel";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -60,7 +65,6 @@ export type MetaProjectDashboardTab =
 export interface MetaProjectDashboardProps {
   readonly environmentId: EnvironmentId | null;
   readonly metaProjectId: MetaProjectId;
-  readonly onStartPmThread?: (metaProject: MetaProject) => void;
   readonly onOpenThread?: (ref: {
     readonly environmentId: EnvironmentId;
     readonly projectId: ProjectId;
@@ -71,14 +75,6 @@ export interface MetaProjectDashboardProps {
     readonly projectId: ProjectId;
   }) => void;
   readonly onDeleted?: (metaProjectId: MetaProjectId) => void;
-  readonly renderRepoMonitors?: (context: {
-    readonly metaProject: MetaProject;
-    readonly environmentId: EnvironmentId;
-  }) => ReactNode;
-  readonly renderImport?: (context: {
-    readonly metaProject: MetaProject;
-    readonly environmentId: EnvironmentId;
-  }) => ReactNode;
 }
 
 function threadStatusVariant(status: RollupThreadEntry["status"]) {
@@ -161,6 +157,8 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
   const gt = useGT();
   const { environments } = useEnvironments();
   const allProjects = useProjects();
+  const navigate = useNavigate();
+  const handleNewThread = useNewThreadHandler();
 
   const metaProjectQuery = useMetaProject(props.environmentId, props.metaProjectId, {
     includeArchived: true,
@@ -187,6 +185,7 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
   const [savingInstructions, setSavingInstructions] = useState(false);
   const [togglingPin, setTogglingPin] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [monitorMemberKey, setMonitorMemberKey] = useState<string | null>(null);
 
   if (props.environmentId === null) {
     return (
@@ -365,6 +364,13 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
   ];
 
   const PullRequestIcon = PullRequestGlyph.pullRequest;
+  const memberKey = (member: MetaProject["members"][number]) =>
+    `${member.environmentId}:${member.projectId}`;
+  const monitorMember =
+    metaProject.members.find((member) => memberKey(member) === monitorMemberKey) ??
+    metaProject.members[0] ??
+    null;
+  const pmLaunchMember = metaProject.members[0] ?? null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-gutter-both bg-background">
@@ -409,12 +415,17 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {props.onStartPmThread !== undefined ? (
-              <Button size="sm" onClick={() => props.onStartPmThread?.(metaProject)}>
-                <BotIcon className="size-4" />
-                <T>Start PM Thread</T>
-              </Button>
-            ) : null}
+            <PmSessionLaunchButton
+              metaProjectId={metaProject.id}
+              metaProjectName={metaProject.title}
+              disabled={pmLaunchMember === null}
+              onLaunchPmSession={async () => {
+                if (pmLaunchMember === null) return;
+                await handleNewThread(
+                  scopeProjectRef(pmLaunchMember.environmentId, pmLaunchMember.projectId),
+                );
+              }}
+            />
             <Button
               size="sm"
               variant="outline"
@@ -786,28 +797,56 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
           ) : null}
 
           {activeTab === "monitors" ? (
-            props.renderRepoMonitors !== undefined ? (
-              props.renderRepoMonitors({ metaProject, environmentId: props.environmentId })
+            monitorMember === null ? (
+              <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                <T>Add a repository to this Meta-Project to configure repo monitors.</T>
+              </p>
             ) : (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                <T>
-                  Configure event-driven repository monitors for member repositories in Settings.
-                </T>
+              <div className="space-y-3">
+                {metaProject.members.length > 1 ? (
+                  <ToggleGroup
+                    value={[memberKey(monitorMember)]}
+                    onValueChange={(values) => {
+                      const next = values[0];
+                      if (next !== undefined) setMonitorMemberKey(next);
+                    }}
+                    className="flex-wrap"
+                  >
+                    {metaProject.members.map((member) => (
+                      <Toggle key={memberKey(member)} value={memberKey(member)} size="sm">
+                        <FolderGit2Icon className="size-3.5" />
+                        <span>
+                          {member.label ??
+                            projectByKey.get(`${member.environmentId}\u0000${member.projectId}`)
+                              ?.title ??
+                            member.projectId}
+                        </span>
+                      </Toggle>
+                    ))}
+                  </ToggleGroup>
+                ) : null}
+                <RepoMonitorPanel
+                  key={memberKey(monitorMember)}
+                  environmentId={monitorMember.environmentId}
+                  projectId={monitorMember.projectId}
+                  onOpenThread={({ environmentId, threadId }) => {
+                    void navigate({
+                      to: "/$environmentId/$threadId",
+                      params: { environmentId, threadId },
+                    });
+                  }}
+                />
               </div>
             )
           ) : null}
 
           {activeTab === "import" ? (
-            props.renderImport !== undefined ? (
-              props.renderImport({ metaProject, environmentId: props.environmentId })
-            ) : (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                <T>
-                  Import local agent sessions and project rules into this Meta-Project from
-                  Settings.
-                </T>
-              </div>
-            )
+            <UnifiedImportWizard
+              environmentId={props.environmentId}
+              initialMetaProjectId={metaProject.id}
+              availableMetaProjects={[{ id: metaProject.id, title: metaProject.title }]}
+              onImported={() => rollupQuery.refresh()}
+            />
           ) : null}
         </section>
       </div>

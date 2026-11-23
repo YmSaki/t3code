@@ -62,6 +62,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   BugIcon,
+  CalendarClockIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -70,6 +71,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  LayersIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -80,8 +82,10 @@ import {
   PinIcon,
   PinOffIcon,
   PlugIcon,
+  RadarIcon,
   SquarePenIcon,
   TextSearchIcon,
+  UploadIcon,
   UserPlusIcon,
 } from "lucide-react";
 import { openThreadFind } from "./chat/threadFindStore";
@@ -120,6 +124,7 @@ import { readLocalApi } from "../localApi";
 import { configuredHostedAppUrl } from "../hostedPairing";
 import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { filesystemEnvironment, useFilesystemReadAccess } from "../state/filesystem";
+import { useMetaProjects } from "../state/metaProjects";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
@@ -500,6 +505,7 @@ function OpenCommandPaletteDialog(props: {
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
+  const metaProjectsQuery = useMetaProjects(primaryEnvironmentId);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const paletteRouteTarget = useThreadRouteTarget();
@@ -1760,6 +1766,56 @@ function OpenCommandPaletteDialog(props: {
       await navigate({ to: "/usage" });
     },
   });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:worklog",
+    searchTerms: ["worklog", "calendar", "timeline", "history", "time", "log"],
+    title: gt("Open worklog"),
+    icon: <CalendarClockIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/worklog" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:repo-monitors",
+    searchTerms: ["repo", "monitor", "monitors", "watch", "events", "automation", "rules"],
+    title: gt("Open repo monitors"),
+    icon: <RadarIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/settings/repo-monitors" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:import-sessions",
+    searchTerms: ["import", "sessions", "history", "claude", "codex", "cursor", "migrate"],
+    title: gt("Import agent sessions"),
+    icon: <UploadIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/settings/import" });
+    },
+  });
+
+  for (const metaProject of metaProjectsQuery.data?.metaProjects ?? []) {
+    actionItems.push({
+      kind: "action",
+      value: `action:workspace:${metaProject.id}`,
+      searchTerms: ["workspace", "meta-project", "meta project", metaProject.title],
+      title: metaProject.title,
+      description: gt("Workspace"),
+      icon: <LayersIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({
+          to: "/workspace/$metaProjectId",
+          params: { metaProjectId: metaProject.id },
+        });
+      },
+    });
+  }
 
   for (const direction of [1, -1] as const) {
     const title =
