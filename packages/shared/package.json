@@ -662,6 +662,94 @@
     "./assistantInsights": {
       "types": "./src/assistantInsights.ts",
       "import": "./src/assistantInsights.ts"
+    },
+    "./artifactBridge.core": {
+      "types": "./src/artifactBridge.core.ts",
+      "import": "./src/artifactBridge.core.ts"
+    },
+    "./artifactState.core": {
+      "types": "./src/artifactState.core.ts",
+      "import": "./src/artifactState.core.ts"
+    },
+    "./icalGenerator.core": {
+      "types": "./src/icalGenerator.core.ts",
+      "import": "./src/icalGenerator.core.ts"
+    },
+    "./importNormalizer.core": {
+      "types": "./src/importNormalizer.core.ts",
+      "import": "./src/importNormalizer.core.ts"
+    },
+    "./markdownArtifact.core": {
+      "types": "./src/markdownArtifact.core.ts",
+      "import": "./src/markdownArtifact.core.ts"
+    },
+    "./metaProjectContext.core": {
+      "types": "./src/metaProjectContext.core.ts",
+      "import": "./src/metaProjectContext.core.ts"
+    },
+    "./metaProjectRollup.core": {
+      "types": "./src/metaProjectRollup.core.ts",
+      "import": "./src/metaProjectRollup.core.ts"
+    },
+    "./metaProjectTree.core": {
+      "types": "./src/metaProjectTree.core.ts",
+      "import": "./src/metaProjectTree.core.ts"
+    },
+    "./metaProjectValidation.core": {
+      "types": "./src/metaProjectValidation.core.ts",
+      "import": "./src/metaProjectValidation.core.ts"
+    },
+    "./nodeHealth.core": {
+      "types": "./src/nodeHealth.core.ts",
+      "import": "./src/nodeHealth.core.ts"
+    },
+    "./pmContextBuilder.core": {
+      "types": "./src/pmContextBuilder.core.ts",
+      "import": "./src/pmContextBuilder.core.ts"
+    },
+    "./pmGuard.core": {
+      "types": "./src/pmGuard.core.ts",
+      "import": "./src/pmGuard.core.ts"
+    },
+    "./pushNotificationPolicy.core": {
+      "types": "./src/pushNotificationPolicy.core.ts",
+      "import": "./src/pushNotificationPolicy.core.ts"
+    },
+    "./repoMonitorEval.core": {
+      "types": "./src/repoMonitorEval.core.ts",
+      "import": "./src/repoMonitorEval.core.ts"
+    },
+    "./repoMonitorGuard.core": {
+      "types": "./src/repoMonitorGuard.core.ts",
+      "import": "./src/repoMonitorGuard.core.ts"
+    },
+    "./repoMonitorPresets.core": {
+      "types": "./src/repoMonitorPresets.core.ts",
+      "import": "./src/repoMonitorPresets.core.ts"
+    },
+    "./repoMonitorPrompt.core": {
+      "types": "./src/repoMonitorPrompt.core.ts",
+      "import": "./src/repoMonitorPrompt.core.ts"
+    },
+    "./selfHostUiPolicy.core": {
+      "types": "./src/selfHostUiPolicy.core.ts",
+      "import": "./src/selfHostUiPolicy.core.ts"
+    },
+    "./workerBrief.core": {
+      "types": "./src/workerBrief.core.ts",
+      "import": "./src/workerBrief.core.ts"
+    },
+    "./worklogGrouping.core": {
+      "types": "./src/worklogGrouping.core.ts",
+      "import": "./src/worklogGrouping.core.ts"
+    },
+    "./worklogLayout.core": {
+      "types": "./src/worklogLayout.core.ts",
+      "import": "./src/worklogLayout.core.ts"
+    },
+    "./worklogStats.core": {
+      "types": "./src/worklogStats.core.ts",
+      "import": "./src/worklogStats.core.ts"
     }
   },
   "scripts": {

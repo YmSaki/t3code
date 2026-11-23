@@ -76,6 +76,23 @@ describe("injectHtmlRenderBootstrap", () => {
       injected.indexOf("<html><head>"),
     );
     expect(injected).toContain('<meta name="viewport" content="width=device-width');
+    expect(injected).not.toContain("t3Artifact");
+  });
+
+  it("injects the optional window.t3Artifact bridge when artifactBridge options are given", () => {
+    const html = "<!doctype html><html><head><title>App</title></head><body></body></html>";
+    const injected = injectHtmlRenderBootstrap(html, {
+      artifactBridge: {
+        artifactId: "artifact-42",
+        initialState: { filter: "open" },
+        initialStateVersion: 3,
+        secret: "nonce-secret-1",
+      },
+    });
+    expect(injected).toContain("t3Artifact");
+    expect(injected).toContain('"artifact-42"');
+    expect(injected).toContain('"nonce-secret-1"');
+    expect(injected).toContain('"filter":"open"');
   });
 });
 
