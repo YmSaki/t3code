@@ -26,6 +26,7 @@ import { DevReplayHost } from "../components/DevReplayHost";
 import { FirstRunGate } from "../components/onboarding/FirstRunGate";
 import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
+import { SelfHostCloudBannerGuard } from "../components/selfHost/SelfHostCloudBannerGuard";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
 import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
@@ -142,10 +143,20 @@ function RootRouteView() {
   return (
     <ToastProvider>
       <AnchoredToastProvider>
+        <WebPushServiceWorkerRegistration />
         <RootRouteBranch />
       </AnchoredToastProvider>
     </ToastProvider>
   );
+}
+
+function WebPushServiceWorkerRegistration() {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the Web Push service worker with the browser once per page load
+  useEffect(() => {
+    if (isElectron || !window.isSecureContext || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
+  }, []);
+  return null;
 }
 
 function RootRouteBranch() {
@@ -194,7 +205,9 @@ function RootRouteBranch() {
       ) : null}
       {isElectron ? <RunningThreadKeepAlive /> : null}
       <RelayClientInstallDialog />
-      <ConnectOnboardingDialog />
+      <SelfHostCloudBannerGuard>
+        <ConnectOnboardingDialog />
+      </SelfHostCloudBannerGuard>
       <SshPasswordPromptDialog />
       <SnapShotCoordinator />
       <ReopenClosedViewShortcut />
