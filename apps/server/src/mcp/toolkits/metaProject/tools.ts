@@ -24,7 +24,7 @@ const shared = {
   ],
 };
 
-export const MetaProjectListTool = Tool.make("meta_project_list", {
+const MetaProjectListTool = Tool.make("meta_project_list", {
   ...shared,
   description: "List meta-projects.",
   parameters: Schema.Struct({
@@ -35,7 +35,7 @@ export const MetaProjectListTool = Tool.make("meta_project_list", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
-export const MetaProjectGetContextTool = Tool.make("meta_project_get_context", {
+const MetaProjectGetContextTool = Tool.make("meta_project_get_context", {
   ...shared,
   description: "Read shared instructions and repositories for a meta-project.",
   parameters: Schema.Struct({
@@ -56,7 +56,7 @@ export const MetaProjectGetContextTool = Tool.make("meta_project_get_context", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
-export const MetaProjectListMembersTool = Tool.make("meta_project_list_members", {
+const MetaProjectListMembersTool = Tool.make("meta_project_list_members", {
   ...shared,
   description: "List member repositories of a meta-project.",
   parameters: Schema.Struct({

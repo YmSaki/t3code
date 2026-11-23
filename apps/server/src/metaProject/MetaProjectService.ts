@@ -166,6 +166,7 @@ export class MetaProjectService extends Context.Service<
 
 const DEFAULT_LOCAL_ENV_ID = EnvironmentId.make("env-local");
 
+/** @public */
 export const makeWithDataSource = Effect.fn("MetaProjectService.makeWithDataSource")(function* (
   explicitDataSource?: MetaProjectDataSourceShape | undefined,
 ) {
@@ -688,6 +689,7 @@ export const makeWithDataSource = Effect.fn("MetaProjectService.makeWithDataSour
   });
 });
 
+/** @public */
 export const make = makeWithDataSource();
 
 export const layer = Layer.effect(MetaProjectService, make);

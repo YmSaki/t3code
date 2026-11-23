@@ -3,8 +3,8 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { WorklogService } from "./WorklogService.ts";
 
-export const WORKLOG_ICAL_ROUTE_PREFIX = "/api/worklog/ical";
-export const WORKLOG_ICAL_ROUTE = "/api/worklog/ical/:token";
+const WORKLOG_ICAL_ROUTE_PREFIX = "/api/worklog/ical";
+const WORKLOG_ICAL_ROUTE = "/api/worklog/ical/:token";
 
 const NO_STORE_HEADERS = {
   "cache-control": "no-store",
@@ -48,10 +48,7 @@ function stripWeakEtagPrefix(tag: string): string {
   return tag.trim().replace(/^W\//i, "");
 }
 
-export function matchesIfNoneMatch(
-  ifNoneMatchHeader: string | undefined,
-  currentEtag: string,
-): boolean {
+function matchesIfNoneMatch(ifNoneMatchHeader: string | undefined, currentEtag: string): boolean {
   if (ifNoneMatchHeader === undefined || ifNoneMatchHeader.trim().length === 0) {
     return false;
   }

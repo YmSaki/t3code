@@ -3,14 +3,19 @@ import {
   evaluateSelfHostUiPolicy,
   type SelfHostUiPolicy,
 } from "@t3tools/shared/selfHostUiPolicy.core";
+import { buildTailscaleHttpsBaseUrl, readTailscaleStatus } from "@t3tools/tailscale";
+import * as Console from "effect/Console";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import { Command, Flag } from "effect/cli";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
-export const DEFAULT_HUB_HOST = "127.0.0.1";
-export const DEFAULT_HUB_PORT = 3773;
-export const DEFAULT_HUB_TAILSCALE_SERVE_PORT = 443;
+const DEFAULT_HUB_HOST = "127.0.0.1";
+const DEFAULT_HUB_PORT = 3773;
+const DEFAULT_HUB_TAILSCALE_SERVE_PORT = 443;
 
 export interface ResolveSelfHostHubConfigInput {
   readonly environmentRole?: EnvironmentRole | undefined;
@@ -247,6 +252,7 @@ export class SelfHostHubCli extends Context.Service<
   }
 >()("t3/cli/hub/SelfHostHubCli") {}
 
+/** @public */
 export const make = (dependencies: SelfHostHubCliDependencies) =>
   Effect.sync(() => {
     const prepareHubGuide: SelfHostHubCli["Service"]["prepareHubGuide"] = Effect.fn(
@@ -308,6 +314,7 @@ export const make = (dependencies: SelfHostHubCliDependencies) =>
 export const layerWithDependencies = (dependencies: SelfHostHubCliDependencies) =>
   Layer.effect(SelfHostHubCli, make(dependencies));
 
+/** @public */
 export const layer = layerWithDependencies({
   detectTailscaleServeUrl: () =>
     Effect.succeed({
@@ -322,3 +329,67 @@ export const layer = layerWithDependencies({
       errorMessage: "No probe transport configured.",
     }),
 });
+
+const hubGuideCommand = Command.make("guide", {
+  host: Flag.String("host").pipe(
+    Flag.withDescription("Host the hub server binds, as workers on the tailnet reach it."),
+    Flag.optional,
+  ),
+  port: Flag.Int("port").pipe(
+    Flag.withDescription("Port the hub server listens on."),
+    Flag.optional,
+  ),
+  tailscaleServePort: Flag.Int("tailscale-serve-port").pipe(
+    Flag.withDescription("HTTPS port Tailscale Serve publishes the hub on."),
+    Flag.optional,
+  ),
+  pairingToken: Flag.String("pairing-token").pipe(
+    Flag.withDescription("A pairing token from `t3 pair`, to print a ready pairing URL."),
+    Flag.optional,
+  ),
+}).pipe(
+  Command.withDescription("Print how to run this machine as a self-hosted hub and pair workers."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const hub = yield* SelfHostHubCli.pipe(
+        Effect.provide(
+          layerWithDependencies({
+            // Without Tailscale the guide falls back to the local origin and says how to enable Serve.
+            detectTailscaleServeUrl: (_port, httpsPort) =>
+              readTailscaleStatus.pipe(
+                Effect.map(({ magicDnsName }) => ({
+                  available: magicDnsName !== null,
+                  url:
+                    magicDnsName === null
+                      ? null
+                      : buildTailscaleHttpsBaseUrl({ magicDnsName, servePort: httpsPort }),
+                })),
+                Effect.orElseSucceed(() => ({ available: false, url: null })),
+                Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+              ),
+            probeTarget: () =>
+              Effect.succeed({
+                reachable: false,
+                authenticated: false,
+                latencyMs: null,
+                errorMessage: "The guide does not probe workers.",
+              }),
+          }),
+        ),
+      );
+      const guide = yield* hub.prepareHubGuide({
+        host: Option.getOrUndefined(flags.host),
+        port: Option.getOrUndefined(flags.port),
+        tailscaleServePort: Option.getOrUndefined(flags.tailscaleServePort),
+        pairingToken: Option.getOrNull(flags.pairingToken),
+      });
+      yield* Console.log(guide.lines.join("\n"));
+    }),
+  ),
+);
+
+export const hubCommand = Command.make("hub").pipe(
+  Command.withDescription("Set up this machine as a self-hosted hub for linked workers."),
+  Command.withSubcommands([hubGuideCommand]),
+);

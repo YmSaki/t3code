@@ -104,6 +104,8 @@ import { ArtifactToolkit } from "./toolkits/artifact/tools.ts";
 import * as ArtifactHandlers from "./toolkits/artifact/handlers.ts";
 import { RepoMonitorToolkit } from "./toolkits/repoMonitor/tools.ts";
 import * as RepoMonitorHandlers from "./toolkits/repoMonitor/handlers.ts";
+import { WorklogToolkit } from "./toolkits/worklog/tools.ts";
+import * as WorklogHandlers from "./toolkits/worklog/handlers.ts";
 import { MCP_HTTP_PATH } from "../httpCors.ts";
 import { requestUrl } from "../requestUrl.ts";
 
@@ -1391,6 +1393,7 @@ const layerMetaProjectToolkit = toolkitRegistration(MetaProjectToolkit, MetaProj
 const layerPmToolkit = toolkitRegistration(PmToolkit, PmHandlers.layer);
 const layerArtifactToolkit = toolkitRegistration(ArtifactToolkit, ArtifactHandlers.layer);
 const layerRepoMonitorToolkit = toolkitRegistration(RepoMonitorToolkit, RepoMonitorHandlers.layer);
+const layerWorklogToolkit = toolkitRegistration(WorklogToolkit, WorklogHandlers.layer);
 
 /** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
 export const layerTools = Layer.mergeAll(
@@ -1412,6 +1415,7 @@ export const layerTools = Layer.mergeAll(
   layerPmToolkit,
   layerArtifactToolkit,
   layerRepoMonitorToolkit,
+  layerWorklogToolkit,
 );
 
 const layerToolExposure = Layer.effect(

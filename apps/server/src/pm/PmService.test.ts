@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
+  PmDispatchError,
   type PmWorkerPolicy,
   ProjectId,
   ProviderDriverKind,
@@ -20,6 +21,7 @@ const projWeb = ProjectId.make("proj-web");
 const projApi = ProjectId.make("proj-api");
 const pmThreadId = ThreadId.make("thread-pm");
 const standardThreadId = ThreadId.make("thread-std");
+const otherPmThreadId = ThreadId.make("thread-pm-other");
 const codexDriver = ProviderDriverKind.make("codex");
 
 const brief: WorkerContextBrief = {
@@ -83,6 +85,12 @@ it.layer(
           metaProjectId: "meta-t3",
           policy,
         });
+        yield* service.setThreadRole({
+          threadId: otherPmThreadId,
+          role: "pm",
+          metaProjectId: "meta-t3",
+          policy,
+        });
 
         const launchedPrompts: Array<string> = [];
         const batchResult = yield* service.dispatchBatch(
@@ -124,6 +132,17 @@ it.layer(
         ]);
         expect(launchedPrompts[0]).toContain("Verify with vp test run.");
 
+        // An accepted item with no launcher configured fails instead of reporting a fake worker.
+        const unconfiguredLaunch = yield* service
+          .dispatchBatch({
+            pmThreadId: otherPmThreadId,
+            items: [{ clientKey: "x", title: "Unlaunched", targetRepoRole: "frontend", brief }],
+          })
+          .pipe(Effect.flip);
+        expect(unconfiguredLaunch).toBeInstanceOf(PmDispatchError);
+        expect(String(unconfiguredLaunch.cause)).toContain("launcher is not configured");
+        expect((yield* service.getBoardSnapshot(otherPmThreadId)).workers).toEqual([]);
+
         const nestedAttempt = yield* service.dispatchBatch({
           pmThreadId: ThreadId.make("worker-fe"),
           items: [{ clientKey: "sub", title: "Subworker", targetRepoRole: "frontend", brief }],
@@ -161,6 +180,38 @@ it.layer(
         expect(inlineContext?.promptText).toContain("<t3_pm_context>");
         expect(inlineContext?.promptText).toContain("Approve adding the drawer route?");
 
+        // With no stopper configured, nothing is marked stopped.
+        const unconfiguredStop = yield* service
+          .stopAllWorkers({ pmThreadId, activateKillSwitch: false })
+          .pipe(Effect.flip);
+        expect(unconfiguredStop).toBeInstanceOf(PmDispatchError);
+        expect(String(unconfiguredStop.cause)).toContain("stopper is not configured");
+        expect(
+          (yield* service.getBoardSnapshot(pmThreadId)).workers.map((worker) => worker.status),
+        ).toEqual(["waiting_approval", "running"]);
+
+        // One unreachable worker still lets the others stop, and only they are marked cancelled.
+        const attempted: Array<ThreadId> = [];
+        const partial = yield* service
+          .stopAllWorkers(
+            { pmThreadId, activateKillSwitch: false, reason: "Emergency stop" },
+            {
+              stopWorker: ({ workerThreadId }) =>
+                Effect.suspend(() => {
+                  attempted.push(workerThreadId);
+                  return workerThreadId === "worker-fe"
+                    ? Effect.fail(new PmDispatchError({ cause: "unreachable" }))
+                    : Effect.void;
+                }),
+            },
+          )
+          .pipe(Effect.flip);
+        expect(String(partial.cause)).toContain("worker-fe");
+        expect(attempted).toEqual(["worker-fe", "worker-be"]);
+        expect(
+          (yield* service.getBoardSnapshot(pmThreadId)).workers.map((worker) => worker.status),
+        ).toEqual(["waiting_approval", "cancelled"]);
+
         const stoppedIds: Array<ThreadId> = [];
         const stopped = yield* service.stopAllWorkers(
           { pmThreadId, reason: "Emergency stop" },
@@ -172,8 +223,11 @@ it.layer(
           },
         );
         expect(stopped.killSwitchActive).toBe(true);
-        expect(stopped.stoppedWorkerThreadIds).toEqual(["worker-fe", "worker-be"]);
-        expect(stoppedIds).toEqual(["worker-fe", "worker-be"]);
+        expect(stopped.stoppedWorkerThreadIds).toEqual(["worker-fe"]);
+        expect(stoppedIds).toEqual(["worker-fe"]);
+        expect(
+          (yield* service.getBoardSnapshot(pmThreadId)).workers.map((worker) => worker.status),
+        ).toEqual(["cancelled", "cancelled"]);
 
         const afterStop = yield* service.dispatchBatch({
           pmThreadId,

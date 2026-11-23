@@ -1,6 +1,9 @@
 import type { EnvironmentId, ProjectId, RuntimeMode, ThreadId } from "@t3tools/contracts";
 
-import type { RepoMonitorEventKindValue, RepoMonitorFilterCriteria } from "./repoMonitorEval.core.ts";
+import type {
+  RepoMonitorEventKindValue,
+  RepoMonitorFilterCriteria,
+} from "./repoMonitorEval.core.ts";
 
 export type RepoMonitorPresetId =
   | "pr_review_comment_autofix"
@@ -66,7 +69,7 @@ export interface RepoMonitorGeneratedRule {
   readonly updatedAt: string;
 }
 
-export const REPO_MONITOR_PRESETS: ReadonlyArray<RepoMonitorPreset> = [
+const REPO_MONITOR_PRESETS: ReadonlyArray<RepoMonitorPreset> = [
   {
     id: "pr_review_comment_autofix",
     name: "PRレビューコメントに自動対応",

@@ -189,18 +189,25 @@ import * as GuestHttp from "./guest/http.ts";
 import * as PeerHealthMonitor from "./peer/PeerHealthMonitor.ts";
 import * as WebPushStore from "./push/WebPushStore.ts";
 import * as WebPushService from "./push/WebPushService.ts";
+import * as WebPushRuntimeWiring from "./push/WebPushRuntimeWiring.ts";
 import * as MetaProjectStore from "./metaProject/MetaProjectStore.ts";
 import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
+import * as MetaProjectRuntimeWiring from "./metaProject/MetaProjectRuntimeWiring.ts";
 import * as PmStore from "./pm/PmStore.ts";
-import * as PmService from "./pm/PmService.ts";
+import * as PmRuntimeWiring from "./pm/PmRuntimeWiring.ts";
 import * as ArtifactStore from "./artifact/ArtifactStore.ts";
-import * as ArtifactService from "./artifact/ArtifactService.ts";
+import * as ArtifactRuntimeWiring from "./artifact/ArtifactRuntimeWiring.ts";
 import * as RepoMonitorStore from "./repoMonitor/RepoMonitorStore.ts";
-import * as RepoMonitorService from "./repoMonitor/RepoMonitorService.ts";
+import * as RepoMonitorRuntimeWiring from "./repoMonitor/RepoMonitorRuntimeWiring.ts";
+import * as RepoMonitorWebhookRoute from "./repoMonitor/RepoMonitorWebhookRoute.ts";
+import * as BranchHeadProber from "./repoMonitor/BranchHeadProber.ts";
 import * as ExtendedAgentSessionScanner from "./project/importers/ExtendedAgentSessionScanner.ts";
 import * as UnifiedImportService from "./project/importers/UnifiedImportService.ts";
+import * as UnifiedImportThreadPersister from "./project/importers/UnifiedImportThreadPersister.ts";
+import * as EventSink from "./orchestration-v2/EventSink.ts";
+import * as EventStore from "./orchestration-v2/EventStore.ts";
 import * as WorklogStore from "./worklog/WorklogStore.ts";
-import * as WorklogService from "./worklog/WorklogService.ts";
+import * as WorklogRuntimeWiring from "./worklog/WorklogRuntimeWiring.ts";
 import * as WorklogHttpRoute from "./worklog/WorklogHttpRoute.ts";
 import * as LinkThreadHttp from "./peer/linkThreadHttp.ts";
 import * as CloudLink from "./cloud/CloudLink.ts";
@@ -661,6 +668,7 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   Layer.provide(
     RunFinalizationService.layerObserver.pipe(
       Layer.provide(ProjectionStoreV2.layer),
+      Layer.provide(EventStore.layer),
       Layer.provide(layerPullRequestService),
       Layer.provide(RuntimeLayer.layerProjectService),
     ),
@@ -773,7 +781,6 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerProviderInstallationRefresh,
   ProviderInstallation.layer,
   ReplayMarkers.layer,
-  WorklogService.layer.pipe(Layer.provide(WorklogStore.layer)),
   Layer.effectDiscard(ProjectSettingsOverrideSweep.sweep),
 ).pipe(
   Layer.provideMerge(layerOrchestrationApplication),
@@ -885,6 +892,54 @@ const layerCommandReadiness = HttpRouter.middleware(
   { global: true },
 );
 
+const layerPeerCore = PeerMcpClient.layer.pipe(Layer.provideMerge(PeerLinks.layer));
+const layerPeerStack = Layer.mergeAll(
+  PeerForwarding.layer,
+  PeerThreadRelay.layer,
+  PeerClientPairing.layer,
+  PeerHealthMonitor.layer,
+).pipe(Layer.provideMerge(layerPeerCore));
+const layerRemoteDelegation = RemoteDelegation.layer.pipe(
+  Layer.provide(ProjectionStoreV2.layer),
+  Layer.provide(layerPeerStack),
+);
+const layerWebPush = WebPushService.layer.pipe(Layer.provide(WebPushStore.layer));
+const layerMetaProject = MetaProjectService.layer.pipe(
+  Layer.provide(MetaProjectStore.layer),
+  Layer.provide(MetaProjectRuntimeWiring.layer),
+  Layer.provide(layerPeerCore),
+);
+const layerPm = PmRuntimeWiring.layer.pipe(
+  Layer.provide(PmStore.layer),
+  Layer.provide(layerMetaProject),
+  Layer.provide(layerRemoteDelegation),
+);
+const layerArtifact = ArtifactRuntimeWiring.layer.pipe(Layer.provide(ArtifactStore.layer));
+const layerRepoMonitorSnapshotSource = RepoMonitorRuntimeWiring.snapshotSourceLayer.pipe(
+  Layer.provide(BranchHeadProber.layer),
+  Layer.provide(layerPullRequestService),
+  Layer.provide(layerIssueService),
+);
+const layerRepoMonitor = RepoMonitorRuntimeWiring.layer.pipe(
+  Layer.provide(RepoMonitorStore.layer),
+  Layer.provide(layerRepoMonitorSnapshotSource),
+  Layer.provide(layerWebPush),
+);
+const layerUnifiedImport = UnifiedImportService.layer.pipe(
+  Layer.provide(ExtendedAgentSessionScanner.layer()),
+  Layer.provide(
+    UnifiedImportThreadPersister.layer.pipe(
+      Layer.provide(ProjectionStoreV2.layer),
+      Layer.provide(EventStore.layer),
+      Layer.provide(EventSink.layer),
+    ),
+  ),
+);
+const layerWorklog = WorklogRuntimeWiring.layerWithPeers().pipe(
+  Layer.provide(WorklogStore.layer),
+  Layer.provide(layerPeerCore),
+);
+
 const layerMakeRoutes = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
@@ -906,6 +961,7 @@ const layerMakeRoutes = Layer.mergeAll(
     GuestHttp.layer,
     LinkThreadHttp.layer,
     WorklogHttpRoute.layer,
+    RepoMonitorWebhookRoute.layer,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
     PreviewTunnel.routeLayer,
@@ -922,13 +978,23 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.effectDiscard(
     RemoteDelegation.RemoteDelegation.pipe(Effect.flatMap((remote) => remote.start())),
   ),
+  Layer.effectDiscard(WebPushRuntimeWiring.startWebPushNotifications()).pipe(
+    Layer.provide(layerWebPush),
+  ),
+  Layer.effectDiscard(PmRuntimeWiring.startPmWorkerStatusSync()).pipe(Layer.provide(layerPm)),
+  Layer.effectDiscard(RepoMonitorRuntimeWiring.startRepoMonitorLoop(Duration.minutes(1))).pipe(
+    Layer.provide(RepoMonitorStore.layer),
+    Layer.provide(layerRepoMonitor),
+    Layer.provide(layerRepoMonitorSnapshotSource),
+  ),
+  WorklogRuntimeWiring.layerEventSubscription().pipe(Layer.provide(layerWorklog)),
 )
   .pipe(
     Layer.provide(
       PullRequestReviewGuideService.layer.pipe(Layer.provide(PullRequestReviewGuides.layer)),
     ),
     // delegate_task to a linked environment, from /mcp and the follower above.
-    Layer.provide(RemoteDelegation.layer.pipe(Layer.provide(ProjectionStoreV2.layer))),
+    Layer.provide(layerRemoteDelegation),
     // Links agents ask for: shown in a thread from /mcp, answered over WebSocket.
     Layer.provide(PeerLinkRequests.layer),
     // Share the service so HTTP/WS clients single-flight reads and invalidate each other's cached patches.
@@ -943,24 +1009,16 @@ const layerMakeRoutes = Layer.mergeAll(
     ),
     Layer.provide(PreviewBrowser.layer),
     // Links to other environments, shared by clients (WebSocket) and agents (/mcp).
-    Layer.provide(
-      Layer.mergeAll(
-        PeerForwarding.layer,
-        PeerThreadRelay.layer,
-        PeerClientPairing.layer,
-        PeerHealthMonitor.layer,
-      ).pipe(Layer.provideMerge(PeerMcpClient.layer), Layer.provideMerge(PeerLinks.layer)),
-    ),
-    Layer.provide(WebPushService.layer.pipe(Layer.provide(WebPushStore.layer))),
+    Layer.provide(layerPeerStack),
+    Layer.provide(layerWebPush),
   )
   .pipe(
-    Layer.provide(MetaProjectService.layer.pipe(Layer.provide(MetaProjectStore.layer))),
-    Layer.provide(PmService.layer.pipe(Layer.provide(PmStore.layer))),
-    Layer.provide(ArtifactService.layer.pipe(Layer.provide(ArtifactStore.layer))),
-    Layer.provide(RepoMonitorService.layer().pipe(Layer.provide(RepoMonitorStore.layer))),
-    Layer.provide(
-      UnifiedImportService.layer.pipe(Layer.provide(ExtendedAgentSessionScanner.layer())),
-    ),
+    Layer.provide(layerMetaProject),
+    Layer.provide(layerPm),
+    Layer.provide(layerArtifact),
+    Layer.provide(layerRepoMonitor),
+    Layer.provide(layerUnifiedImport),
+    Layer.provide(layerWorklog),
     Layer.provide(
       SpeechService.layer.pipe(
         Layer.provide(layerServerSettings),
@@ -1408,6 +1466,11 @@ const layerMakeServer = Layer.unwrap(
       disableLogger: !config.logWebSocketEvents,
       routerConfig: HTTP_ROUTER_CONFIG,
     }).pipe(
+      Layer.provide(layerWorklog),
+      Layer.provide(layerRepoMonitor),
+      Layer.provide(layerRepoMonitorSnapshotSource),
+      Layer.provide(ProjectionStoreV2.layer),
+      Layer.provide(EventStore.layer),
       withUntracedRequests,
       withRootRequestSpans,
       Layer.tap(() => Deferred.succeed(routesReady, undefined).pipe(Effect.orDie)),

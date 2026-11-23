@@ -2,6 +2,7 @@ import * as NodeSqlite from "node:sqlite";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -188,5 +189,131 @@ describe("ExtendedAgentSessionScanner", () => {
       }).pipe(
         Effect.provide(Layer.provideMerge(ExtendedAgentSessionScanner.layer(), NodeServices.layer)),
       ),
+  );
+
+  it.effect("scans this machine's agent homes when no roots are configured", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const scanner = yield* ExtendedAgentSessionScanner.ExtendedAgentSessionScanner;
+
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-ext-scanner-home-" });
+      const workspaceRoot = path.join(home, "work", "project");
+      const claudeProjectDir = path.join(home, ".claude", "projects", "-work-project");
+      yield* fs.makeDirectory(claudeProjectDir, { recursive: true });
+      yield* fs.writeFileString(
+        path.join(claudeProjectDir, "claude-default-1.jsonl"),
+        [
+          JSON.stringify({
+            type: "user",
+            sessionId: "claude-default-1",
+            cwd: workspaceRoot,
+            timestamp: "2025-01-02T00:00:01.000Z",
+            message: { role: "user", content: "Find my sessions" },
+          }),
+          JSON.stringify({
+            type: "assistant",
+            timestamp: "2025-01-02T00:00:05.000Z",
+            message: { role: "assistant", model: "claude-sonnet-4", content: "Found them." },
+          }),
+        ].join("\n"),
+      );
+      const codexHome = path.join(home, "custom-codex");
+      const codexDayDir = path.join(codexHome, "sessions", "2025", "01", "02");
+      yield* fs.makeDirectory(codexDayDir, { recursive: true });
+      yield* fs.writeFileString(
+        path.join(codexHome, "session_index.jsonl"),
+        JSON.stringify({
+          id: "019f6633-3915-7851-894f-682c41a30fd7",
+          thread_name: "Indexed Codex Name",
+        }),
+      );
+      yield* fs.writeFileString(
+        path.join(
+          codexDayDir,
+          "rollout-2025-01-02T00-01-00-019f6633-3915-7851-894f-682c41a30fd7.jsonl",
+        ),
+        [
+          JSON.stringify({
+            type: "session_meta",
+            payload: { id: "019f6633-3915-7851-894f-682c41a30fd7", cwd: workspaceRoot },
+          }),
+          JSON.stringify({
+            type: "event_msg",
+            timestamp: "2025-01-02T00:01:00.000Z",
+            payload: { type: "user_message", message: "Read CODEX_HOME" },
+          }),
+        ].join("\n"),
+      );
+
+      const scanOut = yield* scanner
+        .scanSessions()
+        .pipe(
+          Effect.provideService(HostProcess.HomeDirectory, home),
+          Effect.provideService(HostProcess.Environment, { CODEX_HOME: codexHome }),
+        );
+
+      expect(
+        scanOut.threads.map((t) => `${t.source}:${t.sessionId}:${t.title}`).toSorted(),
+      ).toEqual([
+        "claudeAgent:claude-default-1:Find my sessions",
+        "codex:019f6633-3915-7851-894f-682c41a30fd7:Indexed Codex Name",
+      ]);
+    }).pipe(
+      Effect.provide(Layer.provideMerge(ExtendedAgentSessionScanner.layer(), NodeServices.layer)),
+    ),
+  );
+
+  it.effect("resolves each platform's default agent homes and their overrides", () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const resolve = (platform: NodeJS.Platform, environment: NodeJS.ProcessEnv) =>
+        ExtendedAgentSessionScanner.resolveDefaultScannerRoots({
+          homeDir: "/home/u",
+          environment,
+          platform,
+          path,
+        });
+
+      expect(resolve("linux", {})).toEqual({
+        claudeDir: path.join("/home/u", ".claude", "projects"),
+        codexDir: path.join("/home/u", ".codex"),
+        piDir: path.resolve(path.join("/home/u", ".pi", "agent"), "sessions"),
+        cursorWorkspaceStorageDir: path.join(
+          "/home/u",
+          ".config",
+          "Cursor",
+          "User",
+          "workspaceStorage",
+        ),
+        opencodeStorageDir: path.join("/home/u", ".local", "share", "opencode", "storage"),
+        antigravityDir: path.join("/home/u", ".gemini", "antigravity"),
+      });
+      const overridden = resolve("linux", {
+        CLAUDE_CONFIG_DIR: "~/claude-alt",
+        XDG_CONFIG_HOME: "/xdg/config",
+        XDG_DATA_HOME: "relative/ignored",
+      });
+      expect(overridden.claudeDir).toBe(path.join(path.resolve("/home/u/claude-alt"), "projects"));
+      expect(overridden.cursorWorkspaceStorageDir).toBe(
+        path.join("/xdg/config", "Cursor", "User", "workspaceStorage"),
+      );
+      expect(overridden.opencodeStorageDir).toBe(
+        path.join("/home/u", ".local", "share", "opencode", "storage"),
+      );
+      expect(resolve("darwin", {}).cursorWorkspaceStorageDir).toBe(
+        path.join(
+          "/home/u",
+          "Library",
+          "Application Support",
+          "Cursor",
+          "User",
+          "workspaceStorage",
+        ),
+      );
+      expect(resolve("win32", {}).cursorWorkspaceStorageDir).toBe(
+        path.join("/home/u", "AppData", "Roaming", "Cursor", "User", "workspaceStorage"),
+      );
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

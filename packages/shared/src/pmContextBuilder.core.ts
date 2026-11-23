@@ -109,7 +109,7 @@ export function isActivePmWorkerStatus(status: PmWorkerStatus): boolean {
   return ACTIVE_WORKER_STATUSES.has(status);
 }
 
-export function isDirectEditSuppressed(
+function isDirectEditSuppressed(
   policy: Pick<PmContextPolicy, "directEditSuppressedProviders">,
   providerDriver: ProviderDriverKind | undefined,
 ): boolean {
@@ -118,7 +118,7 @@ export function isDirectEditSuppressed(
   );
 }
 
-export function renderPmContextMarkdown(
+function renderPmContextMarkdown(
   input: Omit<PmContextBuildInput, "supportsSystemContext" | "userPrompt">,
 ): string {
   const { board, metaProject, providerDriver } = input;
@@ -187,11 +187,11 @@ export function renderPmContextMarkdown(
   return lines.join("\n");
 }
 
-export function wrapInlinePmContext(markdown: string): string {
+function wrapInlinePmContext(markdown: string): string {
   return `<${PM_CONTEXT_TAG}>\n${markdown}\n</${PM_CONTEXT_TAG}>`;
 }
 
-export function prependInlinePmContext(inlinePrefix: string, userPrompt: string): string {
+function prependInlinePmContext(inlinePrefix: string, userPrompt: string): string {
   return userPrompt === "" ? inlinePrefix : `${inlinePrefix}\n\n${userPrompt}`;
 }
 

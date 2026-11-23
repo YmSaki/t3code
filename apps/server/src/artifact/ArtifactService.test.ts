@@ -25,15 +25,65 @@ const environmentId = EnvironmentId.make("env-service");
 const projectId = ProjectId.make("project-service");
 const threadId = ThreadId.make("thread-service");
 
-const testLayer = it.layer(
-  ArtifactService.layer.pipe(
+const makeServiceLayer = (options?: ArtifactService.ArtifactServiceOptions) =>
+  ArtifactService.makeLayer(options).pipe(
     Layer.provideMerge(ArtifactStore.layer),
     Layer.provideMerge(
       Layer.effectDiscard(migration108).pipe(
         Layer.provideMerge(NodeSqliteClient.layer({ filename: ":memory:" })),
       ),
     ),
-  ),
+  );
+
+const testLayer = it.layer(makeServiceLayer());
+
+it.effect("reports startedTurn only from the turn starter's real result", () =>
+  Effect.gen(function* () {
+    const outcomes: Array<
+      Effect.Effect<{ readonly started: boolean }, ArtifactService.ArtifactTurnStartError>
+    > = [
+      Effect.succeed({ started: true }),
+      Effect.succeed({ started: false }),
+      Effect.fail(
+        new ArtifactService.ArtifactTurnStartError({
+          artifactId: ArtifactId.make("art-turn"),
+          cause: "thread not found",
+        }),
+      ),
+    ];
+    const prompts: Array<string> = [];
+    const results = yield* Effect.gen(function* () {
+      const service = yield* ArtifactService.ArtifactService;
+      const id = ArtifactId.make("art-turn");
+      yield* service.create({ id, threadId, kind: "markdown", title: "Plan", content: "# Plan" });
+      const submit = (promptText?: string) =>
+        service.submitUserAction({
+          artifactId: id,
+          action: {
+            actionName: "approve",
+            payload: {},
+            ...(promptText === undefined ? {} : { promptText }),
+          },
+        });
+      const withoutPrompt = yield* submit();
+      const started = yield* submit("Go");
+      const notStarted = yield* submit("Go");
+      const failed = yield* submit("Go");
+      return [withoutPrompt, started, notStarted, failed].map((result) => result.startedTurn);
+    }).pipe(
+      Effect.provide(
+        makeServiceLayer({
+          turnStarter: ({ prompt }) => {
+            prompts.push(prompt);
+            return outcomes.shift() ?? Effect.die("unexpected turn start");
+          },
+        }),
+      ),
+    );
+    expect(results).toEqual([false, true, false, false]);
+    expect(prompts).toHaveLength(3);
+    expect(prompts[0]).toContain("User request: Go");
+  }),
 );
 
 testLayer("ArtifactService", (it) => {
@@ -146,7 +196,8 @@ testLayer("ArtifactService", (it) => {
           securityContext: { expectedSecret: "correct-secret", frameFocused: true },
         });
         expect(accepted.accepted).toBe(true);
-        expect(accepted.startedTurn).toBe(true);
+        // No turn starter is configured, so the recorded action started no turn.
+        expect(accepted.startedTurn).toBe(false);
         expect(accepted.prompt).toContain("approve_item");
         expect(accepted.prompt).toContain("<t3_artifact_state");
 

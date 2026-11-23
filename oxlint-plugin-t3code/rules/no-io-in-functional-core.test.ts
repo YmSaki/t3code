@@ -7,6 +7,8 @@ const RULE_NAME = "t3code/no-io-in-functional-core";
 const core = createOxlintRuleHarness(RULE_NAME, { filename: "fixture.core.ts" });
 const shell = createOxlintRuleHarness(RULE_NAME, { filename: "fixture.ts" });
 const coreTest = createOxlintRuleHarness(RULE_NAME, { filename: "fixture.core.test.ts" });
+const logic = createOxlintRuleHarness(RULE_NAME, { filename: "fixture.logic.ts" });
+const logicTest = createOxlintRuleHarness(RULE_NAME, { filename: "fixture.logic.test.ts" });
 
 describe(RULE_NAME, () => {
   describe("*.core.ts", () => {
@@ -130,6 +132,17 @@ describe(RULE_NAME, () => {
     );
   });
 
+  describe("*.logic.ts", () => {
+    logic.invalid(
+      "reports I/O and nondeterminism like core files",
+      `
+        import * as NodeFS from "node:fs";
+        export const read = () => [NodeFS, Date.now()];
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 2),
+    );
+  });
+
   describe("non-core files", () => {
     shell.valid(
       "ignores shell files",
@@ -151,6 +164,14 @@ describe(RULE_NAME, () => {
         import * as NodeFS from "node:fs";
 
         export const read = () => [NodeFS, Math.random(), process.env.HOME];
+      `,
+    );
+    logicTest.valid(
+      "ignores test files for logic modules",
+      `
+        import * as NodeFS from "node:fs";
+
+        export const read = () => [NodeFS, Date.now()];
       `,
     );
   });

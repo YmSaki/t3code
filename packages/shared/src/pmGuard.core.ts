@@ -79,7 +79,7 @@ export interface PmGuardBatchDecision {
   readonly rejected: ReadonlyArray<PmGuardRejectedItem>;
 }
 
-export const DEFAULT_PM_MAX_DELEGATION_DEPTH = 2;
+const DEFAULT_PM_MAX_DELEGATION_DEPTH = 2;
 
 const ok = <A>(value: A): PmGuardResult<A> => ({ ok: true, value });
 const reject = (reason: PmGuardRejectionReason, detail: string): PmGuardRejection => ({
@@ -131,7 +131,7 @@ export function evaluateDelegationDepth(
   return ok({ childDepth });
 }
 
-export function remainingWorkerSlots(activeWorkerCount: number, maxConcurrentWorkers: number) {
+function remainingWorkerSlots(activeWorkerCount: number, maxConcurrentWorkers: number) {
   return Math.max(0, maxConcurrentWorkers - activeWorkerCount);
 }
 

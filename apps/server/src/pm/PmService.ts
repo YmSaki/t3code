@@ -35,6 +35,7 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
 
 import * as PmStore from "./PmStore.ts";
 
@@ -74,11 +75,15 @@ export type PmWorkerLauncher = (
   request: PmWorkerLaunchRequest,
 ) => Effect.Effect<PmWorkerLaunchResponse, PmDispatchError>;
 
-export type PmWorkerStopper = (input: {
+export interface PmWorkerStopRequest {
   readonly pmThreadId: ThreadId;
   readonly workerThreadId: ThreadId;
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
   readonly reason: string;
-}) => Effect.Effect<void, PmDispatchError>;
+}
+
+export type PmWorkerStopper = (input: PmWorkerStopRequest) => Effect.Effect<void, PmDispatchError>;
 
 export type PmMetaProjectResolver = (
   metaProjectId: string,
@@ -191,12 +196,14 @@ const toBoardWorkerSummary = (record: PmStore.PmWorkerDispatchRecord): PmBoardWo
   updatedAt: record.updatedAt,
 });
 
-const defaultLauncher: PmWorkerLauncher = (request) =>
-  Effect.succeed({
-    workerThreadId: ThreadId.make(`worker:${request.pmThreadId}:${request.clientKey}`),
-    status: "running",
+const notConfigured = (what: "launcher" | "stopper") =>
+  new PmDispatchError({
+    cause: new Error(
+      `PM worker ${what} is not configured; no worker was ${what === "launcher" ? "started" : "stopped"}.`,
+    ),
   });
 
+/** @public */
 export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmServiceOptions) {
   const store = yield* PmStore.PmStore;
 
@@ -348,12 +355,13 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
       });
 
       const itemsByKey = new Map(input.items.map((item) => [item.clientKey, item]));
-      const launcher = options?.launchWorker ?? serviceOptions?.launchWorker ?? defaultLauncher;
+      const launcher = options?.launchWorker ?? serviceOptions?.launchWorker;
       const dispatched: Array<PmDispatchAccepted> = [];
 
       for (const accepted of decision.accepted) {
         const item = itemsByKey.get(accepted.clientKey);
         if (item === undefined) continue;
+        if (launcher === undefined) return yield* notConfigured("launcher");
         const promptPack = buildWorkerBriefPrompt({
           title: item.title,
           brief: item.brief,
@@ -431,16 +439,37 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
     const existingWorkers = yield* store.listWorkersByPmThread(input.pmThreadId);
     const activeWorkers = existingWorkers.filter((worker) => isActivePmWorkerStatus(worker.status));
     const stopper = options?.stopWorker ?? serviceOptions?.stopWorker;
-    if (stopper !== undefined) {
-      for (const worker of activeWorkers) {
-        yield* stopper({
+    // Every worker is attempted; only one its stopper confirmed is recorded as cancelled.
+    const unstopped: Array<{ readonly workerThreadId: ThreadId; readonly cause: unknown }> = [];
+    for (const worker of activeWorkers) {
+      if (stopper === undefined) return yield* notConfigured("stopper");
+      const result = yield* Effect.result(
+        stopper({
           pmThreadId: input.pmThreadId,
           workerThreadId: worker.workerThreadId,
+          environmentId: worker.environmentId,
+          projectId: worker.projectId,
           reason,
-        });
+        }),
+      );
+      if (Result.isFailure(result)) {
+        unstopped.push({ workerThreadId: worker.workerThreadId, cause: result.failure });
+        continue;
       }
+      yield* store.updateWorkerProgress({
+        workerThreadId: worker.workerThreadId,
+        status: "cancelled",
+        summary: reason,
+      });
     }
-    yield* store.cancelActiveWorkers(input.pmThreadId, reason);
+    if (unstopped.length > 0) {
+      return yield* new PmDispatchError({
+        cause: new AggregateError(
+          unstopped.map((entry) => entry.cause),
+          `Could not stop workers: ${unstopped.map((entry) => entry.workerThreadId).join(", ")}.`,
+        ),
+      });
+    }
     const updatedConfig = yield* getConfig(input.pmThreadId);
     return {
       pmThreadId: input.pmThreadId,
@@ -473,5 +502,3 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
 });
 
 export const makeLayer = (options?: PmServiceOptions) => Layer.effect(PmService, make(options));
-
-export const layer = makeLayer();

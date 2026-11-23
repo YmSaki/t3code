@@ -50,6 +50,7 @@ import { ArtifactService } from "../artifact/ArtifactService.ts";
 import { MetaProjectService } from "../metaProject/MetaProjectService.ts";
 import { PmService } from "../pm/PmService.ts";
 import { RepoMonitorService } from "../repoMonitor/RepoMonitorService.ts";
+import { WorklogService } from "../worklog/WorklogService.ts";
 import { buildCodexAdditionalContext } from "./CodexDeveloperInstructions.ts";
 import { DocumentText } from "./DocumentText.ts";
 import { EnvironmentThemeService } from "../environmentTheme.ts";
@@ -88,6 +89,7 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(GitManager)({}),
   Layer.mock(RemoteDelegation)({}),
   Layer.mock(RepoMonitorService)({}),
+  Layer.mock(WorklogService)({}),
   Layer.mock(ScheduledTaskService)({}),
   Layer.mock(SecretRequests)({}),
   ServerConfig.layerTest(process.cwd(), { prefix: "t3-agent-context-budget-" }),

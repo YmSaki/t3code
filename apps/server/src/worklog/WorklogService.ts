@@ -135,6 +135,11 @@ export class WorklogService extends Context.Service<
     readonly backfillFromOrchestrationV2: (
       options?: BackfillOrchestrationV2Options,
     ) => Effect.Effect<BackfillOrchestrationV2Result, WorklogError>;
+    /** Records the given runs as backfill would, for live turn completions. */
+    readonly recordRuns: (
+      runIds: ReadonlyArray<RunId>,
+      options?: BackfillOrchestrationV2Options,
+    ) => Effect.Effect<BackfillOrchestrationV2Result, WorklogError>;
     readonly ingestExternalSessions: (
       sessions: ReadonlyArray<ExternalCliSessionWorklogInput>,
       options?: IngestExternalSessionsOptions,
@@ -341,6 +346,7 @@ function coreBlockToContract(block: MergedWorklogCoreBlock): MergedWorklogBlock 
   };
 }
 
+/** @public */
 export const make = Effect.fn("WorklogService.make")(function* (config?: WorklogServiceConfig) {
   const sql = yield* SqlClient.SqlClient;
   const store = yield* WorklogStore;
@@ -357,14 +363,25 @@ export const make = Effect.fn("WorklogService.make")(function* (config?: Worklog
       cause,
     });
 
-  const backfillFromOrchestrationV2: WorklogService["Service"]["backfillFromOrchestrationV2"] =
-    Effect.fn("WorklogService.backfillFromOrchestrationV2")(function* (options) {
-      const envId =
-        options?.environmentId !== undefined && options.environmentId.trim().length > 0
-          ? EnvironmentId.make(options.environmentId.trim())
-          : defaultEnvId;
+  const resolveEnvId = (environmentId: EnvironmentId | string | undefined) =>
+    environmentId !== undefined && environmentId.trim().length > 0
+      ? EnvironmentId.make(environmentId.trim())
+      : defaultEnvId;
 
-      const existingTables = yield* sql<{ readonly name: string }>`
+  // Both backfill and live recording map runs here, so their entries share ids and upsert in place.
+  const syncRuns = Effect.fn("WorklogService.syncRuns")(function* (
+    envId: EnvironmentId,
+    runIds: ReadonlyArray<RunId> | null,
+  ) {
+    if (runIds !== null && runIds.length === 0) return { backfilledCount: 0, entries: [] };
+    const runFilter = (column: "r.run_id" | "run_id") =>
+      runIds === null
+        ? sql`1 = 1`
+        : column === "run_id"
+          ? sql`run_id IN ${sql.in(runIds)}`
+          : sql`r.run_id IN ${sql.in(runIds)}`;
+
+    const existingTables = yield* sql<{ readonly name: string }>`
           SELECT name FROM sqlite_master
           WHERE type = 'table'
             AND name IN (
@@ -374,34 +391,34 @@ export const make = Effect.fn("WorklogService.make")(function* (config?: Worklog
             )
         `.pipe(Effect.mapError(queryFailed("Could not inspect orchestration_v2 tables.")));
 
-      const tableSet = new Set(existingTables.map((row) => row.name));
-      if (
-        !tableSet.has("orchestration_v2_projection_runs") ||
-        !tableSet.has("orchestration_v2_projection_threads")
-      ) {
-        return { backfilledCount: 0, entries: [] };
-      }
+    const tableSet = new Set(existingTables.map((row) => row.name));
+    if (
+      !tableSet.has("orchestration_v2_projection_runs") ||
+      !tableSet.has("orchestration_v2_projection_threads")
+    ) {
+      return { backfilledCount: 0, entries: [] };
+    }
 
-      const nowIso = DateTime.formatIso(yield* DateTime.now);
+    const nowIso = DateTime.formatIso(yield* DateTime.now);
 
-      interface ProjectionBackfillRow {
-        readonly run_id: string;
-        readonly thread_id: string;
-        readonly ordinal: number;
-        readonly provider: string;
-        readonly provider_thread_id: string | null;
-        readonly status: string;
-        readonly requested_at: string;
-        readonly completed_at: string | null;
-        readonly run_payload_json: string;
-        readonly project_id: string;
-        readonly thread_title: string;
-        readonly default_provider: string;
-        readonly thread_updated_at: string;
-        readonly thread_payload_json: string;
-      }
+    interface ProjectionBackfillRow {
+      readonly run_id: string;
+      readonly thread_id: string;
+      readonly ordinal: number;
+      readonly provider: string;
+      readonly provider_thread_id: string | null;
+      readonly status: string;
+      readonly requested_at: string;
+      readonly completed_at: string | null;
+      readonly run_payload_json: string;
+      readonly project_id: string;
+      readonly thread_title: string;
+      readonly default_provider: string;
+      readonly thread_updated_at: string;
+      readonly thread_payload_json: string;
+    }
 
-      const rows = yield* sql<ProjectionBackfillRow>`
+    const rows = yield* sql<ProjectionBackfillRow>`
           SELECT
             r.run_id,
             r.thread_id,
@@ -421,149 +438,162 @@ export const make = Effect.fn("WorklogService.make")(function* (config?: Worklog
           INNER JOIN orchestration_v2_projection_threads t
             ON t.thread_id = r.thread_id
           WHERE t.deleted_at IS NULL
+            AND ${runFilter("r.run_id")}
           ORDER BY r.requested_at ASC, r.ordinal ASC, r.run_id ASC
         `.pipe(Effect.mapError(queryFailed("Could not query orchestration_v2 runs for backfill.")));
 
-      const turnItemCountsByRunId = new Map<
-        string,
-        { readonly commandsCount: number; readonly changedFilesCount: number }
-      >();
+    const turnItemCountsByRunId = new Map<
+      string,
+      { readonly commandsCount: number; readonly changedFilesCount: number }
+    >();
 
-      if (tableSet.has("orchestration_v2_projection_turn_items")) {
-        const itemRows = yield* sql<{
-          readonly run_id: string;
-          readonly type: string;
-          readonly item_count: number;
-        }>`
+    if (tableSet.has("orchestration_v2_projection_turn_items")) {
+      const itemRows = yield* sql<{
+        readonly run_id: string;
+        readonly type: string;
+        readonly item_count: number;
+      }>`
             SELECT
               run_id,
               type,
               COUNT(*) AS item_count
             FROM orchestration_v2_projection_turn_items
             WHERE run_id IS NOT NULL
+              AND ${runFilter("run_id")}
             GROUP BY run_id, type
           `.pipe(Effect.mapError(queryFailed("Could not aggregate turn items for backfill.")));
 
-        for (const itemRow of itemRows) {
-          const current = turnItemCountsByRunId.get(itemRow.run_id) ?? {
-            commandsCount: 0,
-            changedFilesCount: 0,
-          };
-          const lowerType = itemRow.type.toLowerCase();
-          const isCommand = lowerType.includes("command") || lowerType.includes("exec");
-          const isFileChange =
-            lowerType.includes("file") || lowerType.includes("edit") || lowerType.includes("patch");
-          turnItemCountsByRunId.set(itemRow.run_id, {
-            commandsCount: current.commandsCount + (isCommand ? Number(itemRow.item_count) : 0),
-            changedFilesCount:
-              current.changedFilesCount + (isFileChange ? Number(itemRow.item_count) : 0),
-          });
-        }
+      for (const itemRow of itemRows) {
+        const current = turnItemCountsByRunId.get(itemRow.run_id) ?? {
+          commandsCount: 0,
+          changedFilesCount: 0,
+        };
+        const lowerType = itemRow.type.toLowerCase();
+        const isCommand = lowerType.includes("command") || lowerType.includes("exec");
+        const isFileChange =
+          lowerType.includes("file") || lowerType.includes("edit") || lowerType.includes("patch");
+        turnItemCountsByRunId.set(itemRow.run_id, {
+          commandsCount: current.commandsCount + (isCommand ? Number(itemRow.item_count) : 0),
+          changedFilesCount:
+            current.changedFilesCount + (isFileChange ? Number(itemRow.item_count) : 0),
+        });
       }
+    }
 
-      const upsertInputs: Array<StoredWorklogEntryInput> = rows.map((row) => {
-        const runPayload = safeParseJsonObject(row.run_payload_json);
-        const threadPayload = safeParseJsonObject(row.thread_payload_json);
-        const payloadStats =
-          typeof runPayload.stats === "object" && runPayload.stats !== null
-            ? (runPayload.stats as Record<string, unknown>)
-            : {};
-        const itemCounts = turnItemCountsByRunId.get(row.run_id);
+    const upsertInputs: Array<StoredWorklogEntryInput> = rows.map((row) => {
+      const runPayload = safeParseJsonObject(row.run_payload_json);
+      const threadPayload = safeParseJsonObject(row.thread_payload_json);
+      const payloadStats =
+        typeof runPayload.stats === "object" && runPayload.stats !== null
+          ? (runPayload.stats as Record<string, unknown>)
+          : {};
+      const itemCounts = turnItemCountsByRunId.get(row.run_id);
 
-        const providerStr =
-          asNonEmptyString(runPayload.driver) ??
-          asNonEmptyString(row.provider) ??
-          asNonEmptyString(row.default_provider) ??
-          "codex";
-        const providerInstanceStr =
-          asNonEmptyString(runPayload.providerInstanceId) ??
-          asNonEmptyString(threadPayload.providerInstanceId);
-        const modelStr =
-          asNonEmptyString(runPayload.model) ?? asNonEmptyString(threadPayload.model);
-        const projectTitleStr = asNonEmptyString(threadPayload.projectTitle);
-        const summaryStr =
-          asNonEmptyString(runPayload.summary) ?? asNonEmptyString(threadPayload.summary);
-        const threadUrlStr = asNonEmptyString(threadPayload.threadUrl);
-        const role = normalizeThreadRole(
-          runPayload.threadRole ?? threadPayload.threadRole ?? threadPayload.role,
-        );
-        const startedAt = row.requested_at;
-        const endedAt =
-          row.completed_at ??
-          asNonEmptyString(runPayload.updatedAt) ??
-          (row.thread_updated_at >= startedAt ? row.thread_updated_at : nowIso);
-        const status = normalizeRunStatus(row.status, row.completed_at);
-        const turnCount = Math.max(
-          1,
-          asNonNegativeInt(runPayload.turnCount ?? runPayload.turnsCount, 1),
-        );
+      const providerStr =
+        asNonEmptyString(runPayload.driver) ??
+        asNonEmptyString(row.provider) ??
+        asNonEmptyString(row.default_provider) ??
+        "codex";
+      const providerInstanceStr =
+        asNonEmptyString(runPayload.providerInstanceId) ??
+        asNonEmptyString(threadPayload.providerInstanceId);
+      const modelStr = asNonEmptyString(runPayload.model) ?? asNonEmptyString(threadPayload.model);
+      const projectTitleStr = asNonEmptyString(threadPayload.projectTitle);
+      const summaryStr =
+        asNonEmptyString(runPayload.summary) ?? asNonEmptyString(threadPayload.summary);
+      const threadUrlStr = asNonEmptyString(threadPayload.threadUrl);
+      const role = normalizeThreadRole(
+        runPayload.threadRole ?? threadPayload.threadRole ?? threadPayload.role,
+      );
+      const startedAt = row.requested_at;
+      const endedAt =
+        row.completed_at ??
+        asNonEmptyString(runPayload.updatedAt) ??
+        (row.thread_updated_at >= startedAt ? row.thread_updated_at : nowIso);
+      const status = normalizeRunStatus(row.status, row.completed_at);
+      const turnCount = Math.max(
+        1,
+        asNonNegativeInt(runPayload.turnCount ?? runPayload.turnsCount, 1),
+      );
 
-        return {
-          id: `wl-run-${row.run_id}`,
-          sourceKey: `t3_run:${envId}:${row.run_id}`,
-          source: "t3_run",
-          environmentId: envId,
-          provider: ProviderDriverKind.make(providerStr),
-          ...(providerInstanceStr !== undefined
-            ? { providerInstanceId: ProviderInstanceId.make(providerInstanceStr) }
-            : {}),
-          ...(modelStr !== undefined ? { model: modelStr } : {}),
-          projectId: ProjectId.make(row.project_id),
-          ...(projectTitleStr !== undefined ? { projectTitle: projectTitleStr } : {}),
-          threadId: ThreadId.make(row.thread_id),
-          runId: RunId.make(row.run_id),
-          title: row.thread_title,
-          threadRole: role,
-          ...(summaryStr !== undefined ? { summary: summaryStr } : {}),
-          status,
-          startedAt,
-          endedAt,
-          turnCount,
-          stats: {
-            changedFilesCount: NonNegativeInt.make(
-              asNonNegativeInt(
-                payloadStats.changedFilesCount ?? runPayload.changedFilesCount,
-                itemCounts?.changedFilesCount ?? 0,
-              ),
+      return {
+        id: `wl-run-${row.run_id}`,
+        // Keyed by run alone like `id`: live recording and a backfill naming another env must meet.
+        sourceKey: `t3_run:${row.run_id}`,
+        source: "t3_run",
+        environmentId: envId,
+        provider: ProviderDriverKind.make(providerStr),
+        ...(providerInstanceStr !== undefined
+          ? { providerInstanceId: ProviderInstanceId.make(providerInstanceStr) }
+          : {}),
+        ...(modelStr !== undefined ? { model: modelStr } : {}),
+        projectId: ProjectId.make(row.project_id),
+        ...(projectTitleStr !== undefined ? { projectTitle: projectTitleStr } : {}),
+        threadId: ThreadId.make(row.thread_id),
+        runId: RunId.make(row.run_id),
+        title: row.thread_title,
+        threadRole: role,
+        ...(summaryStr !== undefined ? { summary: summaryStr } : {}),
+        status,
+        startedAt,
+        endedAt,
+        turnCount,
+        stats: {
+          changedFilesCount: NonNegativeInt.make(
+            asNonNegativeInt(
+              payloadStats.changedFilesCount ?? runPayload.changedFilesCount,
+              itemCounts?.changedFilesCount ?? 0,
             ),
-            commandsCount: NonNegativeInt.make(
-              asNonNegativeInt(
-                payloadStats.commandsCount ?? runPayload.commandsCount,
-                itemCounts?.commandsCount ?? 0,
-              ),
+          ),
+          commandsCount: NonNegativeInt.make(
+            asNonNegativeInt(
+              payloadStats.commandsCount ?? runPayload.commandsCount,
+              itemCounts?.commandsCount ?? 0,
             ),
-            inputTokens: NonNegativeInt.make(
-              asNonNegativeInt(payloadStats.inputTokens ?? runPayload.inputTokens, 0),
-            ),
-            outputTokens: NonNegativeInt.make(
-              asNonNegativeInt(payloadStats.outputTokens ?? runPayload.outputTokens, 0),
-            ),
-            cachedTokens: NonNegativeInt.make(
-              asNonNegativeInt(
-                payloadStats.cachedTokens ??
-                  payloadStats.cachedInputTokens ??
-                  runPayload.cachedTokens,
-                0,
-              ),
-            ),
-            estimatedCostUsd: asNonNegativeNumber(
-              payloadStats.estimatedCostUsd ??
-                payloadStats.costUsd ??
-                runPayload.estimatedCostUsd ??
-                runPayload.costUsd,
+          ),
+          inputTokens: NonNegativeInt.make(
+            asNonNegativeInt(payloadStats.inputTokens ?? runPayload.inputTokens, 0),
+          ),
+          outputTokens: NonNegativeInt.make(
+            asNonNegativeInt(payloadStats.outputTokens ?? runPayload.outputTokens, 0),
+          ),
+          cachedTokens: NonNegativeInt.make(
+            asNonNegativeInt(
+              payloadStats.cachedTokens ??
+                payloadStats.cachedInputTokens ??
+                runPayload.cachedTokens,
               0,
             ),
-          },
-          ...(threadUrlStr !== undefined ? { threadUrl: threadUrlStr } : {}),
-        };
-      });
-
-      const entries = yield* store.upsertEntries(upsertInputs);
-      return {
-        backfilledCount: entries.length,
-        entries,
+          ),
+          estimatedCostUsd: asNonNegativeNumber(
+            payloadStats.estimatedCostUsd ??
+              payloadStats.costUsd ??
+              runPayload.estimatedCostUsd ??
+              runPayload.costUsd,
+            0,
+          ),
+        },
+        ...(threadUrlStr !== undefined ? { threadUrl: threadUrlStr } : {}),
       };
     });
+
+    const entries = yield* store.upsertEntries(upsertInputs);
+    return {
+      backfilledCount: entries.length,
+      entries,
+    };
+  });
+
+  const backfillFromOrchestrationV2: WorklogService["Service"]["backfillFromOrchestrationV2"] =
+    Effect.fn("WorklogService.backfillFromOrchestrationV2")(function* (options) {
+      return yield* syncRuns(resolveEnvId(options?.environmentId), null);
+    });
+
+  const recordRuns: WorklogService["Service"]["recordRuns"] = Effect.fn(
+    "WorklogService.recordRuns",
+  )(function* (runIds, options) {
+    return yield* syncRuns(resolveEnvId(options?.environmentId), runIds);
+  });
 
   const ingestExternalSessions: WorklogService["Service"]["ingestExternalSessions"] = Effect.fn(
     "WorklogService.ingestExternalSessions",
@@ -914,6 +944,7 @@ export const make = Effect.fn("WorklogService.make")(function* (config?: Worklog
 
   return WorklogService.of({
     backfillFromOrchestrationV2,
+    recordRuns,
     ingestExternalSessions,
     queryWorklog,
     getStats,
@@ -926,6 +957,3 @@ export const make = Effect.fn("WorklogService.make")(function* (config?: Worklog
 });
 
 export const layer = Layer.effect(WorklogService, make());
-
-export const layerWithConfig = (config: WorklogServiceConfig) =>
-  Layer.effect(WorklogService, make(config));

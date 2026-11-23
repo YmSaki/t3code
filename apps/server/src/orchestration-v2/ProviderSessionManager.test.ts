@@ -4830,7 +4830,7 @@ it.effect.each([
     Effect.gen(function* () {
       const state = yield* Ref.make(emptyState);
       const settings = yield* ServerSettings.ServerSettingsService.pipe(
-        Effect.provide(ServerSettings.layerTest()),
+        Effect.provide(ServerSettings.layerTest({ linkedEnvironmentsEnabled: false })),
       );
       const effect = Effect.gen(function* () {
         const eventSink = yield* EventSink.EventSinkV2;
@@ -5674,7 +5674,7 @@ it.effect(
     Effect.gen(function* () {
       const state = yield* Ref.make(emptyState);
       const settings = yield* ServerSettings.ServerSettingsService.pipe(
-        Effect.provide(ServerSettings.layerTest()),
+        Effect.provide(ServerSettings.layerTest({ linkedEnvironmentsEnabled: false })),
       );
       const effect = Effect.gen(function* () {
         const eventSink = yield* EventSink.EventSinkV2;

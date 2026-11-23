@@ -1,7 +1,7 @@
 import type { EnvironmentId, ProjectId, RuntimeMode, ThreadId } from "@t3tools/contracts";
 
-export const DEFAULT_WORKER_BRIEF_MAX_BYTES = 32_768;
-export const BYTES_PER_ESTIMATED_TOKEN = 4;
+const DEFAULT_WORKER_BRIEF_MAX_BYTES = 32_768;
+const BYTES_PER_ESTIMATED_TOKEN = 4;
 const TRUNCATION_NOTICE = "\n... [truncated]";
 const MIN_SECTION_CONTENT_BYTES = 48;
 
@@ -74,11 +74,11 @@ export function utf8ByteLength(value: string): number {
   return utf8Encoder.encode(value).byteLength;
 }
 
-export function estimateTokensFromBytes(byteLength: number): number {
+function estimateTokensFromBytes(byteLength: number): number {
   return Math.ceil(byteLength / BYTES_PER_ESTIMATED_TOKEN);
 }
 
-export function resolveEffectiveMaxBytes(budget: WorkerBriefBudget | undefined): number {
+function resolveEffectiveMaxBytes(budget: WorkerBriefBudget | undefined): number {
   const fromBytes = budget?.maxBytes;
   const fromTokens =
     budget?.maxTokens === undefined ? undefined : budget.maxTokens * BYTES_PER_ESTIMATED_TOKEN;

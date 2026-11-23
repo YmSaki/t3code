@@ -98,7 +98,7 @@ function parseIsoEpochMs(iso: string | null): number | null {
   return Option.isSome(parsed) ? DateTime.toEpochMillis(parsed.value) : null;
 }
 
-export function resolveTimeWindowCutoffMs(
+function resolveTimeWindowCutoffMs(
   options: Pick<AgentSessionScanFilterOptions, "timeWindow" | "includeAllTime" | "nowMs">,
 ): number | null {
   if (options.includeAllTime === true || options.timeWindow === "all") {
@@ -256,7 +256,7 @@ export function buildSelectiveImportInputs(
     });
 }
 
-export function mergeDiagnosticsSummaries(
+function mergeDiagnosticsSummaries(
   summaries: ReadonlyArray<AgentSessionImportDiagnosticsSummary>,
 ): AgentSessionImportDiagnosticsSummary {
   const allDiagnostics: AgentSessionImportDiagnostic[] = [];

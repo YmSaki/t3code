@@ -144,10 +144,8 @@ function toEpochMs(iso: string): number | null {
 }
 
 function toContractCursor(state: RepoMonitorCursorState): RepoMonitorCursor {
-  const branchHeads: Record<
-    typeof TrimmedNonEmptyString.Type,
-    typeof TrimmedNonEmptyString.Type
-  > = {};
+  const branchHeads: Record<typeof TrimmedNonEmptyString.Type, typeof TrimmedNonEmptyString.Type> =
+    {};
   for (const [branch, sha] of Object.entries(state.branchHeads)) {
     const trimmedBranch = branch.trim();
     const trimmedSha = sha.trim();
@@ -240,14 +238,13 @@ function toPromptEventData(
   };
 }
 
-function optTrimmed(
-  value: string | null | undefined,
-): typeof TrimmedNonEmptyString.Type | null {
+function optTrimmed(value: string | null | undefined): typeof TrimmedNonEmptyString.Type | null {
   if (!value) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? TrimmedNonEmptyString.make(trimmed) : null;
 }
 
+/** @public */
 export const make = Effect.fn("RepoMonitorService.make")(function* (
   options?: RepoMonitorServiceOptions | undefined,
 ) {
@@ -364,12 +361,25 @@ export const make = Effect.fn("RepoMonitorService.make")(function* (
 
       let dispatchedThreadId: ThreadId | null = null;
       if (guard.allowed && options?.onActionTriggered !== undefined) {
-        const dispatchResult = yield* options.onActionTriggered({
-          rule: input.rule,
-          event: input.event,
-          dedupeKey: guard.dedupeKey,
-          renderedPrompt: rendered.prompt,
-        });
+        // One rule's failed action must not abort the poll: the cursor would never advance and
+        // every rule on the project would retry the same match forever. A redelivered webhook retries it.
+        const dispatchResult = yield* options
+          .onActionTriggered({
+            rule: input.rule,
+            event: input.event,
+            dedupeKey: guard.dedupeKey,
+            renderedPrompt: rendered.prompt,
+          })
+          .pipe(
+            Effect.catchTags({
+              RepoMonitorError: (error) =>
+                Effect.logWarning("repo monitor action failed", {
+                  ruleId: input.rule.id,
+                  error,
+                }).pipe(Effect.as(null)),
+            }),
+          );
+        if (dispatchResult === null) return null;
         dispatchedThreadId = dispatchResult.dispatchedThreadId ?? null;
       }
 
@@ -576,7 +586,7 @@ export const make = Effect.fn("RepoMonitorService.make")(function* (
         managedAgentLogins: input.managedAgentLogins,
         now,
       });
-      recordedEvents.push(record);
+      if (record !== null) recordedEvents.push(record);
     }
 
     const nextCursor = toContractCursor(evalResult.nextCursor);
@@ -614,7 +624,7 @@ export const make = Effect.fn("RepoMonitorService.make")(function* (
         managedAgentLogins: input.managedAgentLogins,
         now,
       });
-      results.push(record);
+      if (record !== null) results.push(record);
     }
 
     const previousCursor = yield* store.getCursor(input.projectId);

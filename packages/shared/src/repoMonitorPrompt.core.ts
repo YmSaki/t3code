@@ -38,7 +38,7 @@ const MENTION =
 
 const WILDCARD = /^(.*)\[\]$/;
 
-export function sanitizeRepoMonitorUntrustedText(text: string): string {
+function sanitizeRepoMonitorUntrustedText(text: string): string {
   return text.replace(MENTION, "$&\u2060");
 }
 
@@ -131,7 +131,7 @@ function buildLookupRoot(data: RepoMonitorPromptEventData): Record<string, unkno
   };
 }
 
-export function repoMonitorExpressionResolver(
+function repoMonitorExpressionResolver(
   data: RepoMonitorPromptEventData,
 ): (expression: string) => unknown {
   const root = buildLookupRoot(data);

@@ -6,12 +6,6 @@ import {
 } from "./themePalettes.ts";
 import { EVENT_CODE_SHORTCUT_KEYS } from "./keybindings.ts";
 import {
-  ARTIFACT_BRIDGE_GET_STATE_METHOD,
-  ARTIFACT_BRIDGE_GLOBAL_NAME,
-  ARTIFACT_BRIDGE_SEND_ACTION_METHOD,
-  ARTIFACT_BRIDGE_SEND_MESSAGE_METHOD,
-  ARTIFACT_BRIDGE_SET_STATE_METHOD,
-  ARTIFACT_BRIDGE_UPDATE_METHOD,
   type ArtifactBootstrapOptions,
   buildArtifactBootstrapScript,
 } from "./artifactBridge.core.ts";
@@ -499,15 +493,6 @@ export function injectHtmlRenderBootstrap(
   }
   return `<!doctype html><head>${markup}</head>${html}`;
 }
-
-export const HTML_RENDER_ARTIFACT_BRIDGE_METHODS = {
-  globalName: ARTIFACT_BRIDGE_GLOBAL_NAME,
-  getState: ARTIFACT_BRIDGE_GET_STATE_METHOD,
-  setState: ARTIFACT_BRIDGE_SET_STATE_METHOD,
-  sendAction: ARTIFACT_BRIDGE_SEND_ACTION_METHOD,
-  sendMessage: ARTIFACT_BRIDGE_SEND_MESSAGE_METHOD,
-  onUpdate: ARTIFACT_BRIDGE_UPDATE_METHOD,
-} as const;
 
 const FILE_PREVIEW_SCROLL_METHOD = "t3/notifications/file-preview-scroll";
 const FILE_PREVIEW_RESTORE_SCROLL_METHOD = "t3/file-preview/restore-scroll";

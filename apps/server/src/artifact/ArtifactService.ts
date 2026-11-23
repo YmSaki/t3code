@@ -51,6 +51,7 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import * as ArtifactStore from "./ArtifactStore.ts";
 
@@ -77,6 +78,26 @@ export interface ArtifactSubmitUserActionInput {
 export interface ArtifactSubmitUserActionOutput extends ArtifactUserActionResult {
   readonly prompt: string;
   readonly record: ArtifactStore.ArtifactActionRecord;
+}
+
+export interface ArtifactTurnStartRequest {
+  readonly artifact: Artifact;
+  readonly action: ArtifactUserAction;
+  readonly prompt: string;
+}
+
+export class ArtifactTurnStartError extends Schema.TaggedError<ArtifactTurnStartError>()(
+  "ArtifactTurnStartError",
+  { artifactId: ArtifactId, cause: Schema.Defect() },
+) {}
+
+/** Starts the agent turn a user action asks for; `started` is true only once a turn really began. */
+export type ArtifactTurnStarter = (
+  request: ArtifactTurnStartRequest,
+) => Effect.Effect<{ readonly started: boolean }, ArtifactTurnStartError>;
+
+export interface ArtifactServiceOptions {
+  readonly turnStarter?: ArtifactTurnStarter | undefined;
 }
 
 export interface ArtifactStandaloneExport {
@@ -198,7 +219,7 @@ const formatUserActionPrompt = (artifact: Artifact, action: ArtifactUserAction):
   return lines.join("\n");
 };
 
-const make = Effect.gen(function* () {
+const make = Effect.fn("ArtifactService.make")(function* (serviceOptions?: ArtifactServiceOptions) {
   const store = yield* ArtifactStore.ArtifactStore;
   let nextSequence = 0;
 
@@ -377,10 +398,31 @@ const make = Effect.gen(function* () {
       stateVersion: artifact.stateVersion,
     });
 
+    const turnStarter = serviceOptions?.turnStarter;
+    let startedTurn = false;
+    if (resolvedAction.promptText !== undefined) {
+      if (turnStarter === undefined) {
+        yield* Effect.logWarning("artifact.user-action.no-turn-starter", {
+          artifactId: artifact.id,
+        });
+      } else {
+        // The action is already recorded, so a failed start is reported as not started, not as a lost action.
+        startedTurn = yield* turnStarter({ artifact, action: resolvedAction, prompt }).pipe(
+          Effect.map((result) => result.started),
+          Effect.catch((cause) =>
+            Effect.logWarning("artifact.user-action.turn-start-failed", {
+              artifactId: artifact.id,
+              cause,
+            }).pipe(Effect.as(false)),
+          ),
+        );
+      }
+    }
+
     return {
       accepted: true,
       stateVersion: artifact.stateVersion,
-      startedTurn: resolvedAction.promptText !== undefined,
+      startedTurn,
       prompt,
       record,
     };
@@ -524,4 +566,7 @@ const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(ArtifactService, make);
+export const makeLayer = (options?: ArtifactServiceOptions) =>
+  Layer.effect(ArtifactService, make(options));
+
+export const layer = makeLayer();

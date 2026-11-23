@@ -1,7 +1,6 @@
 import {
   type EnvironmentId,
   type PmBoardWorkerSummary,
-  type PmDispatchBatchInput,
   type PmWorkerPolicy,
   type ThreadId,
   type ThreadRole,
@@ -105,13 +104,6 @@ export function buildPmPolicyUpdateInput(target: PmPolicyUpdateTarget): {
       ...(target.metaProjectId === undefined ? {} : { metaProjectId: target.metaProjectId }),
     },
   };
-}
-
-export function buildPmDispatchBatchTarget(
-  environmentId: EnvironmentId,
-  input: PmDispatchBatchInput,
-) {
-  return { environmentId, input };
 }
 
 export function countActivePmWorkers(workers: ReadonlyArray<PmBoardWorkerSummary>): number {

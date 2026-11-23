@@ -145,7 +145,7 @@ export function createEmptyRepoMonitorCursor(
   };
 }
 
-export function isBotActor(authorLogin: string | null, isBotFlag?: boolean): boolean {
+function isBotActor(authorLogin: string | null, isBotFlag?: boolean): boolean {
   if (isBotFlag === true) return true;
   if (!authorLogin) return false;
   const normalized = authorLogin.trim().toLowerCase();
@@ -242,7 +242,7 @@ export function buildNextRepoMonitorCursor(
   };
 }
 
-export function extractNewRepoMonitorEvents(
+function extractNewRepoMonitorEvents(
   previousCursor: RepoMonitorCursorState | null | undefined,
   snapshot: RepoMonitorSnapshot,
   options?: { readonly emitOnInitialCursor?: boolean },

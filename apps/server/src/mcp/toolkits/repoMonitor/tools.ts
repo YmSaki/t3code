@@ -45,7 +45,7 @@ const shared = {
   ],
 };
 
-export const RepoMonitorListRulesTool = Tool.make("repo_monitor_list_rules", {
+const RepoMonitorListRulesTool = Tool.make("repo_monitor_list_rules", {
   ...shared,
   description: "List repository monitor rules.",
   parameters: Schema.Struct({
@@ -59,7 +59,7 @@ export const RepoMonitorListRulesTool = Tool.make("repo_monitor_list_rules", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
-export const RepoMonitorDryRunTool = Tool.make("repo_monitor_dry_run", {
+const RepoMonitorDryRunTool = Tool.make("repo_monitor_dry_run", {
   ...shared,
   description: "Dry-run repository monitor rules without dispatching actions.",
   parameters: Schema.Struct({
@@ -74,7 +74,7 @@ export const RepoMonitorDryRunTool = Tool.make("repo_monitor_dry_run", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
-export const RepoMonitorListEventsTool = Tool.make("repo_monitor_list_events", {
+const RepoMonitorListEventsTool = Tool.make("repo_monitor_list_events", {
   ...shared,
   description: "List recorded repository monitor events.",
   parameters: Schema.Struct({
@@ -90,7 +90,7 @@ export const RepoMonitorListEventsTool = Tool.make("repo_monitor_list_events", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
-export const RepoMonitorListPresetsTool = Tool.make("repo_monitor_list_presets", {
+const RepoMonitorListPresetsTool = Tool.make("repo_monitor_list_presets", {
   ...shared,
   description: "List built-in repository monitor presets.",
   parameters: Schema.Struct({

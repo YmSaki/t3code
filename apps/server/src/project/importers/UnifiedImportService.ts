@@ -6,6 +6,7 @@ import {
   type AgentSessionSelectiveImportInput,
   type ExtendedAgentSessionSource,
   type ImportedSessionThreadSummary,
+  type ThreadId,
   type UnifiedAgentSessionImportResult,
   type UnifiedAgentSessionScanResult,
 } from "@t3tools/contracts";
@@ -26,6 +27,16 @@ import {
   type ExtendedScannerRoots,
   type ScannedUnifiedThread,
 } from "./ExtendedAgentSessionScanner.ts";
+import { UnifiedImportThreadPersister } from "./UnifiedImportThreadPersister.ts";
+
+// The wire summary has no threadId yet; callers in-process get the persisted one.
+export interface UnifiedImportedThreadSummary extends ImportedSessionThreadSummary {
+  readonly threadId: ThreadId;
+}
+
+export interface UnifiedImportSelectedResult extends UnifiedAgentSessionImportResult {
+  readonly threads: ReadonlyArray<UnifiedImportedThreadSummary>;
+}
 
 export interface UnifiedScanOptions {
   readonly roots?: ExtendedScannerRoots | undefined;
@@ -45,7 +56,7 @@ export class UnifiedImportService extends Context.Service<
     readonly importSelected: (
       input: AgentSessionSelectiveImportInput,
       options?: UnifiedImportOptions | undefined,
-    ) => Effect.Effect<UnifiedAgentSessionImportResult, UnifiedAgentSessionError>;
+    ) => Effect.Effect<UnifiedImportSelectedResult, UnifiedAgentSessionError>;
     readonly summarizeDiagnostics: (input: {
       readonly totalRecords: number;
       readonly importedCount: number;
@@ -80,7 +91,7 @@ function truncateLine(text: string, maxChars = 140): string {
   return `${oneLine.slice(0, maxChars - 1)}…`;
 }
 
-export function buildThreadHandoffSummary(thread: ScannedUnifiedThread): string {
+function buildThreadHandoffSummary(thread: ScannedUnifiedThread): string {
   const firstUser = thread.messages.find((m) => m.role === "user");
   const lastUser = [...thread.messages].reverse().find((m) => m.role === "user");
   const lastAssistant = [...thread.messages].reverse().find((m) => m.role === "assistant");
@@ -102,7 +113,7 @@ export function buildThreadHandoffSummary(thread: ScannedUnifiedThread): string 
   return lines.join("\n");
 }
 
-export function buildWorkspaceHandoffMarkdown(
+function buildWorkspaceHandoffMarkdown(
   workspaceRoot: string,
   summaries: ReadonlyArray<{ readonly thread: ScannedUnifiedThread; readonly summary: string }>,
 ): string | null {
@@ -131,6 +142,8 @@ function threadContentFingerprint(thread: ScannedUnifiedThread): string {
   ].join("\u0000");
 }
 
+const MAX_REPORTED_DIAGNOSTICS = 200;
+
 function buildDiagnosticsSummary(input: {
   readonly totalRecords: number;
   readonly importedCount: number;
@@ -154,14 +167,17 @@ function buildDiagnosticsSummary(input: {
       reason: item.reason,
       count: item.count,
     })),
-    diagnostics: [...input.diagnostics],
+    // A real agent home yields hundreds of thousands of skipped lines; `byReason` keeps the totals.
+    diagnostics: input.diagnostics.slice(0, MAX_REPORTED_DIAGNOSTICS),
   };
 }
 
+/** @public */
 export const make = Effect.gen(function* () {
   const scanner = yield* ExtendedAgentSessionScanner;
-  const importedSessionKeys = new Set<string>();
-  const importedFingerprints = new Set<string>();
+  const persister = Option.getOrUndefined(
+    yield* Effect.serviceOption(UnifiedImportThreadPersister),
+  );
 
   const summarizeDiagnostics: UnifiedImportService["Service"]["summarizeDiagnostics"] = (input) =>
     buildDiagnosticsSummary(input);
@@ -227,8 +243,11 @@ export const make = Effect.gen(function* () {
       const orderedSources = SOURCE_ORDER.filter((source) => group.sources.has(source));
       const messageCount = group.threads.reduce((sum, thread) => sum + thread.messages.length, 0);
       const alreadyImported =
+        persister !== undefined &&
         group.threads.length > 0 &&
-        group.threads.every((thread) => importedSessionKeys.has(threadIdentityKey(thread)));
+        (yield* Effect.forEach(group.threads, persister.findImportedThreadId)).every(
+          (threadId) => threadId !== null,
+        );
       const displayTitle = fileDisplayName(group.workspacePath).trim();
 
       candidates.push({
@@ -261,6 +280,16 @@ export const make = Effect.gen(function* () {
   const importSelected: UnifiedImportService["Service"]["importSelected"] = Effect.fn(
     "UnifiedImportService.importSelected",
   )(function* (input, options) {
+    if (persister === undefined) {
+      return yield* new UnifiedAgentSessionError({
+        operation: "import",
+        detail: "No thread persister is configured, so imported sessions cannot be saved.",
+      });
+    }
+    const target = yield* persister.resolveTarget({
+      projectId: input.projectId,
+      workspaceRoot: input.workspaceRoot,
+    });
     const scanOutput = yield* scanner.scanSessions({
       roots: options?.roots,
       workspaceRoot: input.workspaceRoot,
@@ -275,7 +304,7 @@ export const make = Effect.gen(function* () {
 
     const batchSeenKeys = new Set<string>();
     const batchSeenFingerprints = new Set<string>();
-    const importedSummaries: ImportedSessionThreadSummary[] = [];
+    const importedSummaries: UnifiedImportedThreadSummary[] = [];
     const handoffEntries: Array<{
       readonly thread: ScannedUnifiedThread;
       readonly summary: string;
@@ -300,8 +329,12 @@ export const make = Effect.gen(function* () {
       const fingerprint = threadContentFingerprint(thread);
 
       const isBatchDuplicate = batchSeenKeys.has(idKey) || batchSeenFingerprints.has(fingerprint);
+      batchSeenKeys.add(idKey);
+      batchSeenFingerprints.add(fingerprint);
       const isPreviouslyImported =
-        !forceReimport && (importedSessionKeys.has(idKey) || importedFingerprints.has(fingerprint));
+        !isBatchDuplicate &&
+        !forceReimport &&
+        (yield* persister.findImportedThreadId(thread)) !== null;
 
       if (isBatchDuplicate || isPreviouslyImported) {
         duplicateCount += 1;
@@ -316,17 +349,14 @@ export const make = Effect.gen(function* () {
         continue;
       }
 
-      batchSeenKeys.add(idKey);
-      batchSeenFingerprints.add(fingerprint);
-      importedSessionKeys.add(idKey);
-      importedFingerprints.add(fingerprint);
-
       const handoffSummary = generateHandoff ? buildThreadHandoffSummary(thread) : null;
       if (handoffSummary !== null) {
         handoffEntries.push({ thread, summary: handoffSummary });
       }
+      const threadId = yield* persister.persistThread({ target, thread, handoffSummary });
 
       importedSummaries.push({
+        threadId,
         source: thread.source,
         sessionId: thread.sessionId,
         title: thread.title,

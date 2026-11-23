@@ -89,12 +89,7 @@ describe("renderRepoMonitorPrompt", () => {
   });
 
   it("supports array wildcard [] placeholders", () => {
-    const rendered = renderRepoMonitorPrompt(
-      "Labels: {{labels[]}}",
-      sampleEvent,
-      "frame123",
-      true,
-    );
+    const rendered = renderRepoMonitorPrompt("Labels: {{labels[]}}", sampleEvent, "frame123", true);
     expect(rendered.prompt).toBe('Labels: [\n  "perf",\n  "review"\n]');
     expect(rendered.missing).toEqual([]);
   });

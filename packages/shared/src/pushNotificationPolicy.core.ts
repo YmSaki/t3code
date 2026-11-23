@@ -68,7 +68,7 @@ export interface PushNotificationDecision {
 
 const TIME_OF_DAY_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 
-export function parseTimeOfDayMinutes(hhmm: string): number | null {
+function parseTimeOfDayMinutes(hhmm: string): number | null {
   const match = TIME_OF_DAY_PATTERN.exec(hhmm.trim());
   if (!match) return null;
   const hours = Number(match[1]);
@@ -129,7 +129,7 @@ function formatContextPrefix(event: PushNotificationCandidateEvent): string {
   return segments.length > 0 ? `${segments.join(" ")}: ` : "";
 }
 
-export function formatPushNotificationContent(event: PushNotificationCandidateEvent): {
+function formatPushNotificationContent(event: PushNotificationCandidateEvent): {
   readonly title: string;
   readonly body: string;
   readonly priority: "high" | "normal";
@@ -236,7 +236,10 @@ export function evaluatePushNotificationPolicy(params: {
     };
   }
 
-  if (settings.quietHours !== undefined && isWithinQuietHours(event.occurredAt, settings.quietHours)) {
+  if (
+    settings.quietHours !== undefined &&
+    isWithinQuietHours(event.occurredAt, settings.quietHours)
+  ) {
     const bypassForUrgent = Boolean(settings.quietHours.allowUrgent && event.urgent);
     if (!bypassForUrgent) {
       return {

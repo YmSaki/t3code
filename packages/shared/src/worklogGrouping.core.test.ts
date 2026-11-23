@@ -18,7 +18,9 @@ const baseStats: WorklogCoreStats = {
   estimatedCostUsd: 0.05,
 };
 
-function makeEntry(overrides: Partial<WorklogCoreEntry> & { readonly id: string }): WorklogCoreEntry {
+function makeEntry(
+  overrides: Partial<WorklogCoreEntry> & { readonly id: string },
+): WorklogCoreEntry {
   return {
     source: "t3_run",
     environmentId: "env-1",

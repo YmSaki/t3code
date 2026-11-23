@@ -37,7 +37,7 @@ export interface MetaProjectFormattedContext {
   readonly instructionsTruncated: boolean;
 }
 
-export const DEFAULT_META_PROJECT_CONTEXT_MAX_CHARS = 16_000;
+const DEFAULT_META_PROJECT_CONTEXT_MAX_CHARS = 16_000;
 
 const escapeXml = (value: string): string =>
   value
