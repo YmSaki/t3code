@@ -156,7 +156,7 @@ function getFormatter(timeZone: string): Intl.DateTimeFormat {
   return formatter;
 }
 
-export function parseFixedOffsetMs(timeZone: string): number | null {
+function parseFixedOffsetMs(timeZone: string): number | null {
   const trimmed = timeZone.trim();
   if (
     trimmed.length === 0 ||
@@ -262,12 +262,7 @@ function getInstantOffsetMs(utcMs: number, timeZone: string): number {
   return localAsUtc - baseUtcMs;
 }
 
-export function getLocalMidnightUtcMs(
-  year: number,
-  month: number,
-  day: number,
-  timeZone: string,
-): number {
+function getLocalMidnightUtcMs(year: number, month: number, day: number, timeZone: string): number {
   const targetLocalAsUtc = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
   const fixedOffsetMs = parseFixedOffsetMs(timeZone);
   if (fixedOffsetMs !== null) {
@@ -632,7 +627,7 @@ export function groupWorklogEntries(
   );
 }
 
-export function splitWorklogBlockByDay(
+function splitWorklogBlockByDay(
   block: MergedWorklogCoreBlock,
   timeZone: string,
 ): ReadonlyArray<WorklogDaySlice> {

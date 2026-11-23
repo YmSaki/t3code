@@ -199,6 +199,7 @@ const notFoundError = (metaProjectId: MetaProjectId): MetaProjectError =>
     metaProjectId,
   });
 
+/** @public */
 export const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* Migration0106;

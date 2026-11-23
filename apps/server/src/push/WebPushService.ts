@@ -18,13 +18,15 @@ import {
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 
 import * as WebPushStore from "./WebPushStore.ts";
+import { makeHttpTransport } from "./WebPushTransport.ts";
 
 const MAX_HISTORY_RECORDS = 256;
 
-export const DEFAULT_WEB_PUSH_PREFERENCES: WebPushPreferences = {
+const DEFAULT_WEB_PUSH_PREFERENCES: WebPushPreferences = {
   enabled: true,
   enabledKinds: [...WEB_PUSH_EVENT_KINDS],
   debounceWindowMs: 60_000,
@@ -90,12 +92,6 @@ export class WebPushService extends Context.Service<
   }
 >()("t3/push/WebPushService") {}
 
-const defaultTransport: WebPushDeliveryTransport = () =>
-  Effect.succeed({
-    status: "delivered",
-    statusCode: 201,
-  });
-
 const toPolicySettings = (preferences: WebPushPreferences): PushNotificationPolicySettings => ({
   enabled: preferences.enabled,
   enabledKinds: preferences.enabledKinds,
@@ -119,11 +115,13 @@ const toPolicySettings = (preferences: WebPushPreferences): PushNotificationPoli
     : {}),
 });
 
+/** @public */
 export const make = Effect.fn("WebPushService.make")(function* (
   options: WebPushServiceOptions = {},
 ) {
   const store = yield* WebPushStore.WebPushStore;
-  const transport = options.transport ?? defaultTransport;
+  const transport =
+    options.transport ?? (yield* makeHttpTransport().pipe(Effect.provide(FetchHttpClient.layer)));
   let currentPreferences: WebPushPreferences =
     options.initialPreferences ?? DEFAULT_WEB_PUSH_PREFERENCES;
   const history: PushNotificationHistoryRecord[] = [];

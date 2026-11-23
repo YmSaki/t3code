@@ -20,7 +20,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlSchema from "effect/sql/SqlSchema";
 
 const DEFAULT_VAPID_KEY_ID = "default";
-export const DEFAULT_VAPID_SUBJECT = "mailto:selfhost@t3.codes";
+const DEFAULT_VAPID_SUBJECT = "mailto:selfhost@t3.codes";
 
 export interface VapidKeyRecord {
   readonly id: string;
@@ -35,7 +35,7 @@ export interface GeneratedVapidKeyPair {
   readonly privateKeyPkcs8Pem: string;
 }
 
-export function generateVapidKeyPair(): GeneratedVapidKeyPair {
+function generateVapidKeyPair(): GeneratedVapidKeyPair {
   const { publicKey, privateKey } = NodeCrypto.generateKeyPairSync("ec", {
     namedCurve: "prime256v1",
   });
@@ -101,6 +101,7 @@ export class WebPushStore extends Context.Service<
   }
 >()("t3/push/WebPushStore") {}
 
+/** @public */
 export const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 

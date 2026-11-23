@@ -28,12 +28,12 @@ export const SelfHostHubConfig = Schema.Struct({
 });
 export type SelfHostHubConfig = typeof SelfHostHubConfig.Type;
 
-export const PEER_NODE_HEALTH_GRADES = ["healthy", "degraded", "offline"] as const;
+const PEER_NODE_HEALTH_GRADES = ["healthy", "degraded", "offline"] as const;
 
 export const PeerNodeHealthGrade = Schema.Literals(PEER_NODE_HEALTH_GRADES);
 export type PeerNodeHealthGrade = typeof PeerNodeHealthGrade.Type;
 
-export const PEER_NODE_HEALTH_DEGRADATION_REASONS = [
+const PEER_NODE_HEALTH_DEGRADATION_REASONS = [
   "offline",
   "stale_heartbeat",
   "high_latency",
@@ -156,7 +156,7 @@ export const WebPushVapidPublicKeyResult = Schema.Struct({
 });
 export type WebPushVapidPublicKeyResult = typeof WebPushVapidPublicKeyResult.Type;
 
-export const WEB_PUSH_ERROR_REASONS = [
+const WEB_PUSH_ERROR_REASONS = [
   "invalid_subscription",
   "subscription_not_found",
   "vapid_error",

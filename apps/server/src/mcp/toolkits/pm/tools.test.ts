@@ -67,6 +67,12 @@ const basePmLayer = () => {
   const sqliteLayer = NodeSqliteClient.layer({ filename: ":memory:" });
   const storeLayer = PmStore.layer.pipe(Layer.provideMerge(sqliteLayer));
   const serviceLayer = PmService.makeLayer({
+    launchWorker: (request) =>
+      Effect.succeed({
+        workerThreadId: ThreadId.make(`worker:${request.pmThreadId}:${request.clientKey}`),
+        status: "running" as const,
+      }),
+    stopWorker: () => Effect.void,
     resolveMetaProject: (id) =>
       Effect.succeed({
         id,

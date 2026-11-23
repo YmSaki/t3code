@@ -133,7 +133,7 @@ function resolveSlicePercentBounds(
   };
 }
 
-export function determineWorklogLabelDensity(params: {
+function determineWorklogLabelDensity(params: {
   readonly heightPercent: number;
   readonly columnCount: number;
   readonly compactColumnThreshold: number;

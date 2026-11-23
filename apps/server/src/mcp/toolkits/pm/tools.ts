@@ -25,7 +25,7 @@ const sharedDependencies = [
 
 const WorkerBriefSection = Schema.Literals(["core", "background", "handbook", "excerpts"]);
 
-export const PmBoardStatusTool = Tool.make("pm_board_status", {
+const PmBoardStatusTool = Tool.make("pm_board_status", {
   description: "Read the PM worker board snapshot and pending questions.",
   parameters: Schema.Struct({
     pmThreadId: Schema.optional(ThreadId),
@@ -49,7 +49,7 @@ export const PmBoardStatusTool = Tool.make("pm_board_status", {
   .annotate(Tool.Destructive, false)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
-export const PmDispatchBatchTool = Tool.make("pm_dispatch_batch", {
+const PmDispatchBatchTool = Tool.make("pm_dispatch_batch", {
   description: "Dispatch a batch of scoped worker briefs from a PM thread.",
   parameters: Schema.Struct({
     pmThreadId: Schema.optional(ThreadId),
@@ -63,7 +63,7 @@ export const PmDispatchBatchTool = Tool.make("pm_dispatch_batch", {
   .annotate(Tool.Destructive, true)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
-export const PmStopAllWorkersTool = Tool.make("pm_stop_all_workers", {
+const PmStopAllWorkersTool = Tool.make("pm_stop_all_workers", {
   description: "Activate the PM kill switch and stop active workers.",
   parameters: Schema.Struct({
     pmThreadId: Schema.optional(ThreadId),
@@ -82,7 +82,7 @@ export const PmStopAllWorkersTool = Tool.make("pm_stop_all_workers", {
   .annotate(Tool.Destructive, true)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
-export const PmBuildWorkerBriefTool = Tool.make("pm_build_worker_brief", {
+const PmBuildWorkerBriefTool = Tool.make("pm_build_worker_brief", {
   description: "Build a budget-clamped prompt pack from a worker brief.",
   parameters: Schema.Struct({
     title: Schema.optional(TrimmedNonEmptyString),

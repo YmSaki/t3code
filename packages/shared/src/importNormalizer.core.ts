@@ -177,7 +177,7 @@ export function normalizeImportRole(value: unknown): ImportMessageRole | "unsupp
   return "unknown";
 }
 
-export function countImportReasons(reasons: Iterable<string>): ReadonlyArray<ImportReasonCount> {
+function countImportReasons(reasons: Iterable<string>): ReadonlyArray<ImportReasonCount> {
   const counts = new Map<string, number>();
   for (const reason of reasons) counts.set(reason, (counts.get(reason) ?? 0) + 1);
   return [...counts.entries()]

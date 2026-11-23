@@ -66,6 +66,7 @@ export class BranchHeadProber extends Context.Service<
   }
 >()("t3/repoMonitor/BranchHeadProber") {}
 
+/** @public */
 export function makeFromCommandRunner(
   runCommand: BranchHeadCommandRunner,
 ): BranchHeadProber["Service"] {
@@ -95,6 +96,7 @@ export function layerFromCommandRunner(
   return Layer.succeed(BranchHeadProber, makeFromCommandRunner(runCommand));
 }
 
+/** @public */
 export const layer: Layer.Layer<BranchHeadProber, never, GitVcsDriver.GitVcsDriver> = Layer.effect(
   BranchHeadProber,
   Effect.gen(function* () {

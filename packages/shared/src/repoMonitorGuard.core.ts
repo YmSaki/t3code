@@ -4,7 +4,7 @@ import type { RepoMonitorEventKindValue } from "./repoMonitorEval.core.ts";
 
 export const ONE_HOUR_MS = 3_600_000;
 
-export const DEFAULT_T3_AGENT_LOOP_MARKERS: ReadonlyArray<string> = [
+const DEFAULT_T3_AGENT_LOOP_MARKERS: ReadonlyArray<string> = [
   "<!-- t3-repo-monitor -->",
   "<!-- t3-agent -->",
   "[t3-repo-monitor]",

@@ -1,6 +1,6 @@
 import type { EnvironmentId, IsoDateTime, ProjectId, ThreadId } from "@t3tools/contracts";
 
-export const META_PROJECT_STANDARD_ROLES = [
+const META_PROJECT_STANDARD_ROLES = [
   "frontend",
   "backend",
   "infra",
@@ -12,10 +12,10 @@ export const META_PROJECT_STANDARD_ROLES = [
 
 export type MetaProjectStandardRole = (typeof META_PROJECT_STANDARD_ROLES)[number];
 
-export const META_PROJECT_THREAD_ROLES = ["pm", "cross_cutting", "standard"] as const;
+const META_PROJECT_THREAD_ROLES = ["pm", "cross_cutting", "standard"] as const;
 export type MetaProjectThreadRole = (typeof META_PROJECT_THREAD_ROLES)[number];
 
-export const META_PROJECT_ROLE_MAX_LENGTH = 64;
+const META_PROJECT_ROLE_MAX_LENGTH = 64;
 const CUSTOM_ROLE_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 const STANDARD_ROLE_SET: ReadonlySet<string> = new Set(META_PROJECT_STANDARD_ROLES);
 const THREAD_ROLE_SET: ReadonlySet<string> = new Set(META_PROJECT_THREAD_ROLES);

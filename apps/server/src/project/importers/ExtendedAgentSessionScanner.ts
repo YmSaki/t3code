@@ -5,6 +5,9 @@ import {
   type AgentSessionImportDiagnostic,
   type ExtendedAgentSessionSource,
 } from "@t3tools/contracts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import { piHome, resolvePiSessionsDir } from "@t3tools/provider-pi/server/usage";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   importPathComparisonKey,
   isSameImportDirectory,
@@ -105,6 +108,51 @@ const ROOT_RULE_CANDIDATES = [
   ".cursorrules",
 ] as const;
 
+/** Where each agent keeps its sessions on this machine, honoring the same overrides the agents read. */
+export function resolveDefaultScannerRoots(input: {
+  readonly homeDir: string;
+  readonly environment: NodeJS.ProcessEnv;
+  readonly platform: NodeJS.Platform;
+  readonly path: Path.Path;
+}): ExtendedScannerRoots {
+  const { homeDir, environment, platform, path } = input;
+  const configured = (name: string, fallback: string) => {
+    const value = environment[name]?.trim();
+    return value ? path.resolve(expandHomePath(value, homeDir)) : fallback;
+  };
+  const absoluteOr = (name: string, fallback: string) => {
+    const value = environment[name]?.trim();
+    return value && path.isAbsolute(value) ? value : fallback;
+  };
+  const cursorUserDir =
+    platform === "win32"
+      ? path.join(absoluteOr("APPDATA", path.join(homeDir, "AppData", "Roaming")), "Cursor", "User")
+      : platform === "darwin"
+        ? path.join(homeDir, "Library", "Application Support", "Cursor", "User")
+        : path.join(absoluteOr("XDG_CONFIG_HOME", path.join(homeDir, ".config")), "Cursor", "User");
+  return {
+    claudeDir: path.join(
+      configured("CLAUDE_CONFIG_DIR", path.join(homeDir, ".claude")),
+      "projects",
+    ),
+    // The Codex home, not `sessions/`: the scan reads `session_index.jsonl` from this root.
+    codexDir: configured("CODEX_HOME", path.join(homeDir, ".codex")),
+    piDir: resolvePiSessionsDir(environment, piHome(environment, homeDir, platform), path),
+    cursorWorkspaceStorageDir: path.join(cursorUserDir, "workspaceStorage"),
+    opencodeStorageDir: path.join(
+      absoluteOr("XDG_DATA_HOME", path.join(homeDir, ".local", "share")),
+      "opencode",
+      "storage",
+    ),
+    antigravityDir: path.join(
+      configured("GEMINI_HOME", path.join(homeDir, ".gemini")),
+      "antigravity",
+    ),
+  };
+}
+
+const CODEX_ROLLOUT_ID_PATTERN = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
 function stripExtension(filename: string, ext: string): string {
   return filename.toLowerCase().endsWith(ext.toLowerCase())
     ? filename.slice(0, filename.length - ext.length)
@@ -187,6 +235,7 @@ function readCursorDatabaseSync(databasePath: string): ReadonlyArray<CursorKvEnt
   }
 }
 
+/** @public */
 export const makeWithRoots = Effect.fn("ExtendedAgentSessionScanner.make")(function* (
   defaultRoots?: ExtendedScannerRoots | undefined,
 ) {
@@ -244,10 +293,20 @@ export const makeWithRoots = Effect.fn("ExtendedAgentSessionScanner.make")(funct
     "ExtendedAgentSessionScanner.scanSessions",
   )(function* (options) {
     const nowIso = DateTime.formatIso(yield* DateTime.now);
-    const roots: ExtendedScannerRoots = {
+    const configuredRoots: ExtendedScannerRoots = {
       ...defaultRoots,
       ...options?.roots,
     };
+    // Configured roots replace the machine's defaults as a whole, so a scan of given folders
+    // never also reads this user's real agent homes.
+    const roots = Object.values(configuredRoots).some((root) => root !== undefined)
+      ? configuredRoots
+      : resolveDefaultScannerRoots({
+          homeDir: yield* HostProcess.HomeDirectory,
+          environment: yield* HostProcess.Environment,
+          platform: yield* HostProcess.Platform,
+          path,
+        });
     const enabledSources = options?.sources !== undefined ? new Set(options.sources) : null;
     const isSourceEnabled = (source: ExtendedAgentSessionSource): boolean =>
       enabledSources === null || enabledSources.has(source);
@@ -295,7 +354,10 @@ export const makeWithRoots = Effect.fn("ExtendedAgentSessionScanner.make")(funct
           jsonl: contents,
           fallbackSessionId: fallbackId,
           fallbackTimestamp: nowIso,
-          codexThreadName: codexNames.get(fallbackId),
+          // Codex names rollouts `rollout-<time>-<uuid>.jsonl`; the index keys by the uuid.
+          codexThreadName:
+            codexNames.get(fallbackId) ??
+            codexNames.get(CODEX_ROLLOUT_ID_PATTERN.exec(fallbackId)?.[1] ?? ""),
         });
 
         for (const diag of parsed.diagnostics) {
@@ -665,6 +727,7 @@ export const makeWithRoots = Effect.fn("ExtendedAgentSessionScanner.make")(funct
   };
 });
 
+/** @public */
 export const make = makeWithRoots();
 
 export const layer = (defaultRoots?: ExtendedScannerRoots | undefined) =>

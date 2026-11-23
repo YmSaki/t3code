@@ -3,7 +3,7 @@ import * as Option from "effect/Option";
 
 import { getPropertyName, isIdentifier, unwrapExpression } from "../utils.ts";
 
-const CORE_FILE_PATTERN = /\.core\.[cm]?[jt]sx?$/u;
+const CORE_FILE_PATTERN = /\.(?:core|logic)\.[cm]?[jt]sx?$/u;
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const FORBIDDEN_MODULE_PREFIXES = [
   "node:",
@@ -17,7 +17,7 @@ const FORBIDDEN_MODULE_PREFIXES = [
 const FORBIDDEN_MEMBERS = new Set(["Date.now", "Math.random", "crypto.randomUUID", "process.env"]);
 
 const MESSAGE_SUFFIX =
-  "Functional core files (*.core.ts) stay pure: take time, randomness, environment, and I/O as inputs and let the shell (Effect Service) supply them. See docs/internals/functional-core-shell.md.";
+  "Functional core files (*.core.ts, *.logic.ts) stay pure: take time, randomness, environment, and I/O as inputs and let the shell (Effect Service) supply them. See docs/internals/functional-core-shell.md.";
 
 const importMessage = (source: string) =>
   `Functional core must not import ${source}. ${MESSAGE_SUFFIX}`;
@@ -65,7 +65,7 @@ export default defineRule({
     type: "problem",
     docs: {
       description:
-        "Disallow I/O and nondeterminism (node:*, fetch, Date.now, Math.random, crypto.randomUUID, process.env) in *.core.ts files.",
+        "Disallow I/O and nondeterminism (node:*, fetch, Date.now, Math.random, crypto.randomUUID, process.env) in *.core.ts and *.logic.ts files.",
     },
   },
   create(context) {

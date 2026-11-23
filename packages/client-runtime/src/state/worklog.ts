@@ -121,7 +121,7 @@ export function createWorklogEnvironmentAtoms<R, E>(
   };
 }
 
-export function agentWorklogEntryToCore(entry: AgentWorklogEntry): WorklogCoreEntry {
+function agentWorklogEntryToCore(entry: AgentWorklogEntry): WorklogCoreEntry {
   return {
     id: entry.id,
     source: entry.source,
@@ -148,10 +148,7 @@ export function agentWorklogEntryToCore(entry: AgentWorklogEntry): WorklogCoreEn
   };
 }
 
-export function matchesClientWorklogFilter(
-  entry: WorklogCoreEntry,
-  filter?: WorklogFilter,
-): boolean {
+function matchesClientWorklogFilter(entry: WorklogCoreEntry, filter?: WorklogFilter): boolean {
   if (!filter) return true;
   if (filter.since !== undefined && entry.endedAt < filter.since) {
     return false;

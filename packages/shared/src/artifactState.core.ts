@@ -1,5 +1,5 @@
 export const ARTIFACT_STATE_MAX_BYTES = 16_384;
-export const ARTIFACT_STATE_MAX_DEPTH = 16;
+const ARTIFACT_STATE_MAX_DEPTH = 16;
 
 export type ArtifactStateObject = { readonly [key: string]: unknown };
 

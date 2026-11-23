@@ -27,7 +27,7 @@ export const META_PROJECT_STANDARD_ROLES = [
 export const MetaProjectStandardRole = Schema.Literals(META_PROJECT_STANDARD_ROLES);
 export type MetaProjectStandardRole = typeof MetaProjectStandardRole.Type;
 
-export const META_PROJECT_ROLE_MAX_LENGTH = 64;
+const META_PROJECT_ROLE_MAX_LENGTH = 64;
 
 export const MetaProjectCustomRole = TrimmedNonEmptyString.check(
   Schema.isMaxLength(META_PROJECT_ROLE_MAX_LENGTH),

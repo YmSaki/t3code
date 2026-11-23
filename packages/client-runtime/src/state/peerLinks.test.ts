@@ -20,10 +20,7 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { vi } from "vite-plus/test";
 
-import {
-  AVAILABLE_CONNECTION_STATE,
-  type PreparedConnection,
-} from "../connection/model.ts";
+import { AVAILABLE_CONNECTION_STATE, type PreparedConnection } from "../connection/model.ts";
 import { EnvironmentRegistry } from "../connection/registry.ts";
 import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import type { LinkedThreadView } from "../linkedThread.ts";

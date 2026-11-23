@@ -129,7 +129,7 @@ export function hashIcalFeedToken(rawToken: string): string {
   return NodeCrypto.createHash("sha256").update(rawToken.trim()).digest("hex");
 }
 
-export function generateRawIcalFeedToken(): string {
+function generateRawIcalFeedToken(): string {
   return NodeCrypto.randomBytes(24).toString("base64url");
 }
 

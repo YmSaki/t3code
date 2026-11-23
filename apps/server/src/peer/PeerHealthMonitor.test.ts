@@ -2,6 +2,7 @@ import { expect, it } from "@effect/vitest";
 import {
   AuthMcpClientAccess,
   EnvironmentId,
+  OrchestratorMcpFailure,
   PeerLinkError,
   type PeerLinkSummary,
   ProviderDriverKind,
@@ -9,9 +10,12 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as PeerHealthMonitor from "./PeerHealthMonitor.ts";
+import * as PeerMcpClient from "./PeerMcpClient.ts";
 
 const makePeerSummary = (params: {
   readonly id: string;
@@ -142,5 +146,81 @@ it.effect("probeOne updates a single peer and fails for an unknown environmentId
 
     const unknownResult = yield* Effect.result(monitor.probeOne(EnvironmentId.make("env-missing")));
     expect(unknownResult._tag).toBe("Failure");
+  }),
+);
+
+it.effect("measures latency from the probe round trip when the probe does not report one", () =>
+  Effect.gen(function* () {
+    const peer = makePeerSummary({ id: "env-measured", label: "Measured" });
+    const monitor = yield* PeerHealthMonitor.PeerHealthMonitor.pipe(
+      Effect.provide(
+        PeerHealthMonitor.layerWithOptions({
+          listPeers: Effect.succeed([peer]),
+          probePeer: () =>
+            TestClock.adjust(Duration.millis(120)).pipe(
+              Effect.as({ online: true, activeWorkers: 2, maxWorkers: 8 }),
+            ),
+        }),
+      ),
+    );
+
+    const snapshot = yield* monitor.probeOne(EnvironmentId.make("env-measured"));
+    expect(snapshot.latencyMs).toBe(120);
+    expect(snapshot.activeWorkers).toBe(2);
+  }),
+);
+
+it.effect("probes linked peers over MCP for active thread count and round-trip latency", () =>
+  Effect.gen(function* () {
+    const calls: Array<{ readonly tool: string; readonly arguments: unknown }> = [];
+    const peers = [
+      makePeerSummary({ id: "env-up", label: "Up" }),
+      makePeerSummary({ id: "env-gone", label: "Gone" }),
+      makePeerSummary({ id: "env-denied", label: "Denied" }),
+    ];
+    const mcpClient = Layer.mock(PeerMcpClient.PeerMcpClient)({
+      call: (input) => {
+        calls.push({ tool: input.tool, arguments: input.arguments });
+        if (input.environmentId === "env-denied") {
+          return Effect.fail(
+            new OrchestratorMcpFailure({ code: "capability_denied", message: "read-only link" }),
+          );
+        }
+        if (input.environmentId === "env-gone") {
+          return Effect.fail(
+            new OrchestratorMcpFailure({ code: "orchestration_error", message: "unreachable" }),
+          );
+        }
+        return TestClock.adjust(Duration.millis(75)).pipe(
+          // oxlint-disable-next-line t3code/no-inline-schema-compile -- the mock decodes with whatever schema each call passes in.
+          Effect.andThen(Schema.decodeEffect(input.success)({ total: 3, threads: [] })),
+          Effect.orDie,
+        );
+      },
+    });
+
+    const monitor = yield* PeerHealthMonitor.PeerHealthMonitor.pipe(
+      Effect.provide(
+        PeerHealthMonitor.layerWithOptions({ listPeers: Effect.succeed(peers) }).pipe(
+          Layer.provide(mcpClient),
+        ),
+      ),
+    );
+
+    const result = yield* monitor.probeAll;
+    const up = result.nodes.find((node) => node.environmentId === "env-up");
+    const gone = result.nodes.find((node) => node.environmentId === "env-gone");
+    expect(up?.latencyMs).toBe(75);
+    expect(up?.activeWorkers).toBe(3);
+    expect(up?.online).toBe(true);
+    expect(gone?.online).toBe(false);
+    expect(gone?.latencyMs).toBeNull();
+    expect(gone?.lastError).toBe("unreachable");
+    const denied = result.nodes.find((node) => node.environmentId === "env-denied");
+    expect(denied?.online).toBe(false);
+    expect(denied?.lastError).toBe("read-only link");
+    expect(result.recommendedEnvironmentId).toBe(EnvironmentId.make("env-up"));
+    expect(calls[0]?.tool).toBe("t3_thread_list");
+    expect(calls[0]?.arguments).toMatchObject({ allProjects: true, limit: 1 });
   }),
 );

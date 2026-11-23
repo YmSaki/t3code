@@ -9,7 +9,7 @@ import type {
 } from "./worklogGrouping.core.ts";
 
 export const ICAL_MAX_LINE_OCTETS = 75;
-export const ICAL_CRLF = "\r\n";
+const ICAL_CRLF = "\r\n";
 
 export interface IcalWorklogEventInput {
   readonly id: string;
@@ -39,7 +39,7 @@ export interface IcalFeedGenerationOptions {
   readonly includeThreadUrl?: boolean | undefined;
 }
 
-export function utf8ByteLengthOfCodePoint(codePoint: number): number {
+function utf8ByteLengthOfCodePoint(codePoint: number): number {
   if (codePoint <= 0x7f) return 1;
   if (codePoint <= 0x7ff) return 2;
   if (codePoint <= 0xffff) return 3;
@@ -100,7 +100,7 @@ function pad2(value: number): string {
   return value < 10 ? `0${value}` : `${value}`;
 }
 
-export function formatIcalUtcDateTime(timestamp: string | number): string {
+function formatIcalUtcDateTime(timestamp: string | number): string {
   const ms = typeof timestamp === "number" ? timestamp : Date.parse(timestamp);
   const safeMs = Number.isFinite(ms) ? ms : 0;
   const parts = DateTime.toPartsUtc(DateTime.makeUnsafe(safeMs));
@@ -113,6 +113,7 @@ export function formatIcalUtcDateTime(timestamp: string | number): string {
   return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
 }
 
+/** @public */
 export function formatWorklogDurationLabel(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -128,7 +129,7 @@ export function formatWorklogDurationLabel(durationMs: number): string {
   return `${seconds}s`;
 }
 
-export function buildWorklogIcalDescription(
+function buildWorklogIcalDescription(
   event: IcalWorklogEventInput,
   options?: {
     readonly includeStatsInDescription?: boolean | undefined;

@@ -1,5 +1,7 @@
 import {
   EnvironmentId,
+  NonNegativeInt,
+  type OrchestratorMcpThreadStatus,
   PeerLinkError,
   type PeerLinkSummary,
   type PeerNodeHealthListResult,
@@ -14,17 +16,21 @@ import {
   type NodeHealthThresholds,
   selectBestNodeForAllocation,
 } from "@t3tools/shared/nodeHealth.core";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import * as PeerLinks from "./PeerLinks.ts";
+import * as PeerMcpClient from "./PeerMcpClient.ts";
 
 export interface PeerProbeMetrics {
   readonly online: boolean;
-  readonly latencyMs: number | null;
+  /** Omit to use the measured round trip of the probe itself. */
+  readonly latencyMs?: number | null | undefined;
   readonly cpuUsagePercent?: number | null | undefined;
   readonly memoryUsagePercent?: number | null | undefined;
   readonly activeWorkers?: number | undefined;
@@ -53,18 +59,28 @@ export class PeerHealthMonitor extends Context.Service<
   }
 >()("t3/peer/PeerHealthMonitor") {}
 
-const defaultProbeFromSummary = (peer: PeerLinkSummary, nowMs: number): PeerProbeMetrics => {
-  const online = peer.status === "reachable";
+/** Threads that hold a worker on the peer: the same set `t3_thread_list` treats as live. */
+const ACTIVE_THREAD_STATUSES: ReadonlyArray<OrchestratorMcpThreadStatus> = [
+  "queued",
+  "preparing",
+  "starting",
+  "running",
+  "waiting",
+];
+
+/** Only the count; peers on other versions may add or drop the rest of the list result. */
+const ThreadCountResult = Schema.Struct({ total: NonNegativeInt });
+
+/** Without a transport to the peer nothing was measured, so latency stays unknown. */
+const probeFromSummary = (peer: PeerLinkSummary, nowMs: number): PeerProbeMetrics => {
   const lastReachedMs =
     peer.lastReachedAt === null ? null : DateTime.toEpochMillis(peer.lastReachedAt);
-  const lastHeartbeatAgeMs = lastReachedMs === null ? null : Math.max(0, nowMs - lastReachedMs);
   return {
-    online,
-    latencyMs: online ? 0 : null,
+    online: peer.status === "reachable",
+    latencyMs: null,
     cpuUsagePercent: null,
     memoryUsagePercent: null,
-    activeWorkers: 0,
-    lastHeartbeatAgeMs,
+    lastHeartbeatAgeMs: lastReachedMs === null ? null : Math.max(0, nowMs - lastReachedMs),
     lastError: peer.lastError,
   };
 };
@@ -75,7 +91,7 @@ const toMetricsInput = (
 ): NodeHealthMetricsInput => ({
   nodeId: environmentId,
   online: metrics.online,
-  latencyMs: metrics.latencyMs,
+  latencyMs: metrics.latencyMs ?? null,
   cpuUsagePercent: metrics.cpuUsagePercent ?? null,
   memoryUsagePercent: metrics.memoryUsagePercent ?? null,
   activeWorkers: metrics.activeWorkers ?? 0,
@@ -140,10 +156,12 @@ const sortSnapshots = (
     ),
   );
 
+/** @public */
 export const make = Effect.fn("PeerHealthMonitor.make")(function* (
   options: PeerHealthMonitorOptions = {},
 ) {
   const maybePeerLinks = yield* Effect.serviceOption(PeerLinks.PeerLinks);
+  const maybePeerMcpClient = yield* Effect.serviceOption(PeerMcpClient.PeerMcpClient);
   const thresholds = options.thresholds ?? DEFAULT_NODE_HEALTH_THRESHOLDS;
   const snapshots = new Map<EnvironmentId, PeerNodeHealthSnapshot>();
 
@@ -153,25 +171,55 @@ export const make = Effect.fn("PeerHealthMonitor.make")(function* (
   > = options.listPeers ??
   (Option.isSome(maybePeerLinks) ? maybePeerLinks.value.list : Effect.succeed([]));
 
+  const offline = (message: string): PeerProbeMetrics => ({
+    online: false,
+    latencyMs: null,
+    activeWorkers: 0,
+    lastError: message,
+  });
+
+  // A read-only call with the narrowest limits: its round trip is the latency, its total the load.
+  const probeOverMcp = (client: PeerMcpClient.PeerMcpClient["Service"], peer: PeerLinkSummary) =>
+    client
+      .call({
+        environmentId: peer.environmentId,
+        tool: "t3_thread_list",
+        arguments: { allProjects: true, statuses: ACTIVE_THREAD_STATUSES, limit: 1 },
+        limits: { runtimeMode: "approval-required", interactionMode: "plan" },
+        success: ThreadCountResult,
+      })
+      .pipe(
+        Effect.map((result): PeerProbeMetrics => ({
+          online: true,
+          activeWorkers: result.total,
+          lastHeartbeatAgeMs: 0,
+          lastError: null,
+        })),
+        Effect.catchTags({
+          // Expired or unknown links fail locally with the codes a refusing peer uses: all count as offline.
+          OrchestratorMcpFailure: (error) => Effect.succeed(offline(error.message)),
+        }),
+      );
+
   const runProbe = Effect.fn("PeerHealthMonitor.runProbe")(function* (peer: PeerLinkSummary) {
-    const now = yield* DateTime.now;
-    const checkedAt = DateTime.formatIso(now);
-    const nowMs = DateTime.toEpochMillis(now);
+    const startedAtMs = yield* Clock.currentTimeMillis;
     const metrics =
       options.probePeer !== undefined
         ? yield* options.probePeer(peer).pipe(
             Effect.catchTags({
-              PeerLinkError: (error) =>
-                Effect.succeed<PeerProbeMetrics>({
-                  online: false,
-                  latencyMs: null,
-                  activeWorkers: 0,
-                  lastError: error.message,
-                }),
+              PeerLinkError: (error) => Effect.succeed(offline(error.message)),
             }),
           )
-        : defaultProbeFromSummary(peer, nowMs);
-    const snapshot = buildSnapshot(peer, metrics, checkedAt, thresholds);
+        : Option.isSome(maybePeerMcpClient)
+          ? yield* probeOverMcp(maybePeerMcpClient.value, peer)
+          : probeFromSummary(peer, startedAtMs);
+    const now = yield* DateTime.now;
+    const measuredLatencyMs = Math.max(0, DateTime.toEpochMillis(now) - startedAtMs);
+    const measured: PeerProbeMetrics =
+      metrics.latencyMs !== undefined
+        ? metrics
+        : { ...metrics, latencyMs: metrics.online ? measuredLatencyMs : null };
+    const snapshot = buildSnapshot(peer, measured, DateTime.formatIso(now), thresholds);
     snapshots.set(peer.environmentId, snapshot);
     return snapshot;
   });

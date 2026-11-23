@@ -6,9 +6,18 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import { ProjectId } from "@t3tools/contracts";
 
+import * as EventSink from "../../orchestration-v2/EventSink.ts";
+import * as EventStore from "../../orchestration-v2/EventStore.ts";
+import * as Orchestrator from "../../orchestration-v2/Orchestrator.ts";
+import * as ProjectionStore from "../../orchestration-v2/ProjectionStore.ts";
+import * as SqlitePersistence from "../../persistence/Sqlite.ts";
+import * as ServerSettings from "../../serverSettings.ts";
+import * as ProjectService from "../ProjectService.ts";
 import * as ExtendedAgentSessionScanner from "./ExtendedAgentSessionScanner.ts";
 import * as UnifiedImportService from "./UnifiedImportService.ts";
+import * as UnifiedImportThreadPersister from "./UnifiedImportThreadPersister.ts";
 
 function writeCursorVscdb(dbPath: string) {
   const db = new NodeSqlite.DatabaseSync(dbPath);
@@ -53,8 +62,55 @@ function writeCursorVscdb(dbPath: string) {
   }
 }
 
+const projectId = ProjectId.make("unified-import-project");
+
+const stores = Layer.mergeAll(EventStore.layer, ProjectionStore.layer).pipe(
+  Layer.provideMerge(SqlitePersistence.layerMemory),
+);
+
+const orchestratorFromProjections = Layer.unwrap(
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    return Layer.mock(Orchestrator.OrchestratorV2)({
+      getThreadRecords: (threadId, fields) =>
+        projections
+          .getThreadRecords(threadId, fields)
+          .pipe(
+            Effect.mapError(
+              (cause) => new Orchestrator.OrchestratorProjectionError({ threadId, cause }),
+            ),
+          ),
+    });
+  }),
+);
+
+const persisterLayer = UnifiedImportThreadPersister.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      EventSink.layer.pipe(Layer.provide(stores)),
+      orchestratorFromProjections,
+      ServerSettings.layerTest(),
+      Layer.mock(ProjectService.ProjectService)({
+        getByWorkspaceRoot: (workspaceRoot) =>
+          Effect.succeedSome({
+            id: projectId,
+            title: "Project",
+            workspaceRoot,
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: "2025-01-01T00:00:00.000Z",
+            updatedAt: "2025-01-01T00:00:00.000Z",
+            deletedAt: null,
+          }),
+      }),
+    ),
+  ),
+  Layer.provideMerge(stores),
+);
+
 const testLayer = UnifiedImportService.layer.pipe(
   Layer.provideMerge(ExtendedAgentSessionScanner.layer()),
+  Layer.provideMerge(persisterLayer),
   Layer.provideMerge(NodeServices.layer),
 );
 
@@ -289,9 +345,23 @@ describe("UnifiedImportService (6-source integration)", () => {
           "opencode",
           "antigravity",
         ]);
+        const projections = yield* ProjectionStore.ProjectionStoreV2;
         for (const thread of importResult.threads) {
+          expect(thread.threadId).toBe(`import-unified:${thread.source}:${thread.sessionId}`);
           expect(thread.messages).toHaveLength(2);
           expect(thread.handoffSummary).toContain(thread.sessionId);
+          const persisted = yield* projections.getThreadRecords(thread.threadId, [
+            "messages",
+            "turnItems",
+          ]);
+          expect(persisted.thread.projectId).toBe(projectId);
+          expect(persisted.thread.historyOrigin).toBe("v1_import");
+          expect(persisted.messages.map((m) => `${m.role}:${m.text}`)).toEqual(
+            thread.messages.map((m) => `${m.role}:${m.text}`),
+          );
+          expect(persisted.turnItems.find((item) => item.type === "system_notice")).toMatchObject({
+            message: thread.handoffSummary,
+          });
         }
 
         expect(importResult.instructionsMd).toContain("## AGENTS.md");
@@ -329,6 +399,26 @@ describe("UnifiedImportService (6-source integration)", () => {
         );
         expect(selectiveReimport.importedCount).toBe(1);
         expect(selectiveReimport.threads[0]?.sessionId).toBe("ag-ses-1");
+        expect(selectiveReimport.threads[0]?.threadId).toBe(
+          "import-unified:antigravity:ag-ses-1:2",
+        );
       }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("fails an import instead of reporting threads it could not save", () =>
+    Effect.gen(function* () {
+      const service = yield* UnifiedImportService.UnifiedImportService;
+      const error = yield* Effect.flip(
+        service.importSelected({ workspaceRoot: "/workspace/none" }),
+      );
+      expect(error.operation).toBe("import");
+    }).pipe(
+      Effect.provide(
+        UnifiedImportService.layer.pipe(
+          Layer.provideMerge(ExtendedAgentSessionScanner.layer()),
+          Layer.provideMerge(NodeServices.layer),
+        ),
+      ),
+    ),
   );
 });

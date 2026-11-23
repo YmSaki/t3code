@@ -32,9 +32,7 @@ describe("pushNotificationPolicy.core", () => {
     expect(approvalDecision.priority).toBe("high");
     expect(approvalDecision.title).toBe("[cx] T3 Code: Approval Required (bash: rm -rf dist)");
     expect(approvalDecision.body).toBe("Allow deleting dist folder before build?");
-    expect(approvalDecision.dedupeKey).toBe(
-      "push:approval_requested:env-1:proj-1:thread-1:req-42",
-    );
+    expect(approvalDecision.dedupeKey).toBe("push:approval_requested:env-1:proj-1:thread-1:req-42");
 
     const questionDecision = evaluatePushNotificationPolicy({
       event: {

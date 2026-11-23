@@ -11,10 +11,10 @@ import {
 } from "./baseSchemas.ts";
 
 export const ARTIFACT_STATE_MAX_BYTES = 16_384;
-export const ARTIFACT_CONTENT_MAX_LENGTH = 1_000_000;
-export const ARTIFACT_TITLE_MAX_LENGTH = 200;
-export const ARTIFACT_ACTION_NAME_MAX_LENGTH = 128;
-export const ARTIFACT_PROMPT_TEXT_MAX_LENGTH = 8_000;
+const ARTIFACT_CONTENT_MAX_LENGTH = 1_000_000;
+const ARTIFACT_TITLE_MAX_LENGTH = 200;
+const ARTIFACT_ACTION_NAME_MAX_LENGTH = 128;
+const ARTIFACT_PROMPT_TEXT_MAX_LENGTH = 8_000;
 
 const textEncoder = new TextEncoder();
 

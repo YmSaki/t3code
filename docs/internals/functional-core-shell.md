@@ -18,13 +18,13 @@ Push I/O outward. If a function needs a timestamp, an id, or an env value, the c
 ## Naming and layout
 
 - A core module is named `<topic>.core.ts` and sits beside the service that calls it, in the same domain folder. Its tests are `<topic>.core.test.ts`.
-- Existing `*.logic.ts` files are unchanged and are not covered by the lint rule below. Name new pure modules `*.core.ts`; do not rename old ones as a drive-by.
+- `*.logic.ts` files are functional core too and the lint rule below covers them. A few upstream web `*.logic.ts` files that predate the rule are exempted by name in `vite.config.ts`; do not add to that list. Name new pure modules `*.core.ts`; do not rename old ones as a drive-by.
 - A core module exports plain functions and types. No `Context.Service`, no `Layer`, no module-level mutable state.
 - Effect itself is fine in a core file when it stays pure: `Option`, `Result`, `Schema`, `Data`, `Array`, and `Effect` values that only compose other pure values.
 
 ## Forbidden in `*.core.ts`
 
-The `t3code/no-io-in-functional-core` rule ([source](../../oxlint-plugin-t3code/rules/no-io-in-functional-core.ts)) reports these in `*.core.ts`, `.cts`, `.mts`, `.js`, and `.tsx` variants. Test files (`*.test.*`, `*.spec.*`) are exempt, so `foo.core.test.ts` may use fixtures freely.
+The `t3code/no-io-in-functional-core` rule ([source](../../oxlint-plugin-t3code/rules/no-io-in-functional-core.ts)) reports these in `*.core.ts` and `*.logic.ts`, plus their `.cts`, `.mts`, `.js`, and `.tsx` variants. Test files (`*.test.*`, `*.spec.*`) are exempt, so `foo.core.test.ts` may use fixtures freely.
 
 | Kind        | Forbidden                                                                                                                                                                                            |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

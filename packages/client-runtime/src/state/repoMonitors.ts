@@ -10,7 +10,6 @@ import {
   type RepoMonitorEventRecord,
   type RepoMonitorFilter,
   type RepoMonitorRule,
-  type RepoMonitorRuleId,
   type RepoMonitorRuleUpsertInput,
   type RuntimeMode,
   type ThreadId,
@@ -200,12 +199,4 @@ export function countTriggeredRepoMonitorEvents(
     }
   }
   return count;
-}
-
-export function findRepoMonitorRuleById(
-  rules: ReadonlyArray<RepoMonitorRule>,
-  ruleId: RepoMonitorRuleId | null | undefined,
-): RepoMonitorRule | undefined {
-  if (!ruleId) return undefined;
-  return rules.find((rule) => rule.id === ruleId);
 }
