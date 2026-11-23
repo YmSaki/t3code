@@ -102,6 +102,7 @@ import {
   RpcClientId,
   EnvironmentAuthorizationError,
   PmDispatchError,
+  ThreadHandoffError,
   type RepoMonitorFilter,
   ThreadId,
   TrimmedNonEmptyString,
@@ -130,6 +131,7 @@ import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as McpSignIn from "./mcpApps/McpSignIn.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
+import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
@@ -1590,6 +1592,7 @@ export const layerWsRpc = (
       const webPushService = yield* WebPushService.WebPushService;
       const metaProjectService = yield* MetaProjectService.MetaProjectService;
       const pmService = yield* PmService.PmService;
+      const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
       const artifactService = yield* ArtifactService.ArtifactService;
       const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
       const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
@@ -3756,6 +3759,26 @@ export const layerWsRpc = (
           pmService.dispatchBatch(input).pipe(Effect.mapError(toPmRpcError)),
         [WS_METHODS.pmStopAllWorkers]: (input) =>
           pmService.stopAllWorkers(input).pipe(Effect.mapError(toPmRpcError)),
+        [WS_METHODS.threadHandoff]: (input) =>
+          startup
+            .enqueueCommand(
+              threadHandoff.handoff({
+                ...input,
+                createdBy: "user",
+                creationSource: input.creationSource ?? "web",
+              }),
+            )
+            .pipe(
+              Effect.catchTags({
+                ServerRuntimeStartupError: (cause) =>
+                  new ThreadHandoffError({
+                    sourceThreadId: input.threadId,
+                    operation: "launch",
+                    detail: cause.message,
+                    cause,
+                  }),
+              }),
+            ),
         [WS_METHODS.artifactsList]: (input) => artifactService.list(input),
         [WS_METHODS.artifactsGet]: (input) => artifactService.get(input),
         [WS_METHODS.artifactsCreate]: (input) => artifactService.create(input),
@@ -3852,6 +3875,7 @@ export const layer = Layer.unwrap(
     const webPushService = yield* WebPushService.WebPushService;
     const metaProjectService = yield* MetaProjectService.MetaProjectService;
     const pmService = yield* PmService.PmService;
+    const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
     const artifactService = yield* ArtifactService.ArtifactService;
     const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
     const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
@@ -3971,6 +3995,9 @@ export const layer = Layer.unwrap(
                   Layer.succeed(MetaProjectService.MetaProjectService, metaProjectService),
                 ),
                 Layer.provide(Layer.succeed(PmService.PmService, pmService)),
+                Layer.provide(
+                  Layer.succeed(ThreadHandoffService.ThreadHandoffService, threadHandoff),
+                ),
                 Layer.provide(Layer.succeed(ArtifactService.ArtifactService, artifactService)),
                 Layer.provide(
                   Layer.succeed(RepoMonitorService.RepoMonitorService, repoMonitorService),

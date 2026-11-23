@@ -500,6 +500,12 @@ import {
   ThreadRole,
 } from "./pm.ts";
 import {
+  ThreadHandoffError,
+  ThreadHandoffInput,
+  ThreadHandoffResult,
+  ThreadHandoffSourceNotFoundError,
+} from "./threadHandoff.ts";
+import {
   Artifact,
   ArtifactArchiveInput,
   ArtifactArchivedError,
@@ -820,6 +826,8 @@ export const WS_METHODS = {
   pmSetKillSwitch: "pm.setKillSwitch",
   pmDispatchBatch: "pm.dispatchBatch",
   pmStopAllWorkers: "pm.stopAllWorkers",
+
+  threadHandoff: "thread.handoff",
 
   artifactsList: "artifacts.list",
   artifactsGet: "artifacts.get",
@@ -2832,6 +2840,16 @@ const WsPmStopAllWorkersRpc = Rpc.make(WS_METHODS.pmStopAllWorkers, {
   error: PmRpcError,
 });
 
+const WsThreadHandoffRpc = Rpc.make(WS_METHODS.threadHandoff, {
+  payload: ThreadHandoffInput,
+  success: ThreadHandoffResult,
+  error: Schema.Union([
+    ThreadHandoffSourceNotFoundError,
+    ThreadHandoffError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
 const ArtifactRpcError = Schema.Union([
   ArtifactNotFoundError,
   ArtifactVersionNotFoundError,
@@ -3370,6 +3388,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPmSetKillSwitchRpc,
   WsPmDispatchBatchRpc,
   WsPmStopAllWorkersRpc,
+  WsThreadHandoffRpc,
   WsArtifactsListRpc,
   WsArtifactsGetRpc,
   WsArtifactsCreateRpc,

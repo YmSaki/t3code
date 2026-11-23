@@ -274,6 +274,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.pmSetKillSwitch]: "pm",
   [WS_METHODS.pmDispatchBatch]: "pm",
   [WS_METHODS.pmStopAllWorkers]: "pm",
+  [WS_METHODS.threadHandoff]: "orchestration",
   [WS_METHODS.artifactsList]: "artifacts",
   [WS_METHODS.artifactsGet]: "artifacts",
   [WS_METHODS.artifactsCreate]: "artifacts",
