@@ -120,6 +120,11 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     if (!activeThreadRef || !isServerThread) return;
     useRightPanelStore.getState().toggle(activeThreadRef, "pm");
   };
+  const onOpenArtifact = () => {
+    if (!activeThreadRef || !isServerThread) return;
+    useRightPanelStore.getState().openArtifact(activeThreadRef);
+  };
+  const onOpenArtifactStable = useStableCallback(onOpenArtifact);
   const onOpenPmStable = useStableCallback(onOpenPm);
   const onTogglePmStable = useStableCallback(onTogglePm);
   const onToggleDiffStable = useStableCallback(onToggleDiff);
@@ -370,6 +375,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     moveRightPanelSurfaceStable,
     onOpenToolDiffStable,
     onOpenTurnDiffStable,
+    onOpenArtifactStable,
     onOpenPmStable,
     onToggleDiffStable,
     onTogglePmStable,

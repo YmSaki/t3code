@@ -1,5 +1,12 @@
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/assistantInsights";
-import { MessageId, type RunId, type TurnItemId } from "@t3tools/contracts";
+import {
+  MessageId,
+  orchestrationV2RunWorkStartedAt,
+  type RunId,
+  type ScopedThreadRef,
+  type TurnItemId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { agentWorkingDirectories } from "@t3tools/client-runtime/workspace-basename-lookup";
 import { T, useGT, useMessages } from "gt-react";
@@ -25,8 +32,12 @@ import {
   readResponseSubagents,
   useAssistantMessageText,
   useProject,
+  useQuietThreadProjection,
   useQuietThreadShell,
 } from "../../state/entities";
+import { useThreadArtifacts } from "../../state/artifacts";
+import { useRightPanelStore } from "../../rightPanelStore";
+import { ArtifactCard } from "../artifact/ArtifactCard";
 import { MessageCopyButton } from "./MessageCopyButton";
 import { AssistantCitationSource } from "./AssistantCitationSource";
 import { resolveAssistantMessageCopyState } from "./MessagesTimeline.logic";
@@ -96,6 +107,9 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             onOpenTurnDiff={ctx.onOpenTurnDiff}
           />
         ) : null}
+        {row.showAssistantMeta && !row.message.streaming && row.message.runId && ctx.threadRef ? (
+          <RunArtifactCards threadRef={ctx.threadRef} runId={row.message.runId} />
+        ) : null}
         {!row.showAssistantMeta && row.projectedItem?.item.status === "interrupted" ? (
           <div className="mt-1.5 flex">
             <AssistantStatusBadge status="interrupted" />
@@ -112,6 +126,37 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
         ) : null}
       </div>
     </>
+  );
+}
+
+/** Artifacts created while the run worked, under the run's final reply. */
+function RunArtifactCards({ threadRef, runId }: { threadRef: ScopedThreadRef; runId: RunId }) {
+  const run = useQuietThreadProjection(threadRef)?.projection.runs.find(
+    (entry) => entry.id === runId,
+  );
+  const artifactsQuery = useThreadArtifacts(threadRef.environmentId, threadRef.threadId);
+  if (!run) return null;
+  const startedAt = DateTime.toEpochMillis(orchestrationV2RunWorkStartedAt(run));
+  const completedAt = run.completedAt === null ? null : DateTime.toEpochMillis(run.completedAt);
+  const artifacts = (artifactsQuery.data?.artifacts ?? []).filter((artifact) => {
+    const createdAt = Date.parse(artifact.createdAt);
+    return createdAt >= startedAt && (completedAt === null || createdAt <= completedAt);
+  });
+  if (artifacts.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {artifacts.map((artifact) => (
+        <ArtifactCard
+          key={artifact.id}
+          environmentId={threadRef.environmentId}
+          threadId={threadRef.threadId}
+          artifact={artifact}
+          onOpenPanel={(artifactId) =>
+            useRightPanelStore.getState().openArtifact(threadRef, artifactId)
+          }
+        />
+      ))}
+    </div>
   );
 }
 
