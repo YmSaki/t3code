@@ -37,6 +37,9 @@ const DevicePanel = lazy(() =>
   import("../device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
 const FilePreviewPanel = lazy(() => import("../files/FilePreviewPanel"));
+const PmControlPanel = lazy(() =>
+  import("../pm/PmControlPanel").then((module) => ({ default: module.PmControlPanel })),
+);
 
 type RightPanelTerminalProps = Omit<
   PersistentThreadTerminalPanelProps,
@@ -215,6 +218,42 @@ export function RightPanelSurfaceContent(props: {
       );
     case "pull-requests":
       return <ThreadPullRequestsPanel threadRef={threadRef} />;
+    case "pm":
+      return (
+        <Suspense fallback={null}>
+          <PmControlPanel
+            environmentId={props.environmentId}
+            pmThreadId={threadRef.threadId}
+            onOpenWorkerThread={(worker) => {
+              if (worker.environmentId === props.environmentId) {
+                useRightPanelStore.getState().openThread(threadRef, worker.threadId);
+              } else {
+                useRightPanelStore.getState().openLinkedThread(threadRef, {
+                  viaEnvironmentId: props.environmentId,
+                  environmentId: worker.environmentId,
+                  threadId: worker.threadId,
+                  label: worker.targetRepoRole ?? worker.environmentId,
+                  title: worker.title,
+                });
+              }
+            }}
+            onAnswerPendingWorker={(item) => {
+              if (!item.worker) return;
+              if (item.worker.environmentId === props.environmentId) {
+                useRightPanelStore.getState().openThread(threadRef, item.worker.threadId);
+              } else {
+                useRightPanelStore.getState().openLinkedThread(threadRef, {
+                  viaEnvironmentId: props.environmentId,
+                  environmentId: item.worker.environmentId,
+                  threadId: item.worker.threadId,
+                  label: item.worker.targetRepoRole ?? item.worker.environmentId,
+                  title: item.worker.title,
+                });
+              }
+            }}
+          />
+        </Suspense>
+      );
     case "thread":
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
       return (

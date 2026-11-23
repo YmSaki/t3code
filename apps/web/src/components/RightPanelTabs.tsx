@@ -157,6 +157,7 @@ export interface RightPanelTabsProps {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  onAddPm?: (() => void) | undefined;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
   browserAvailable: boolean;
@@ -166,6 +167,7 @@ export interface RightPanelTabsProps {
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
   deviceAvailable: boolean;
+  pmAvailable?: boolean | undefined;
   sideChatAvailable?: boolean;
   /** Overrides the default reason while side chats are available but cannot start. */
   sideChatDisabledReason?: string | null;
@@ -195,6 +197,7 @@ const SURFACE_DISABLED_REASONS = {
   pullRequest: msg("This thread's branch has no pull request yet."),
   pullRequests: msg("This thread has no linked items."),
   device: msg("Devices are only available from a thread."),
+  pm: msg("PM Board is only available for server threads."),
   sideChat: msg("Side chats start after the first message."),
 } as const;
 
@@ -343,6 +346,7 @@ function RightPanelEmptyState(props: {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  onAddPm?: (() => void) | undefined;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
   browserAvailable: boolean;
@@ -352,6 +356,7 @@ function RightPanelEmptyState(props: {
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
   deviceAvailable: boolean;
+  pmAvailable?: boolean | undefined;
   sideChatAvailable: boolean;
   sideChatDisabledReason: string | null;
 }) {
@@ -417,6 +422,18 @@ function RightPanelEmptyState(props: {
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.device),
       onClick: props.onAddDevice,
     },
+    ...(props.onAddPm
+      ? [
+          {
+            label: msg("PM Board"),
+            icon: Bot,
+            shortcut: "O",
+            available: props.pmAvailable === true,
+            disabledReason: messages(SURFACE_DISABLED_REASONS.pm),
+            onClick: props.onAddPm,
+          },
+        ]
+      : []),
     ...(props.onAddSideChat
       ? [
           {
@@ -617,6 +634,8 @@ function surfaceTitle(
       return `#${surface.number}`;
     case "pull-requests":
       return resolve(msg("Linked items"));
+    case "pm":
+      return resolve(msg("PM Board"));
     case "issue":
       // A git host numbers its issues; a tracker with keys of its own, such as Linear, names them.
       return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
@@ -718,6 +737,8 @@ function SurfaceIcon({
       );
     case "pull-requests":
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
+    case "pm":
+      return <Bot className="size-3 shrink-0" />;
     case "issue":
       return <IssueSurfaceIcon surface={surface} environmentId={environmentId} />;
     case "thread":
@@ -1259,6 +1280,18 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       disabledReason: messages(SURFACE_DISABLED_REASONS.device),
       onClick: props.onAddDevice,
     },
+    ...(props.onAddPm
+      ? [
+          {
+            label: msg("PM Board"),
+            icon: Bot,
+            shortcut: "O",
+            available: props.pmAvailable === true,
+            disabledReason: messages(SURFACE_DISABLED_REASONS.pm),
+            onClick: props.onAddPm,
+          },
+        ]
+      : []),
     ...(props.onAddSideChat
       ? [
           {
@@ -1692,6 +1725,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequest={props.onAddPullRequest}
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
+            onAddPm={props.onAddPm}
             onAddSideChat={props.onAddSideChat}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
@@ -1700,6 +1734,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             pullRequestAvailable={props.pullRequestAvailable}
             pullRequestsAvailable={props.pullRequestsAvailable}
             deviceAvailable={props.deviceAvailable}
+            pmAvailable={props.pmAvailable}
             sideChatAvailable={props.sideChatAvailable === true}
             sideChatDisabledReason={props.sideChatDisabledReason ?? null}
           />

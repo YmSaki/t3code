@@ -112,6 +112,16 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
       useRightPanelStore.getState().toggle(activeThreadRef, "diff");
     }
   };
+  const onOpenPm = () => {
+    if (!activeThreadRef || !isServerThread) return;
+    useRightPanelStore.getState().open(activeThreadRef, "pm");
+  };
+  const onTogglePm = () => {
+    if (!activeThreadRef || !isServerThread) return;
+    useRightPanelStore.getState().toggle(activeThreadRef, "pm");
+  };
+  const onOpenPmStable = useStableCallback(onOpenPm);
+  const onTogglePmStable = useStableCallback(onTogglePm);
   const onToggleDiffStable = useStableCallback(onToggleDiff);
   const createBrowserSurface = (profileId?: string, duplicateFrom?: PreviewSessionSnapshot) => {
     if (!activeThreadRef || !canOperatePreview) return;
@@ -360,7 +370,9 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     moveRightPanelSurfaceStable,
     onOpenToolDiffStable,
     onOpenTurnDiffStable,
+    onOpenPmStable,
     onToggleDiffStable,
+    onTogglePmStable,
     openChangesFromThreadPanelStable,
     openFileSurfaceStable,
     toggleRightPanelMaximizedStable,
