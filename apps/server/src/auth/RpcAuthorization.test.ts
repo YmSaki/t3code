@@ -84,6 +84,8 @@ describe("RPC authorization scopes", () => {
   });
 
   it("lets file readers see a task folder and takes source control to add a repository to it", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.kanbanListBoard)).toBe(AuthOrchestrationReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.kanbanMoveCard)).toBe(AuthSourceControlWriteScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.workspaceTaskFolder)).toBe(AuthFilesystemReadScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.workspaceAddTaskFolderRepository)).toBe(
       AuthSourceControlWriteScope,
