@@ -92,6 +92,28 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.peerLinksAnswerRequest]: AuthAccessWriteScope,
   [WS_METHODS.peerLinksPairClient]: AuthAccessWriteScope,
   [WS_METHODS.peerLinksPairLink]: AuthAccessWriteScope,
+
+  [WS_METHODS.peerHealthProbe]: AuthSettingsWriteScope,
+  [WS_METHODS.webPushSubscribe]: AuthSettingsWriteScope,
+  [WS_METHODS.webPushUnsubscribe]: AuthSettingsWriteScope,
+  [WS_METHODS.metaProjectsMutate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.pmSetRole]: AuthOrchestrationOperateScope,
+  [WS_METHODS.pmSetKillSwitch]: AuthOrchestrationOperateScope,
+  [WS_METHODS.pmDispatchBatch]: AuthOrchestrationOperateScope,
+  [WS_METHODS.pmStopAllWorkers]: AuthOrchestrationOperateScope,
+  [WS_METHODS.artifactsCreate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.artifactsRevise]: AuthOrchestrationOperateScope,
+  [WS_METHODS.artifactsSwitchVersion]: AuthOrchestrationOperateScope,
+  [WS_METHODS.artifactsArchive]: AuthOrchestrationOperateScope,
+  [WS_METHODS.artifactsPatchState]: AuthOrchestrationOperateScope,
+  [WS_METHODS.artifactsSubmitUserAction]: AuthOrchestrationOperateScope,
+  [WS_METHODS.repoMonitorUpsertRule]: AuthOrchestrationOperateScope,
+  [WS_METHODS.repoMonitorDeleteRule]: AuthOrchestrationOperateScope,
+  [WS_METHODS.agentSessionsImportSelected]: AuthOrchestrationOperateScope,
+  [WS_METHODS.worklogBackfill]: AuthOrchestrationOperateScope,
+  [WS_METHODS.worklogCreateIcalFeed]: AuthOrchestrationOperateScope,
+  [WS_METHODS.worklogRotateIcalFeedToken]: AuthOrchestrationOperateScope,
+  [WS_METHODS.worklogDeleteIcalFeed]: AuthOrchestrationOperateScope,
 } as const;
 export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 

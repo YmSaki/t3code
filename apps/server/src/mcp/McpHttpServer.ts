@@ -96,6 +96,16 @@ import * as HtmlHandlers from "./toolkits/html/handlers.ts";
 import { MessageToolkit } from "./toolkits/message/tools.ts";
 import * as MessageHandlers from "./toolkits/message/handlers.ts";
 import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
+import { MetaProjectToolkit } from "./toolkits/metaProject/tools.ts";
+import * as MetaProjectHandlers from "./toolkits/metaProject/handlers.ts";
+import { PmToolkit } from "./toolkits/pm/tools.ts";
+import * as PmHandlers from "./toolkits/pm/handlers.ts";
+import { ArtifactToolkit } from "./toolkits/artifact/tools.ts";
+import * as ArtifactHandlers from "./toolkits/artifact/handlers.ts";
+import { RepoMonitorToolkit } from "./toolkits/repoMonitor/tools.ts";
+import * as RepoMonitorHandlers from "./toolkits/repoMonitor/handlers.ts";
+import { WorklogToolkit } from "./toolkits/worklog/tools.ts";
+import * as WorklogHandlers from "./toolkits/worklog/handlers.ts";
 import { MCP_HTTP_PATH } from "../httpCors.ts";
 import { requestUrl } from "../requestUrl.ts";
 
@@ -1379,6 +1389,12 @@ export const layerMcpTransport = <RA, RE, RR>(registrations: Layer.Layer<RA, RE,
     registrations,
   }).pipe(Layer.provide(layerMcpAuthMiddleware));
 
+const layerMetaProjectToolkit = toolkitRegistration(MetaProjectToolkit, MetaProjectHandlers.layer);
+const layerPmToolkit = toolkitRegistration(PmToolkit, PmHandlers.layer);
+const layerArtifactToolkit = toolkitRegistration(ArtifactToolkit, ArtifactHandlers.layer);
+const layerRepoMonitorToolkit = toolkitRegistration(RepoMonitorToolkit, RepoMonitorHandlers.layer);
+const layerWorklogToolkit = toolkitRegistration(WorklogToolkit, WorklogHandlers.layer);
+
 /** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
 export const layerTools = Layer.mergeAll(
   layerPreviewToolkit,
@@ -1395,6 +1411,11 @@ export const layerTools = Layer.mergeAll(
   layerDeviceToolkit,
   layerHtmlToolkit,
   layerMessageToolkit,
+  layerMetaProjectToolkit,
+  layerPmToolkit,
+  layerArtifactToolkit,
+  layerRepoMonitorToolkit,
+  layerWorklogToolkit,
 );
 
 const layerToolExposure = Layer.effect(

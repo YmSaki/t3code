@@ -305,6 +305,7 @@ export default defineConfig({
       ],
       "t3code/no-global-process-runtime": "error",
       "t3code/no-inline-schema-compile": "error",
+      "t3code/no-io-in-functional-core": "error",
       "t3code/no-low-value-comments": "error",
       "t3code/no-manual-effect-runtime-in-tests": "error",
       "t3code/no-native-title-tooltip": "error",
@@ -389,6 +390,18 @@ export default defineConfig({
       {
         files: ["packages/shared/src/HostProcess.ts"],
         rules: { "t3code/no-global-process-runtime": "off" },
+      },
+      {
+        // Upstream web `*.logic.ts` predating the functional-core rule; new logic files stay guarded.
+        files: [
+          "apps/web/src/components/ChatView.logic.ts",
+          "apps/web/src/components/CommandPalette.logic.ts",
+          "apps/web/src/components/KeybindingsUpdateToast.logic.ts",
+          "apps/web/src/components/Sidebar.logic.ts",
+          "apps/web/src/components/chat/TimelineWorkGroupRows.logic.ts",
+          "apps/web/src/onboarding/projectImport.logic.ts",
+        ],
+        rules: { "t3code/no-io-in-functional-core": "off" },
       },
       {
         // The `t3` npm launcher is published as plain, dependency-free Node.

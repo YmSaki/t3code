@@ -1,9 +1,12 @@
 import {
+  AuthSettingsWriteScope,
   EnvironmentId,
   WS_METHODS,
+  type AuthSessionState,
   type OrchestrationV2ThreadHistoryPage,
   type OrchestrationV2ThreadStreamItem,
   type PeerLinkSummary,
+  type PeerNodeHealthListResult,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
@@ -15,13 +18,25 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
+import { vi } from "vite-plus/test";
 
+import { AVAILABLE_CONNECTION_STATE, type PreparedConnection } from "../connection/model.ts";
 import { EnvironmentRegistry } from "../connection/registry.ts";
 import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import type { LinkedThreadView } from "../linkedThread.ts";
+import { RpcPermissionGuard } from "../rpc/client.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { v2MessageRow, v2Projection, v2ThreadId } from "./orchestrationV2TestFixtures.ts";
 import { createPeerLinkEnvironmentAtoms, linkThroughRoutes } from "./peerLinks.ts";
+import { awaitAtomResult, runAtomCommand } from "./runtime.ts";
+
+vi.mock("./session.ts", () => ({
+  createEnvironmentSessionAtoms: () => ({ sessionStateAtom: mockSessions }),
+}));
+
+const mockSessions = Atom.family((_id: EnvironmentId) =>
+  Atom.make<AsyncResult.AsyncResult<AuthSessionState, string>>(AsyncResult.initial()),
+);
 
 // regression: #40544 earlier messages vanished when a linked thread's view opened again
 it.effect(
@@ -167,4 +182,126 @@ describe("linkThroughRoutes", () => {
       },
     ]);
   });
+});
+
+describe("peerHealth atoms", () => {
+  it.effect("reads peer health list and refreshes after probeHealth", () =>
+    Effect.gen(function* () {
+      const hubId = EnvironmentId.make("hub");
+      const workerId = EnvironmentId.make("worker-1");
+      let latencyMs = 80;
+      let listCalls = 0;
+      let probeCalls = 0;
+
+      const snapshot = (): PeerNodeHealthListResult => ({
+        nodes: [
+          {
+            environmentId: workerId,
+            label: "Worker 1",
+            online: true,
+            grade: "healthy",
+            recommendedScore: 92,
+            reasons: [],
+            latencyMs,
+            activeWorkers: 1,
+            maxWorkers: 8,
+            checkedAt: "2026-11-22T00:00:00.000Z",
+            lastError: null,
+          },
+        ],
+        recommendedEnvironmentId: workerId,
+        checkedAt: "2026-11-22T00:00:00.000Z",
+      });
+
+      const client = {
+        [WS_METHODS.peerHealthList]: () =>
+          Effect.sync(() => {
+            listCalls += 1;
+            return snapshot();
+          }),
+        [WS_METHODS.peerHealthProbe]: () =>
+          Effect.sync(() => {
+            probeCalls += 1;
+            latencyMs = 24;
+            return snapshot();
+          }),
+        [WS_METHODS.peerLinksList]: () => Effect.succeed({ links: [] }),
+        [WS_METHODS.peerLinksNames]: () => Effect.succeed({ links: [] }),
+      } as unknown as RpcSession["client"];
+
+      const supervisor = EnvironmentSupervisor.of({
+        target: { environmentId: hubId, label: "Hub" },
+        session: yield* SubscriptionRef.make(Option.some({ client } as unknown as RpcSession)),
+        state: yield* SubscriptionRef.make({
+          ...AVAILABLE_CONNECTION_STATE,
+          desired: true,
+          network: "online",
+          phase: "connected",
+          attempt: 1,
+          generation: 1,
+        }),
+        prepared: yield* SubscriptionRef.make<Option.Option<PreparedConnection>>(Option.none()),
+        connect: Effect.void,
+        disconnect: Effect.void,
+        retryNow: Effect.void,
+      } as unknown as EnvironmentSupervisor["Service"]);
+
+      const registryService = EnvironmentRegistry.of({
+        run: (_id, effect) =>
+          effect.pipe(
+            Effect.provideService(EnvironmentSupervisor, supervisor),
+            Effect.provideService(RpcPermissionGuard, {
+              authorize: () => Effect.void,
+            }),
+          ),
+        followStream: (_id, stream) =>
+          Stream.provideService(stream, EnvironmentSupervisor, supervisor),
+      } as Pick<
+        EnvironmentRegistry["Service"],
+        "run" | "followStream"
+      > as EnvironmentRegistry["Service"]);
+
+      const runtime = Atom.runtime(Layer.succeed(EnvironmentRegistry, registryService));
+      const links = createPeerLinkEnvironmentAtoms(runtime);
+      const registry = yield* Effect.acquireRelease(
+        Effect.sync(() => AtomRegistry.make()),
+        (r) => Effect.sync(() => r.dispose()),
+      );
+      registry.mount(mockSessions(hubId));
+      registry.set(
+        mockSessions(hubId),
+        AsyncResult.success({
+          authenticated: true,
+          auth: {
+            policy: "remote-reachable",
+            bootstrapMethods: [],
+            sessionMethods: [],
+            sessionCookieName: "test",
+          },
+          scopes: [AuthSettingsWriteScope],
+          permissions: [AuthSettingsWriteScope],
+        }),
+      );
+
+      const healthAtom = links.health({ environmentId: hubId, input: {} });
+      yield* AtomRegistry.mount(registry, healthAtom);
+
+      const initial = yield* awaitAtomResult(registry, healthAtom);
+      expect(initial.nodes[0]?.latencyMs).toBe(80);
+      expect(listCalls).toBe(1);
+
+      const probeExit = yield* Effect.promise(() =>
+        runAtomCommand(registry, links.probeHealth, {
+          environmentId: hubId,
+          input: {},
+        }),
+      );
+      expect(probeExit._tag).toBe("Success");
+      expect(probeCalls).toBe(1);
+
+      const refreshed = yield* awaitAtomResult(registry, healthAtom);
+      expect(refreshed.nodes[0]?.latencyMs).toBe(24);
+      expect(listCalls).toBe(2);
+    }).pipe(Effect.scoped),
+  );
 });

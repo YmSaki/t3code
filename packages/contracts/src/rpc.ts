@@ -465,6 +465,99 @@ import {
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
+import { EnvironmentId, IsoDateTime, PositiveInt, ProjectId, ThreadId } from "./baseSchemas.ts";
+import {
+  PeerNodeHealthListResult,
+  WebPushError,
+  WebPushSubscription,
+  WebPushSubscriptionDeleteInput,
+  WebPushSubscriptionInput,
+  WebPushVapidPublicKeyResult,
+} from "./selfHost.ts";
+import {
+  MetaProjectAddMemberResult,
+  MetaProjectCreateResult,
+  MetaProjectDeleteResult,
+  MetaProjectError,
+  MetaProjectId,
+  MetaProjectLinkThreadResult,
+  MetaProjectListInput,
+  MetaProjectListResult,
+  MetaProjectMutation,
+  MetaProjectRemoveMemberResult,
+  MetaProjectThreadRole,
+  MetaProjectUnlinkThreadResult,
+  MetaProjectUpdateResult,
+} from "./metaProject.ts";
+import {
+  PmBoardWorkerSummary,
+  PmDispatchBatchInput,
+  PmDispatchBatchResult,
+  PmDispatchError,
+  PmThreadNotFoundError,
+  PmWorkerPolicy,
+  PmWorkerStatus,
+  ThreadRole,
+} from "./pm.ts";
+import {
+  Artifact,
+  ArtifactArchiveInput,
+  ArtifactArchivedError,
+  ArtifactAuthor,
+  ArtifactContent,
+  ArtifactGetInput,
+  ArtifactId,
+  ArtifactInvalidStateError,
+  ArtifactKind,
+  ArtifactListInput,
+  ArtifactListResult,
+  ArtifactListVersionsInput,
+  ArtifactListVersionsResult,
+  ArtifactNotFoundError,
+  ArtifactPatchStateInput,
+  ArtifactPatchStateResult,
+  ArtifactResult,
+  ArtifactReviseInput,
+  ArtifactState,
+  ArtifactStateConflictError,
+  ArtifactStateTooLargeError,
+  ArtifactSwitchVersionInput,
+  ArtifactTitle,
+  ArtifactUserActionInput,
+  ArtifactUserActionResult,
+  ArtifactVersion,
+  ArtifactVersionNotFoundError,
+  ArtifactVersionNumber,
+} from "./artifact.ts";
+import {
+  RepoMonitorActionKind,
+  RepoMonitorDryRunResult,
+  RepoMonitorError,
+  RepoMonitorEventKind,
+  RepoMonitorEventRecord,
+  RepoMonitorFilter,
+  RepoMonitorRule,
+  RepoMonitorRuleDeleteInput,
+  RepoMonitorRuleId,
+  RepoMonitorRuleListInput,
+  RepoMonitorRuleUpsertInput,
+} from "./repoMonitor.ts";
+import { RuntimeMode } from "./providerPolicy.ts";
+import {
+  AgentSessionSelectiveImportInput,
+  ExtendedAgentSessionSource,
+  UnifiedAgentSessionError,
+  UnifiedAgentSessionImportResult,
+  UnifiedAgentSessionScanResult,
+} from "./agentSessions.ts";
+import {
+  AgentWorklogEntry,
+  IcalFeedId,
+  MergedWorklogBlock,
+  WorklogError,
+  WorklogFilter,
+  WorklogRangeStats,
+} from "./worklog.ts";
 
 export const WS_METHODS = {
   projectsListEntries: "projects.listEntries",
@@ -709,6 +802,53 @@ export const WS_METHODS = {
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
+
+  peerHealthList: "peerHealth.list",
+  peerHealthProbe: "peerHealth.probe",
+  webPushGetVapidPublicKey: "webPush.getVapidPublicKey",
+  webPushSubscribe: "webPush.subscribe",
+  webPushUnsubscribe: "webPush.unsubscribe",
+
+  metaProjectsList: "metaProjects.list",
+  metaProjectsGetTree: "metaProjects.getTree",
+  metaProjectsMutate: "metaProjects.mutate",
+  metaProjectsGetContext: "metaProjects.getContext",
+  metaProjectsGetRollup: "metaProjects.getRollup",
+
+  pmGetBoard: "pm.getBoard",
+  pmSetRole: "pm.setRole",
+  pmSetKillSwitch: "pm.setKillSwitch",
+  pmDispatchBatch: "pm.dispatchBatch",
+  pmStopAllWorkers: "pm.stopAllWorkers",
+
+  artifactsList: "artifacts.list",
+  artifactsGet: "artifacts.get",
+  artifactsCreate: "artifacts.create",
+  artifactsRevise: "artifacts.revise",
+  artifactsListVersions: "artifacts.listVersions",
+  artifactsSwitchVersion: "artifacts.switchVersion",
+  artifactsArchive: "artifacts.archive",
+  artifactsPatchState: "artifacts.patchState",
+  artifactsSubmitUserAction: "artifacts.submitUserAction",
+  artifactsExportStandalone: "artifacts.exportStandalone",
+
+  repoMonitorListRules: "repoMonitor.listRules",
+  repoMonitorUpsertRule: "repoMonitor.upsertRule",
+  repoMonitorDeleteRule: "repoMonitor.deleteRule",
+  repoMonitorListEvents: "repoMonitor.listEvents",
+  repoMonitorDryRun: "repoMonitor.dryRun",
+  repoMonitorListPresets: "repoMonitor.listPresets",
+
+  agentSessionsScanAll: "agentSessions.scanAll",
+  agentSessionsImportSelected: "agentSessions.importSelected",
+
+  worklogQuery: "worklog.query",
+  worklogGetStats: "worklog.getStats",
+  worklogBackfill: "worklog.backfill",
+  worklogListIcalFeeds: "worklog.listIcalFeeds",
+  worklogCreateIcalFeed: "worklog.createIcalFeed",
+  worklogRotateIcalFeedToken: "worklog.rotateIcalFeedToken",
+  worklogDeleteIcalFeed: "worklog.deleteIcalFeed",
 } as const;
 
 const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -2365,6 +2505,603 @@ const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeResourceTel
   stream: true,
 });
 
+const WsPeerHealthListRpc = Rpc.make(WS_METHODS.peerHealthList, {
+  payload: Schema.Struct({}),
+  success: PeerNodeHealthListResult,
+  error: Schema.Union([PeerLinkError, EnvironmentAuthorizationError]),
+});
+
+const WsPeerHealthProbeRpc = Rpc.make(WS_METHODS.peerHealthProbe, {
+  payload: Schema.Struct({ environmentId: Schema.optional(EnvironmentId) }),
+  success: PeerNodeHealthListResult,
+  error: Schema.Union([PeerLinkError, EnvironmentAuthorizationError]),
+});
+
+const WsWebPushGetVapidPublicKeyRpc = Rpc.make(WS_METHODS.webPushGetVapidPublicKey, {
+  payload: Schema.Struct({}),
+  success: WebPushVapidPublicKeyResult,
+  error: Schema.Union([WebPushError, EnvironmentAuthorizationError]),
+});
+
+const WsWebPushSubscribeRpc = Rpc.make(WS_METHODS.webPushSubscribe, {
+  payload: WebPushSubscriptionInput,
+  success: WebPushSubscription,
+  error: Schema.Union([WebPushError, EnvironmentAuthorizationError]),
+});
+
+const WsWebPushUnsubscribeRpc = Rpc.make(WS_METHODS.webPushUnsubscribe, {
+  payload: WebPushSubscriptionDeleteInput,
+  success: Schema.Struct({ removed: Schema.Boolean }),
+  error: Schema.Union([WebPushError, EnvironmentAuthorizationError]),
+});
+
+const MetaProjectEnvironmentBadgeRpcSchema = Schema.Struct({
+  environmentId: EnvironmentId,
+  label: Schema.String,
+  isLocal: Schema.Boolean,
+  online: Schema.Boolean,
+});
+
+const MetaProjectThreadNodeRpcSchema = Schema.Struct({
+  environmentId: EnvironmentId,
+  projectId: Schema.NullOr(ProjectId),
+  threadId: ThreadId,
+  title: Schema.String,
+  role: MetaProjectThreadRole,
+  environmentBadge: MetaProjectEnvironmentBadgeRpcSchema,
+  updatedAt: Schema.NullOr(IsoDateTime),
+  isActive: Schema.Boolean,
+  missing: Schema.Boolean,
+});
+
+const MetaProjectRepositoryNodeRpcSchema = Schema.Struct({
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+  title: Schema.String,
+  workspaceRoot: Schema.NullOr(Schema.String),
+  role: Schema.String,
+  environmentBadge: MetaProjectEnvironmentBadgeRpcSchema,
+  threads: Schema.Array(MetaProjectThreadNodeRpcSchema),
+  missing: Schema.Boolean,
+});
+
+const MetaProjectTreeNodeRpcSchema = Schema.Struct({
+  metaProjectId: Schema.String,
+  title: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  pinned: Schema.Boolean,
+  archived: Schema.Boolean,
+  pmThreads: Schema.Array(MetaProjectThreadNodeRpcSchema),
+  crossCuttingThreads: Schema.Array(MetaProjectThreadNodeRpcSchema),
+  repositories: Schema.Array(MetaProjectRepositoryNodeRpcSchema),
+});
+
+const UncategorizedRepositoryNodeRpcSchema = Schema.Struct({
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+  title: Schema.String,
+  workspaceRoot: Schema.String,
+  environmentBadge: MetaProjectEnvironmentBadgeRpcSchema,
+  threads: Schema.Array(MetaProjectThreadNodeRpcSchema),
+});
+
+const MetaProjectHierarchyTreeRpcSchema = Schema.Struct({
+  metaProjects: Schema.Array(MetaProjectTreeNodeRpcSchema),
+  uncategorizedRepositories: Schema.Array(UncategorizedRepositoryNodeRpcSchema),
+});
+
+const RollupSourceRefRpcSchema = Schema.Struct({
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+});
+
+const MetaProjectRollupResultRpcSchema = Schema.Struct({
+  pullRequests: Schema.Array(
+    Schema.Struct({
+      environmentId: EnvironmentId,
+      projectId: ProjectId,
+      host: Schema.String,
+      repository: Schema.String,
+      number: Schema.Number,
+      title: Schema.String,
+      url: Schema.String,
+      state: Schema.Literals(["open", "closed", "merged"]),
+      isDraft: Schema.optional(Schema.Boolean),
+      checksState: Schema.optional(
+        Schema.NullOr(Schema.Literals(["passing", "failing", "pending"])),
+      ),
+      reviewDecision: Schema.optional(
+        Schema.NullOr(Schema.Literals(["approved", "changes-requested", "review-required"])),
+      ),
+      mergeability: Schema.optional(Schema.Literals(["mergeable", "conflicting", "unknown"])),
+      viewerReviewRequested: Schema.optional(Schema.Boolean),
+      updatedAt: IsoDateTime,
+      canonicalKey: Schema.String,
+      sources: Schema.Array(RollupSourceRefRpcSchema),
+    }),
+  ),
+  issues: Schema.Array(
+    Schema.Struct({
+      environmentId: EnvironmentId,
+      projectId: ProjectId,
+      tracker: Schema.String,
+      host: Schema.String,
+      scope: Schema.String,
+      key: Schema.String,
+      displayKey: Schema.String,
+      title: Schema.String,
+      url: Schema.String,
+      stateCategory: Schema.Literals(["open", "closed"]),
+      isAssignedToViewer: Schema.optional(Schema.Boolean),
+      isMentioned: Schema.optional(Schema.Boolean),
+      labels: Schema.optional(Schema.Array(Schema.String)),
+      commentCount: Schema.optional(Schema.Number),
+      updatedAt: IsoDateTime,
+      canonicalKey: Schema.String,
+      sources: Schema.Array(RollupSourceRefRpcSchema),
+    }),
+  ),
+  activeThreads: Schema.Array(
+    Schema.Struct({
+      canonicalKey: Schema.String,
+      environmentId: EnvironmentId,
+      projectId: ProjectId,
+      threadId: ThreadId,
+      title: Schema.String,
+      role: MetaProjectThreadRole,
+      status: Schema.Literals([
+        "waiting_approval",
+        "waiting_input",
+        "error",
+        "running",
+        "idle",
+        "settled",
+      ]),
+      updatedAt: IsoDateTime,
+    }),
+  ),
+  counts: Schema.Struct({
+    pullRequests: Schema.Struct({
+      total: Schema.Number,
+      open: Schema.Number,
+      draft: Schema.Number,
+      failingChecks: Schema.Number,
+      conflicting: Schema.Number,
+      reviewRequested: Schema.Number,
+      changesRequested: Schema.Number,
+      approved: Schema.Number,
+      merged: Schema.Number,
+      closed: Schema.Number,
+    }),
+    issues: Schema.Struct({
+      total: Schema.Number,
+      open: Schema.Number,
+      closed: Schema.Number,
+      assignedToViewer: Schema.Number,
+      mentioned: Schema.Number,
+    }),
+    threads: Schema.Struct({
+      total: Schema.Number,
+      active: Schema.Number,
+      running: Schema.Number,
+      needsAttention: Schema.Number,
+      pm: Schema.Number,
+      crossCutting: Schema.Number,
+      standard: Schema.Number,
+      settled: Schema.Number,
+    }),
+  }),
+});
+
+const MetaProjectRpcError = Schema.Union([MetaProjectError, EnvironmentAuthorizationError]);
+
+const WsMetaProjectsListRpc = Rpc.make(WS_METHODS.metaProjectsList, {
+  payload: MetaProjectListInput,
+  success: MetaProjectListResult,
+  error: MetaProjectRpcError,
+});
+
+const WsMetaProjectsGetTreeRpc = Rpc.make(WS_METHODS.metaProjectsGetTree, {
+  payload: Schema.Struct({ includeArchived: Schema.optional(Schema.Boolean) }),
+  success: MetaProjectHierarchyTreeRpcSchema,
+  error: MetaProjectRpcError,
+});
+
+const WsMetaProjectsMutateRpc = Rpc.make(WS_METHODS.metaProjectsMutate, {
+  payload: MetaProjectMutation,
+  success: Schema.Union([
+    MetaProjectCreateResult,
+    MetaProjectUpdateResult,
+    MetaProjectDeleteResult,
+    MetaProjectAddMemberResult,
+    MetaProjectRemoveMemberResult,
+    MetaProjectLinkThreadResult,
+    MetaProjectUnlinkThreadResult,
+  ]),
+  error: MetaProjectRpcError,
+});
+
+const WsMetaProjectsGetContextRpc = Rpc.make(WS_METHODS.metaProjectsGetContext, {
+  payload: Schema.Struct({
+    metaProjectId: Schema.optional(MetaProjectId),
+    environmentId: Schema.optional(EnvironmentId),
+    projectId: Schema.optional(ProjectId),
+    format: Schema.optional(Schema.Literals(["hybrid", "xml", "markdown"])),
+    maxChars: Schema.optional(PositiveInt),
+  }),
+  success: Schema.NullOr(
+    Schema.Struct({
+      metaProjectId: MetaProjectId,
+      text: Schema.String,
+      charCount: NonNegativeInt,
+      truncated: Schema.Boolean,
+      omittedRepositoryCount: NonNegativeInt,
+      instructionsTruncated: Schema.Boolean,
+    }),
+  ),
+  error: MetaProjectRpcError,
+});
+
+const WsMetaProjectsGetRollupRpc = Rpc.make(WS_METHODS.metaProjectsGetRollup, {
+  payload: Schema.Struct({ metaProjectId: MetaProjectId }),
+  success: MetaProjectRollupResultRpcSchema,
+  error: MetaProjectRpcError,
+});
+
+const PmRpcError = Schema.Union([
+  PmThreadNotFoundError,
+  PmDispatchError,
+  EnvironmentAuthorizationError,
+]);
+
+const WsPmGetBoardRpc = Rpc.make(WS_METHODS.pmGetBoard, {
+  payload: Schema.Struct({ pmThreadId: ThreadId }),
+  success: Schema.Struct({
+    pmThreadId: ThreadId,
+    metaProjectId: Schema.NullOr(TrimmedNonEmptyString),
+    policy: PmWorkerPolicy,
+    killSwitchActive: Schema.Boolean,
+    delegatedTurnCount: NonNegativeInt,
+    workers: Schema.Array(PmBoardWorkerSummary),
+    generatedAt: IsoDateTime,
+    pendingQuestions: Schema.Array(
+      Schema.Struct({
+        workerThreadId: ThreadId,
+        title: Schema.String,
+        status: PmWorkerStatus,
+        questions: Schema.Array(Schema.String),
+      }),
+    ),
+  }),
+  error: PmRpcError,
+});
+
+const WsPmSetRoleRpc = Rpc.make(WS_METHODS.pmSetRole, {
+  payload: Schema.Struct({
+    threadId: ThreadId,
+    role: ThreadRole,
+    metaProjectId: Schema.optional(Schema.NullOr(Schema.String)),
+    delegationDepth: Schema.optional(NonNegativeInt),
+    policy: Schema.optional(PmWorkerPolicy),
+  }),
+  success: Schema.Struct({
+    threadId: ThreadId,
+    metaProjectId: Schema.NullOr(TrimmedNonEmptyString),
+    role: ThreadRole,
+    delegationDepth: NonNegativeInt,
+    policy: PmWorkerPolicy,
+    killSwitchActive: Schema.Boolean,
+    delegatedTurnCount: NonNegativeInt,
+    createdAt: IsoDateTime,
+    updatedAt: IsoDateTime,
+  }),
+  error: PmRpcError,
+});
+
+const WsPmSetKillSwitchRpc = Rpc.make(WS_METHODS.pmSetKillSwitch, {
+  payload: Schema.Struct({
+    scope: Schema.Literals(["global", "thread"]),
+    threadId: Schema.optional(ThreadId),
+    active: Schema.Boolean,
+  }),
+  success: Schema.Struct({
+    scope: Schema.Literals(["global", "thread"]),
+    active: Schema.Boolean,
+    threadId: Schema.optional(ThreadId),
+  }),
+  error: PmRpcError,
+});
+
+const WsPmDispatchBatchRpc = Rpc.make(WS_METHODS.pmDispatchBatch, {
+  payload: PmDispatchBatchInput,
+  success: PmDispatchBatchResult,
+  error: PmRpcError,
+});
+
+const WsPmStopAllWorkersRpc = Rpc.make(WS_METHODS.pmStopAllWorkers, {
+  payload: Schema.Struct({
+    pmThreadId: ThreadId,
+    activateKillSwitch: Schema.optional(Schema.Boolean),
+    reason: Schema.optional(Schema.String),
+  }),
+  success: Schema.Struct({
+    pmThreadId: ThreadId,
+    killSwitchActive: Schema.Boolean,
+    stoppedWorkerThreadIds: Schema.Array(ThreadId),
+  }),
+  error: PmRpcError,
+});
+
+const ArtifactRpcError = Schema.Union([
+  ArtifactNotFoundError,
+  ArtifactVersionNotFoundError,
+  ArtifactStateConflictError,
+  ArtifactStateTooLargeError,
+  ArtifactInvalidStateError,
+  ArtifactArchivedError,
+  EnvironmentAuthorizationError,
+]);
+
+const WsArtifactsListRpc = Rpc.make(WS_METHODS.artifactsList, {
+  payload: ArtifactListInput,
+  success: ArtifactListResult,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsGetRpc = Rpc.make(WS_METHODS.artifactsGet, {
+  payload: ArtifactGetInput,
+  success: ArtifactResult,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsCreateRpc = Rpc.make(WS_METHODS.artifactsCreate, {
+  payload: Schema.Struct({
+    id: Schema.optional(ArtifactId),
+    environmentId: Schema.optional(EnvironmentId),
+    projectId: Schema.optional(ProjectId),
+    threadId: ThreadId,
+    kind: ArtifactKind,
+    title: ArtifactTitle,
+    content: ArtifactContent,
+    author: Schema.optionalKey(ArtifactAuthor),
+    summary: Schema.optional(Schema.String),
+    initialState: Schema.optionalKey(ArtifactState),
+  }),
+  success: ArtifactResult,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsReviseRpc = Rpc.make(WS_METHODS.artifactsRevise, {
+  payload: ArtifactReviseInput,
+  success: ArtifactResult,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsListVersionsRpc = Rpc.make(WS_METHODS.artifactsListVersions, {
+  payload: ArtifactListVersionsInput,
+  success: ArtifactListVersionsResult,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsSwitchVersionRpc = Rpc.make(WS_METHODS.artifactsSwitchVersion, {
+  payload: ArtifactSwitchVersionInput,
+  success: ArtifactResult,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsArchiveRpc = Rpc.make(WS_METHODS.artifactsArchive, {
+  payload: ArtifactArchiveInput,
+  success: Artifact,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsPatchStateRpc = Rpc.make(WS_METHODS.artifactsPatchState, {
+  payload: ArtifactPatchStateInput,
+  success: ArtifactPatchStateResult,
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsSubmitUserActionRpc = Rpc.make(WS_METHODS.artifactsSubmitUserAction, {
+  payload: ArtifactUserActionInput,
+  success: Schema.Struct({
+    ...ArtifactUserActionResult.fields,
+    prompt: Schema.String,
+  }),
+  error: ArtifactRpcError,
+});
+
+const WsArtifactsExportStandaloneRpc = Rpc.make(WS_METHODS.artifactsExportStandalone, {
+  payload: Schema.Struct({
+    artifactId: ArtifactId,
+    version: Schema.optional(ArtifactVersionNumber),
+    secret: Schema.optional(Schema.String),
+    allowBlobFrames: Schema.optional(Schema.Boolean),
+  }),
+  success: Schema.Struct({
+    artifact: Artifact,
+    version: ArtifactVersion,
+    fileName: Schema.String,
+    mimeType: Schema.String,
+    content: Schema.String,
+    csp: Schema.String,
+    headers: Schema.Record(Schema.String, Schema.String),
+  }),
+  error: ArtifactRpcError,
+});
+
+const RepoMonitorRpcError = Schema.Union([RepoMonitorError, EnvironmentAuthorizationError]);
+
+const RepoMonitorPresetRpcSchema = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  description: Schema.String,
+  eventKinds: Schema.Array(RepoMonitorEventKind),
+  defaultFilter: RepoMonitorFilter,
+  actionKind: RepoMonitorActionKind,
+  defaultRuntimeMode: RuntimeMode,
+  promptTemplate: TrimmedNonEmptyString,
+  defaultCooldownSec: NonNegativeInt,
+  defaultMaxTriggersPerHour: PositiveInt,
+});
+
+const WsRepoMonitorListRulesRpc = Rpc.make(WS_METHODS.repoMonitorListRules, {
+  payload: RepoMonitorRuleListInput,
+  success: Schema.Struct({ rules: Schema.Array(RepoMonitorRule) }),
+  error: RepoMonitorRpcError,
+});
+
+const WsRepoMonitorUpsertRuleRpc = Rpc.make(WS_METHODS.repoMonitorUpsertRule, {
+  payload: RepoMonitorRuleUpsertInput,
+  success: RepoMonitorRule,
+  error: RepoMonitorRpcError,
+});
+
+const WsRepoMonitorDeleteRuleRpc = Rpc.make(WS_METHODS.repoMonitorDeleteRule, {
+  payload: RepoMonitorRuleDeleteInput,
+  success: Schema.Struct({ id: RepoMonitorRuleId, deleted: Schema.Boolean }),
+  error: RepoMonitorRpcError,
+});
+
+const WsRepoMonitorListEventsRpc = Rpc.make(WS_METHODS.repoMonitorListEvents, {
+  payload: Schema.Struct({
+    projectId: Schema.optional(ProjectId),
+    ruleId: Schema.optional(RepoMonitorRuleId),
+    limit: Schema.optional(PositiveInt),
+  }),
+  success: Schema.Struct({ events: Schema.Array(RepoMonitorEventRecord) }),
+  error: RepoMonitorRpcError,
+});
+
+const WsRepoMonitorDryRunRpc = Rpc.make(WS_METHODS.repoMonitorDryRun, {
+  payload: Schema.Struct({
+    projectId: ProjectId,
+    ruleId: Schema.optional(RepoMonitorRuleId),
+    emitOnInitialCursor: Schema.optional(Schema.Boolean),
+  }),
+  success: Schema.Struct({ results: Schema.Array(RepoMonitorDryRunResult) }),
+  error: RepoMonitorRpcError,
+});
+
+const WsRepoMonitorListPresetsRpc = Rpc.make(WS_METHODS.repoMonitorListPresets, {
+  payload: Schema.Struct({}),
+  success: Schema.Struct({ presets: Schema.Array(RepoMonitorPresetRpcSchema) }),
+  error: RepoMonitorRpcError,
+});
+
+const WsAgentSessionsScanAllRpc = Rpc.make(WS_METHODS.agentSessionsScanAll, {
+  payload: Schema.Struct({
+    sources: Schema.optional(Schema.Array(ExtendedAgentSessionSource)),
+  }),
+  success: UnifiedAgentSessionScanResult,
+  error: Schema.Union([UnifiedAgentSessionError, EnvironmentAuthorizationError]),
+});
+
+const WsAgentSessionsImportSelectedRpc = Rpc.make(WS_METHODS.agentSessionsImportSelected, {
+  payload: AgentSessionSelectiveImportInput,
+  success: UnifiedAgentSessionImportResult,
+  error: Schema.Union([UnifiedAgentSessionError, EnvironmentAuthorizationError]),
+});
+
+const WorklogRpcError = Schema.Union([WorklogError, EnvironmentAuthorizationError]);
+
+const StoredIcalFeedRpcSchema = Schema.Struct({
+  id: IcalFeedId,
+  name: Schema.String,
+  enabled: Schema.Boolean,
+  timeZone: Schema.String,
+  gapToleranceMinutes: Schema.Number,
+  filter: WorklogFilter,
+  includeStatsInDescription: Schema.Boolean,
+  includeThreadUrl: Schema.Boolean,
+  revokedAt: Schema.NullOr(Schema.String),
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+});
+
+const CreatedIcalFeedRpcSchema = Schema.Struct({
+  feed: StoredIcalFeedRpcSchema,
+  rawToken: Schema.String,
+});
+
+const WsWorklogQueryRpc = Rpc.make(WS_METHODS.worklogQuery, {
+  payload: Schema.Struct({
+    filter: Schema.optional(WorklogFilter),
+    mode: Schema.optional(Schema.Literals(["raw", "merged"])),
+    gapToleranceMinutes: Schema.optional(Schema.NullOr(NonNegativeInt)),
+    timeZone: Schema.optional(TrimmedNonEmptyString),
+    includePeers: Schema.optional(Schema.Boolean),
+  }),
+  success: Schema.Struct({
+    entries: Schema.Array(AgentWorklogEntry),
+    blocks: Schema.Array(MergedWorklogBlock),
+    dailySummaries: Schema.Array(
+      Schema.Struct({
+        dayKey: Schema.String,
+        parallelDurationMs: Schema.Number,
+        parallelHours: Schema.Number,
+        unionDurationMs: Schema.Number,
+        unionHours: Schema.Number,
+        sliceCount: Schema.Number,
+        slices: Schema.Array(Schema.Unknown),
+      }),
+    ),
+    dayLayouts: Schema.Record(Schema.String, Schema.Array(Schema.Unknown)),
+  }),
+  error: WorklogRpcError,
+});
+
+const WsWorklogGetStatsRpc = Rpc.make(WS_METHODS.worklogGetStats, {
+  payload: Schema.Struct({
+    filter: Schema.optional(WorklogFilter),
+    timeZone: Schema.optional(TrimmedNonEmptyString),
+    topProjectsLimit: Schema.optional(PositiveInt),
+    includePeers: Schema.optional(Schema.Boolean),
+  }),
+  success: WorklogRangeStats,
+  error: WorklogRpcError,
+});
+
+const WsWorklogBackfillRpc = Rpc.make(WS_METHODS.worklogBackfill, {
+  payload: Schema.Struct({ environmentId: Schema.optional(EnvironmentId) }),
+  success: Schema.Struct({
+    backfilledCount: Schema.Number,
+    entries: Schema.Array(AgentWorklogEntry),
+  }),
+  error: WorklogRpcError,
+});
+
+const WsWorklogListIcalFeedsRpc = Rpc.make(WS_METHODS.worklogListIcalFeeds, {
+  payload: Schema.Struct({ includeRevoked: Schema.optional(Schema.Boolean) }),
+  success: Schema.Struct({ feeds: Schema.Array(StoredIcalFeedRpcSchema) }),
+  error: WorklogRpcError,
+});
+
+const WsWorklogCreateIcalFeedRpc = Rpc.make(WS_METHODS.worklogCreateIcalFeed, {
+  payload: Schema.Struct({
+    id: Schema.optional(IcalFeedId),
+    name: TrimmedNonEmptyString,
+    timeZone: Schema.optional(TrimmedNonEmptyString),
+    gapToleranceMinutes: Schema.optional(NonNegativeInt),
+    filter: Schema.optional(WorklogFilter),
+    includeStatsInDescription: Schema.optional(Schema.Boolean),
+    includeThreadUrl: Schema.optional(Schema.Boolean),
+  }),
+  success: CreatedIcalFeedRpcSchema,
+  error: WorklogRpcError,
+});
+
+const WsWorklogRotateIcalFeedTokenRpc = Rpc.make(WS_METHODS.worklogRotateIcalFeedToken, {
+  payload: Schema.Struct({ feedId: IcalFeedId }),
+  success: CreatedIcalFeedRpcSchema,
+  error: WorklogRpcError,
+});
+
+const WsWorklogDeleteIcalFeedRpc = Rpc.make(WS_METHODS.worklogDeleteIcalFeed, {
+  payload: Schema.Struct({ feedId: IcalFeedId }),
+  success: Schema.Void,
+  error: WorklogRpcError,
+});
+
 export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthorization>()(
   "t3/contracts/RpcScopeAuthorization",
   { error: EnvironmentAuthorizationError },
@@ -2618,4 +3355,44 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
   WsOrchestrationV2SubscribeCommandOutputRpc,
   WsOrchestrationV2SubscribePromptSuggestionRpc,
+  WsPeerHealthListRpc,
+  WsPeerHealthProbeRpc,
+  WsWebPushGetVapidPublicKeyRpc,
+  WsWebPushSubscribeRpc,
+  WsWebPushUnsubscribeRpc,
+  WsMetaProjectsListRpc,
+  WsMetaProjectsGetTreeRpc,
+  WsMetaProjectsMutateRpc,
+  WsMetaProjectsGetContextRpc,
+  WsMetaProjectsGetRollupRpc,
+  WsPmGetBoardRpc,
+  WsPmSetRoleRpc,
+  WsPmSetKillSwitchRpc,
+  WsPmDispatchBatchRpc,
+  WsPmStopAllWorkersRpc,
+  WsArtifactsListRpc,
+  WsArtifactsGetRpc,
+  WsArtifactsCreateRpc,
+  WsArtifactsReviseRpc,
+  WsArtifactsListVersionsRpc,
+  WsArtifactsSwitchVersionRpc,
+  WsArtifactsArchiveRpc,
+  WsArtifactsPatchStateRpc,
+  WsArtifactsSubmitUserActionRpc,
+  WsArtifactsExportStandaloneRpc,
+  WsRepoMonitorListRulesRpc,
+  WsRepoMonitorUpsertRuleRpc,
+  WsRepoMonitorDeleteRuleRpc,
+  WsRepoMonitorListEventsRpc,
+  WsRepoMonitorDryRunRpc,
+  WsRepoMonitorListPresetsRpc,
+  WsAgentSessionsScanAllRpc,
+  WsAgentSessionsImportSelectedRpc,
+  WsWorklogQueryRpc,
+  WsWorklogGetStatsRpc,
+  WsWorklogBackfillRpc,
+  WsWorklogListIcalFeedsRpc,
+  WsWorklogCreateIcalFeedRpc,
+  WsWorklogRotateIcalFeedTokenRpc,
+  WsWorklogDeleteIcalFeedRpc,
 ).middleware(RpcScopeAuthorization);

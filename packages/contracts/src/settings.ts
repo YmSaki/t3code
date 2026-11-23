@@ -54,6 +54,7 @@ import {
   ProviderDriverKind,
 } from "./providerInstance.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
+import { EnvironmentRole, SelfHostHubConfig } from "./selfHost.ts";
 import {
   CloudSpeechModelId,
   SpeechAcceleration,
@@ -1493,7 +1494,7 @@ export const ServerSettings = Schema.Struct({
    * Beta: links to the user's other machines, both ways. Off refuses new links, calls over links
    * and tasks on another machine; tasks already running there finish.
    */
-  linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   /** Beta: Claude and Codex predict the next prompt after completed turns. Codex follows a change at once; open Claude threads after they restart. */
   promptSuggestionsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
@@ -1615,6 +1616,14 @@ export const ServerSettings = Schema.Struct({
 
   /** Sent by the Usage tab with each summary request to this environment; edit in settings.json. Invalid values are ignored. */
   usageModelFilter: ForwardCompatibleOptional(UsageModelFilter),
+
+  environmentRole: EnvironmentRole.pipe(
+    Schema.withDecodingDefault(Effect.succeed("standalone" as const)),
+  ),
+  hubConfig: Schema.NullOr(SelfHostHubConfig).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  peerLinksDefaultEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
@@ -2003,6 +2012,10 @@ export const ServerSettingsPatch = Schema.Struct({
   usageModelAliases: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, Schema.NullOr(TrimmedNonEmptyString)),
   ),
+
+  environmentRole: Schema.optionalKey(EnvironmentRole),
+  hubConfig: Schema.optionalKey(Schema.NullOr(SelfHostHubConfig)),
+  peerLinksDefaultEnabled: Schema.optionalKey(Schema.Boolean),
 });
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 

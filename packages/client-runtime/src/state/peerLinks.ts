@@ -50,10 +50,16 @@ export function createPeerLinkEnvironmentAtoms<R, E>(
     tag: WS_METHODS.peerLinksNames,
     staleTimeMs: 10_000,
   });
+  const health = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "environment-data:peer-links:health",
+    tag: WS_METHODS.peerHealthList,
+    staleTimeMs: 10_000,
+  });
   const refreshLinks = (registry: AtomRegistry.AtomRegistry, environmentId: EnvironmentId) =>
     Effect.sync(() => {
       registry.refresh(list({ environmentId, input: {} }));
       registry.refresh(names({ environmentId, input: {} }));
+      registry.refresh(health({ environmentId, input: {} }));
     });
   /**
    * What a view of the thread last showed. It outlives the subscription for a while, so coming
@@ -98,6 +104,12 @@ export function createPeerLinkEnvironmentAtoms<R, E>(
   return {
     list,
     names,
+    health,
+    probeHealth: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:peer-links:probe-health",
+      tag: WS_METHODS.peerHealthProbe,
+      onSuccess: ({ environmentId }, registry) => refreshLinks(registry, environmentId),
+    }),
     link: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:peer-links:link",
       tag: WS_METHODS.peerLinksLink,

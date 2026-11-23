@@ -1,0 +1,28 @@
+[Unit]
+Description=T3 Code hub server
+Documentation=https://github.com/pingdotgg/t3code
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=t3code
+Group=t3code
+WorkingDirectory=/srv/t3code/workspaces
+Environment=T3CODE_HOME=/var/lib/t3code
+Environment=T3CODE_HOST=127.0.0.1
+Environment=T3CODE_PORT=3773
+Environment=T3CODE_NO_BROWSER=1
+EnvironmentFile=-/etc/t3code/hub.env
+ExecStart=/usr/bin/env t3 serve --host ${T3CODE_HOST} --port ${T3CODE_PORT} --no-browser
+Restart=on-failure
+RestartSec=5
+StateDirectory=t3code
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/srv/t3code /var/lib/t3code
+
+[Install]
+WantedBy=multi-user.target
