@@ -303,6 +303,34 @@
       "types": "./src/state/peerLinks.ts",
       "default": "./src/state/peerLinks.ts"
     },
+    "./state/webPush": {
+      "types": "./src/state/webPush.ts",
+      "default": "./src/state/webPush.ts"
+    },
+    "./state/metaProjects": {
+      "types": "./src/state/metaProjects.ts",
+      "default": "./src/state/metaProjects.ts"
+    },
+    "./state/pmBoard": {
+      "types": "./src/state/pmBoard.ts",
+      "default": "./src/state/pmBoard.ts"
+    },
+    "./state/artifacts": {
+      "types": "./src/state/artifacts.ts",
+      "default": "./src/state/artifacts.ts"
+    },
+    "./state/repoMonitors": {
+      "types": "./src/state/repoMonitors.ts",
+      "default": "./src/state/repoMonitors.ts"
+    },
+    "./state/agentSessionImport": {
+      "types": "./src/state/agentSessionImport.ts",
+      "default": "./src/state/agentSessionImport.ts"
+    },
+    "./state/worklog": {
+      "types": "./src/state/worklog.ts",
+      "default": "./src/state/worklog.ts"
+    },
     "./state/environmentHttpAuth": {
       "types": "./src/state/environmentHttpAuth.ts",
       "default": "./src/state/environmentHttpAuth.ts"
