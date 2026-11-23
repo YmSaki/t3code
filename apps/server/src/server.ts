@@ -186,6 +186,22 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as EnvironmentAuthPolicy from "./auth/EnvironmentAuthPolicy.ts";
 import * as CloudHttp from "./cloud/http.ts";
 import * as GuestHttp from "./guest/http.ts";
+import * as PeerHealthMonitor from "./peer/PeerHealthMonitor.ts";
+import * as WebPushStore from "./push/WebPushStore.ts";
+import * as WebPushService from "./push/WebPushService.ts";
+import * as MetaProjectStore from "./metaProject/MetaProjectStore.ts";
+import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
+import * as PmStore from "./pm/PmStore.ts";
+import * as PmService from "./pm/PmService.ts";
+import * as ArtifactStore from "./artifact/ArtifactStore.ts";
+import * as ArtifactService from "./artifact/ArtifactService.ts";
+import * as RepoMonitorStore from "./repoMonitor/RepoMonitorStore.ts";
+import * as RepoMonitorService from "./repoMonitor/RepoMonitorService.ts";
+import * as ExtendedAgentSessionScanner from "./project/importers/ExtendedAgentSessionScanner.ts";
+import * as UnifiedImportService from "./project/importers/UnifiedImportService.ts";
+import * as WorklogStore from "./worklog/WorklogStore.ts";
+import * as WorklogService from "./worklog/WorklogService.ts";
+import * as WorklogHttpRoute from "./worklog/WorklogHttpRoute.ts";
 import * as LinkThreadHttp from "./peer/linkThreadHttp.ts";
 import * as CloudLink from "./cloud/CloudLink.ts";
 import * as ConnectReachability from "./cloud/ConnectReachability.ts";
@@ -757,6 +773,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerProviderInstallationRefresh,
   ProviderInstallation.layer,
   ReplayMarkers.layer,
+  WorklogService.layer.pipe(Layer.provide(WorklogStore.layer)),
   Layer.effectDiscard(ProjectSettingsOverrideSweep.sweep),
 ).pipe(
   Layer.provideMerge(layerOrchestrationApplication),
@@ -888,6 +905,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,
     LinkThreadHttp.layer,
+    WorklogHttpRoute.layer,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
     PreviewTunnel.routeLayer,
@@ -904,46 +922,59 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.effectDiscard(
     RemoteDelegation.RemoteDelegation.pipe(Effect.flatMap((remote) => remote.start())),
   ),
-).pipe(
-  Layer.provide(
-    PullRequestReviewGuideService.layer.pipe(Layer.provide(PullRequestReviewGuides.layer)),
-  ),
-  // delegate_task to a linked environment, from /mcp and the follower above.
-  Layer.provide(RemoteDelegation.layer.pipe(Layer.provide(ProjectionStoreV2.layer))),
-  // Links agents ask for: shown in a thread from /mcp, answered over WebSocket.
-  Layer.provide(PeerLinkRequests.layer),
-  // Share the service so HTTP/WS clients single-flight reads and invalidate each other's cached patches.
-  Layer.provide(layerPullRequestService),
-  Layer.provide(layerThreadIssueService),
-  Layer.provide(layerIssueService),
-  // The same activity instance RunExecutionService reports to, by layer memoization.
-  Layer.provide(
-    ServerBrowser.layer.pipe(
-      Layer.provide(Layer.merge(DesktopBrowserChannel.layer, PreviewAgentActivity.layer)),
+)
+  .pipe(
+    Layer.provide(
+      PullRequestReviewGuideService.layer.pipe(Layer.provide(PullRequestReviewGuides.layer)),
     ),
-  ),
-  Layer.provide(PreviewBrowser.layer),
-  // Links to other environments, shared by clients (WebSocket) and agents (/mcp).
-  Layer.provide(
-    Layer.mergeAll(PeerForwarding.layer, PeerThreadRelay.layer, PeerClientPairing.layer).pipe(
-      Layer.provideMerge(PeerMcpClient.layer),
-      Layer.provideMerge(PeerLinks.layer),
+    // delegate_task to a linked environment, from /mcp and the follower above.
+    Layer.provide(RemoteDelegation.layer.pipe(Layer.provide(ProjectionStoreV2.layer))),
+    // Links agents ask for: shown in a thread from /mcp, answered over WebSocket.
+    Layer.provide(PeerLinkRequests.layer),
+    // Share the service so HTTP/WS clients single-flight reads and invalidate each other's cached patches.
+    Layer.provide(layerPullRequestService),
+    Layer.provide(layerThreadIssueService),
+    Layer.provide(layerIssueService),
+    // The same activity instance RunExecutionService reports to, by layer memoization.
+    Layer.provide(
+      ServerBrowser.layer.pipe(
+        Layer.provide(Layer.merge(DesktopBrowserChannel.layer, PreviewAgentActivity.layer)),
+      ),
     ),
-  ),
-  Layer.provide(
-    SpeechService.layer.pipe(
-      Layer.provide(layerServerSettings),
-      Layer.provide(SpeechModelStore.layer),
+    Layer.provide(PreviewBrowser.layer),
+    // Links to other environments, shared by clients (WebSocket) and agents (/mcp).
+    Layer.provide(
+      Layer.mergeAll(
+        PeerForwarding.layer,
+        PeerThreadRelay.layer,
+        PeerClientPairing.layer,
+        PeerHealthMonitor.layer,
+      ).pipe(Layer.provideMerge(PeerMcpClient.layer), Layer.provideMerge(PeerLinks.layer)),
     ),
-  ),
-  Layer.provide(CloudSpeech.layer.pipe(Layer.provide(SecretResolver.layer))),
-  Layer.provide(layerServerSettings),
-  Layer.provide(PreviewAutomationBroker.layer),
-  Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
-  Layer.provide(layerCommandReadiness),
-  Layer.provide(ServerHttp.layerBrowserApiCors),
-  Layer.provide(ServerHttp.layerHttpCompression),
-);
+    Layer.provide(WebPushService.layer.pipe(Layer.provide(WebPushStore.layer))),
+  )
+  .pipe(
+    Layer.provide(MetaProjectService.layer.pipe(Layer.provide(MetaProjectStore.layer))),
+    Layer.provide(PmService.layer.pipe(Layer.provide(PmStore.layer))),
+    Layer.provide(ArtifactService.layer.pipe(Layer.provide(ArtifactStore.layer))),
+    Layer.provide(RepoMonitorService.layer().pipe(Layer.provide(RepoMonitorStore.layer))),
+    Layer.provide(
+      UnifiedImportService.layer.pipe(Layer.provide(ExtendedAgentSessionScanner.layer())),
+    ),
+    Layer.provide(
+      SpeechService.layer.pipe(
+        Layer.provide(layerServerSettings),
+        Layer.provide(SpeechModelStore.layer),
+      ),
+    ),
+    Layer.provide(CloudSpeech.layer.pipe(Layer.provide(SecretResolver.layer))),
+    Layer.provide(layerServerSettings),
+    Layer.provide(PreviewAutomationBroker.layer),
+    Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
+    Layer.provide(layerCommandReadiness),
+    Layer.provide(ServerHttp.layerBrowserApiCors),
+    Layer.provide(ServerHttp.layerHttpCompression),
+  );
 
 const layerMakeServer = Layer.unwrap(
   Effect.gen(function* () {

@@ -101,7 +101,10 @@ import {
   PersistChatAttachmentsError,
   RpcClientId,
   EnvironmentAuthorizationError,
+  PmDispatchError,
+  type RepoMonitorFilter,
   ThreadId,
+  TrimmedNonEmptyString,
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
   WS_METHODS,
@@ -293,6 +296,15 @@ import {
 } from "@t3tools/shared/usageLimits";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
+import * as UnifiedImportService from "./project/importers/UnifiedImportService.ts";
+import * as PeerHealthMonitor from "./peer/PeerHealthMonitor.ts";
+import * as WebPushService from "./push/WebPushService.ts";
+import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
+import * as PmService from "./pm/PmService.ts";
+import * as ArtifactService from "./artifact/ArtifactService.ts";
+import * as RepoMonitorService from "./repoMonitor/RepoMonitorService.ts";
+import * as WorklogService from "./worklog/WorklogService.ts";
+import type { RepoMonitorFilterCriteria } from "@t3tools/shared/repoMonitorEval.core";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import { requestUrl } from "./requestUrl.ts";
 
@@ -735,6 +747,9 @@ const SPLIT_WS_RPC_PREFIXES = [
   "issueTrackers",
   "provider",
   "orchestration",
+  "artifacts",
+  "metaProjects",
+  "repoMonitor",
 ] as const;
 type SplitWsRpc = Extract<
   ServerWsRpc,
@@ -1571,6 +1586,40 @@ export const layerWsRpc = (
       const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
       const peerThreadRelay = yield* PeerThreadRelay.PeerThreadRelay;
       const peerClientPairing = yield* PeerClientPairing.PeerClientPairing;
+      const peerHealthMonitor = yield* PeerHealthMonitor.PeerHealthMonitor;
+      const webPushService = yield* WebPushService.WebPushService;
+      const metaProjectService = yield* MetaProjectService.MetaProjectService;
+      const pmService = yield* PmService.PmService;
+      const artifactService = yield* ArtifactService.ArtifactService;
+      const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
+      const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
+      const worklogService = yield* WorklogService.WorklogService;
+      const toRepoMonitorContractFilter = (
+        filter: RepoMonitorFilterCriteria,
+      ): RepoMonitorFilter => {
+        const toTrimmedList = (items?: ReadonlyArray<string>) =>
+          items
+            ?.map((item) => item.trim())
+            .filter((item) => item.length > 0)
+            .map((item) => TrimmedNonEmptyString.make(item));
+        const branchGlobs = toTrimmedList(filter.branchGlobs);
+        const requiredLabels = toTrimmedList(filter.requiredLabels);
+        const excludedLabels = toTrimmedList(filter.excludedLabels);
+        const allowedAuthors = toTrimmedList(filter.allowedAuthors);
+        const excludedAuthors = toTrimmedList(filter.excludedAuthors);
+        const keywords = toTrimmedList(filter.keywords);
+        return {
+          ...(branchGlobs === undefined ? {} : { branchGlobs }),
+          ...(requiredLabels === undefined ? {} : { requiredLabels }),
+          ...(excludedLabels === undefined ? {} : { excludedLabels }),
+          ...(allowedAuthors === undefined ? {} : { allowedAuthors }),
+          ...(excludedAuthors === undefined ? {} : { excludedAuthors }),
+          ...(filter.excludeBots === undefined ? {} : { excludeBots: filter.excludeBots }),
+          ...(keywords === undefined ? {} : { keywords }),
+        };
+      };
+      const toPmRpcError = (error: PmService.PmServiceError) =>
+        error._tag === "PmStoreError" ? new PmDispatchError({ cause: error }) : error;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFolders = yield* WorkspaceFolders.WorkspaceFolders;
@@ -3677,6 +3726,97 @@ export const layerWsRpc = (
               Stream.concat(Stream.make(latest), changes),
             ),
           ),
+        [WS_METHODS.peerHealthList]: (_input) => peerHealthMonitor.listSnapshots,
+        [WS_METHODS.peerHealthProbe]: (input) =>
+          input.environmentId === undefined
+            ? peerHealthMonitor.probeAll
+            : peerHealthMonitor.probeOne(input.environmentId).pipe(
+                Effect.map((snap) => ({
+                  nodes: [snap],
+                  recommendedEnvironmentId: snap.online ? snap.environmentId : null,
+                  checkedAt: snap.checkedAt,
+                })),
+              ),
+        [WS_METHODS.webPushGetVapidPublicKey]: (_input) => webPushService.getVapidPublicKey,
+        [WS_METHODS.webPushSubscribe]: (input) => webPushService.subscribe(input),
+        [WS_METHODS.webPushUnsubscribe]: (input) =>
+          webPushService.unsubscribe(input).pipe(Effect.map((removed) => ({ removed }))),
+        [WS_METHODS.metaProjectsList]: (input) => metaProjectService.list(input),
+        [WS_METHODS.metaProjectsGetTree]: (input) => metaProjectService.getTree(input),
+        [WS_METHODS.metaProjectsMutate]: (input) => metaProjectService.mutate(input),
+        [WS_METHODS.metaProjectsGetContext]: (input) => metaProjectService.getSharedContext(input),
+        [WS_METHODS.metaProjectsGetRollup]: (input) => metaProjectService.getRollup(input),
+        [WS_METHODS.pmGetBoard]: (input) =>
+          pmService.getBoardSnapshot(input.pmThreadId).pipe(Effect.mapError(toPmRpcError)),
+        [WS_METHODS.pmSetRole]: (input) =>
+          pmService.setThreadRole(input).pipe(Effect.mapError(toPmRpcError)),
+        [WS_METHODS.pmSetKillSwitch]: (input) =>
+          pmService.setKillSwitch(input).pipe(Effect.mapError(toPmRpcError)),
+        [WS_METHODS.pmDispatchBatch]: (input) =>
+          pmService.dispatchBatch(input).pipe(Effect.mapError(toPmRpcError)),
+        [WS_METHODS.pmStopAllWorkers]: (input) =>
+          pmService.stopAllWorkers(input).pipe(Effect.mapError(toPmRpcError)),
+        [WS_METHODS.artifactsList]: (input) => artifactService.list(input),
+        [WS_METHODS.artifactsGet]: (input) => artifactService.get(input),
+        [WS_METHODS.artifactsCreate]: (input) => artifactService.create(input),
+        [WS_METHODS.artifactsRevise]: (input) => artifactService.revise(input),
+        [WS_METHODS.artifactsListVersions]: (input) => artifactService.listVersions(input),
+        [WS_METHODS.artifactsSwitchVersion]: (input) => artifactService.switchVersion(input),
+        [WS_METHODS.artifactsArchive]: (input) => artifactService.archive(input),
+        [WS_METHODS.artifactsPatchState]: (input) => artifactService.patchState(input),
+        [WS_METHODS.artifactsSubmitUserAction]: (input) =>
+          artifactService.submitUserAction(input).pipe(
+            Effect.map(({ accepted, stateVersion, startedTurn, prompt }) => ({
+              accepted,
+              stateVersion,
+              startedTurn,
+              prompt,
+            })),
+          ),
+        [WS_METHODS.artifactsExportStandalone]: (input) => artifactService.exportStandalone(input),
+        [WS_METHODS.repoMonitorListRules]: (input) =>
+          repoMonitorService.listRules(input.projectId).pipe(Effect.map((rules) => ({ rules }))),
+        [WS_METHODS.repoMonitorUpsertRule]: (input) => repoMonitorService.upsertRule(input),
+        [WS_METHODS.repoMonitorDeleteRule]: (input) => repoMonitorService.deleteRule(input.id),
+        [WS_METHODS.repoMonitorListEvents]: (input) =>
+          repoMonitorService.listEvents(input).pipe(Effect.map((events) => ({ events }))),
+        [WS_METHODS.repoMonitorDryRun]: (input) =>
+          repoMonitorService.dryRunProject(input).pipe(Effect.map((results) => ({ results }))),
+        [WS_METHODS.repoMonitorListPresets]: (_input) =>
+          Effect.map(repoMonitorService.listPresets, (presets) => ({
+            presets: presets.map((preset) => ({
+              id: TrimmedNonEmptyString.make(preset.id),
+              name: TrimmedNonEmptyString.make(preset.name),
+              description: preset.description,
+              eventKinds: preset.eventKinds,
+              defaultFilter: toRepoMonitorContractFilter(preset.defaultFilter),
+              actionKind: preset.actionKind,
+              defaultRuntimeMode: preset.defaultRuntimeMode,
+              promptTemplate: TrimmedNonEmptyString.make(preset.promptTemplate),
+              defaultCooldownSec: preset.defaultCooldownSec,
+              defaultMaxTriggersPerHour: preset.defaultMaxTriggersPerHour,
+            })),
+          })),
+        [WS_METHODS.agentSessionsScanAll]: (input) =>
+          unifiedImportService.scanAll(
+            input.sources === undefined ? undefined : { sources: input.sources },
+          ),
+        [WS_METHODS.agentSessionsImportSelected]: (input) =>
+          unifiedImportService.importSelected(input),
+        [WS_METHODS.worklogQuery]: (input) => worklogService.queryWorklog(input),
+        [WS_METHODS.worklogGetStats]: (input) => worklogService.getStats(input),
+        [WS_METHODS.worklogBackfill]: (input) => worklogService.backfillFromOrchestrationV2(input),
+        [WS_METHODS.worklogListIcalFeeds]: (input) =>
+          worklogService.listIcalFeeds(input).pipe(Effect.map((feeds) => ({ feeds }))),
+        [WS_METHODS.worklogCreateIcalFeed]: (input) =>
+          worklogService
+            .createIcalFeed(input)
+            .pipe(Effect.map(({ feed, rawToken }) => ({ feed, rawToken }))),
+        [WS_METHODS.worklogRotateIcalFeedToken]: (input) =>
+          worklogService
+            .rotateIcalFeedToken(input.feedId)
+            .pipe(Effect.map(({ feed, rawToken }) => ({ feed, rawToken }))),
+        [WS_METHODS.worklogDeleteIcalFeed]: (input) => worklogService.deleteIcalFeed(input.feedId),
       });
       const splitHandlers: Pick<typeof handlers, SplitWsRpc["_tag"]> = handlers;
       const otherHandlers: Pick<typeof handlers, Exclude<ServerWsRpc, SplitWsRpc>["_tag"]> =
@@ -3708,6 +3848,14 @@ export const layer = Layer.unwrap(
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const peerThreadRelay = yield* PeerThreadRelay.PeerThreadRelay;
     const peerClientPairing = yield* PeerClientPairing.PeerClientPairing;
+    const peerHealthMonitor = yield* PeerHealthMonitor.PeerHealthMonitor;
+    const webPushService = yield* WebPushService.WebPushService;
+    const metaProjectService = yield* MetaProjectService.MetaProjectService;
+    const pmService = yield* PmService.PmService;
+    const artifactService = yield* ArtifactService.ArtifactService;
+    const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
+    const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
+    const worklogService = yield* WorklogService.WorklogService;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3783,47 +3931,68 @@ export const layer = Layer.unwrap(
               serverBrowser,
               reportProfiles,
               readSettingsClient(url.value),
-            ).pipe(
-              Layer.provideMerge(RpcSerialization.layerJson),
-              // Handler-context reporters see only request defects, not server-wide defects.
-              Layer.provide(DefectReporter.layer),
-              Layer.provide(AcpRegistrySessions.layer),
-              Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
-              Layer.provide(ProviderMaintenanceRunner.layer),
-              Layer.provide(Layer.succeed(NpmRelease.NpmRelease, npmRelease)),
-              Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
-              // Share server-lifetime PR caches so WS mutations invalidate every client's HTTP diffs.
-              Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
-              Layer.provide(Layer.succeed(IssueService.IssueService, issues)),
-              Layer.provide(Layer.succeed(ThreadIssueService.ThreadIssueService, threadIssues)),
-              Layer.provide(
-                Layer.succeed(IssueTrackerConnections.IssueTrackerConnections, issueTrackers),
-              ),
-              Layer.provide(OtlpEndpointCheck.layer),
-              Layer.provide(
-                Layer.succeed(
-                  PullRequestReviewGuideService.PullRequestReviewGuideService,
-                  reviewGuides,
+            )
+              .pipe(
+                Layer.provideMerge(RpcSerialization.layerJson),
+                // Handler-context reporters see only request defects, not server-wide defects.
+                Layer.provide(DefectReporter.layer),
+                Layer.provide(AcpRegistrySessions.layer),
+                Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
+                Layer.provide(ProviderMaintenanceRunner.layer),
+                Layer.provide(Layer.succeed(NpmRelease.NpmRelease, npmRelease)),
+                Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
+                // Share server-lifetime PR caches so WS mutations invalidate every client's HTTP diffs.
+                Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+                Layer.provide(Layer.succeed(IssueService.IssueService, issues)),
+                Layer.provide(Layer.succeed(ThreadIssueService.ThreadIssueService, threadIssues)),
+                Layer.provide(
+                  Layer.succeed(IssueTrackerConnections.IssueTrackerConnections, issueTrackers),
                 ),
-              ),
-              Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
-              Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
-              Layer.provide(Layer.succeed(PeerThreadRelay.PeerThreadRelay, peerThreadRelay)),
-              Layer.provide(Layer.succeed(PeerClientPairing.PeerClientPairing, peerClientPairing)),
-              Layer.provide(
-                SourceControlDiscovery.layer.pipe(
-                  Layer.provide(
-                    SourceControlProviderRegistry.layer.pipe(
-                      Layer.provide(SourceControlBuiltInDrivers.layer),
-                      Layer.provideMerge(GitVcsDriver.layer),
-                      Layer.provide(
-                        VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),
+                Layer.provide(OtlpEndpointCheck.layer),
+                Layer.provide(
+                  Layer.succeed(
+                    PullRequestReviewGuideService.PullRequestReviewGuideService,
+                    reviewGuides,
+                  ),
+                ),
+                Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
+                Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
+                Layer.provide(Layer.succeed(PeerThreadRelay.PeerThreadRelay, peerThreadRelay)),
+              )
+              .pipe(
+                Layer.provide(
+                  Layer.succeed(PeerClientPairing.PeerClientPairing, peerClientPairing),
+                ),
+                Layer.provide(
+                  Layer.succeed(PeerHealthMonitor.PeerHealthMonitor, peerHealthMonitor),
+                ),
+                Layer.provide(Layer.succeed(WebPushService.WebPushService, webPushService)),
+                Layer.provide(
+                  Layer.succeed(MetaProjectService.MetaProjectService, metaProjectService),
+                ),
+                Layer.provide(Layer.succeed(PmService.PmService, pmService)),
+                Layer.provide(Layer.succeed(ArtifactService.ArtifactService, artifactService)),
+                Layer.provide(
+                  Layer.succeed(RepoMonitorService.RepoMonitorService, repoMonitorService),
+                ),
+                Layer.provide(
+                  Layer.succeed(UnifiedImportService.UnifiedImportService, unifiedImportService),
+                ),
+                Layer.provide(Layer.succeed(WorklogService.WorklogService, worklogService)),
+                Layer.provide(
+                  SourceControlDiscovery.layer.pipe(
+                    Layer.provide(
+                      SourceControlProviderRegistry.layer.pipe(
+                        Layer.provide(SourceControlBuiltInDrivers.layer),
+                        Layer.provideMerge(GitVcsDriver.layer),
+                        Layer.provide(
+                          VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
           ),
         );
         const framedRpcWebSocketHttpEffect = url.value.searchParams.has(

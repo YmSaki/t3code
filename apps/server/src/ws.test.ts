@@ -105,6 +105,14 @@ import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerThreadRelay from "./peer/PeerThreadRelay.ts";
 import * as PeerClientPairing from "./peer/PeerClientPairing.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
+import * as PeerHealthMonitor from "./peer/PeerHealthMonitor.ts";
+import * as WebPushService from "./push/WebPushService.ts";
+import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
+import * as PmService from "./pm/PmService.ts";
+import * as ArtifactService from "./artifact/ArtifactService.ts";
+import * as RepoMonitorService from "./repoMonitor/RepoMonitorService.ts";
+import * as UnifiedImportService from "./project/importers/UnifiedImportService.ts";
+import * as WorklogService from "./worklog/WorklogService.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
@@ -854,6 +862,22 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(OtlpEndpointCheck.OtlpEndpointCheck)({}),
   Layer.mock(PairingGrantStore.PairingGrantStore)({}),
   Layer.mock(PeerLinks.PeerLinks)({}),
+  Layer.mock(PeerHealthMonitor.PeerHealthMonitor)({}),
+  Layer.mock(WebPushService.WebPushService)({}),
+  Layer.mock(MetaProjectService.MetaProjectService)({}),
+  Layer.mock(PmService.PmService)({}),
+  Layer.mock(ArtifactService.ArtifactService)({}),
+  Layer.mock(RepoMonitorService.RepoMonitorService)({}),
+  Layer.mock(UnifiedImportService.UnifiedImportService)({
+    summarizeDiagnostics: ({ totalRecords, importedCount }) => ({
+      totalRecords,
+      importedCount,
+      skippedCount: 0,
+      repairedTimestampCount: 0,
+      byReason: [],
+    }),
+  }),
+  Layer.mock(WorklogService.WorklogService)({}),
   Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),
   Layer.mock(PeerThreadRelay.PeerThreadRelay)({}),
   Layer.mock(PeerClientPairing.PeerClientPairing)({}),
