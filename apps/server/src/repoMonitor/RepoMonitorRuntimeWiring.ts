@@ -82,9 +82,7 @@ export const makeSnapshotSource = (ports: RepoMonitorSnapshotPorts) => {
   const selfLogins = new Map<ProjectId, ReadonlyArray<string>>();
   return RepoMonitorSnapshotSource.of({
     lastSelfAccountLogins: Effect.fn("RepoMonitorSnapshotSource.lastSelfAccountLogins")(
-      function* (projectId) {
-        return selfLogins.get(projectId) ?? [];
-      },
+      (projectId: ProjectId) => Effect.sync(() => selfLogins.get(projectId) ?? []),
     ),
     observe: Effect.fn("RepoMonitorSnapshotSource.observe")(function* (projectId) {
       const cwd = yield* ports.workspaceRoot(projectId);

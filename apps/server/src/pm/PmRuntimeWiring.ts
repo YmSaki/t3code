@@ -2,19 +2,25 @@ import {
   CommandId,
   type EnvironmentId,
   MetaProjectId,
+  type OrchestrationV2DomainEvent,
   type OrchestrationV2Subagent,
   PmDispatchError,
+  type PmWorkerStatus,
   type ThreadId,
 } from "@t3tools/contracts";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
+import * as Stream from "effect/Stream";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as MetaProjectService from "../metaProject/MetaProjectService.ts";
 import { resolveRuntimeMode } from "../mcp/delegatedTaskModes.ts";
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
+import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadLaunch from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
@@ -216,3 +222,52 @@ export const layer = Layer.unwrap(
     return PmService.makeLayer(options);
   }),
 );
+
+const STREAM_RETRY_DELAY = Duration.seconds(5);
+
+function toPmWorkerStatus(runStatus: string): PmWorkerStatus | null {
+  switch (runStatus) {
+    case "completed":
+      return "completed";
+    case "failed":
+      return "failed";
+    case "cancelled":
+    case "interrupted":
+      return "cancelled";
+    case "waiting":
+      return "waiting_input";
+    default:
+      return null;
+  }
+}
+
+/** Syncs PM worker slot status from `run.updated` domain events so completed/failed workers free concurrency slots. */
+const runPmWorkerStatusSync = Effect.fn("PmRuntimeWiring.runWorkerStatusSync")(function* () {
+  const orchestrator = yield* Orchestrator.OrchestratorV2;
+  const pmService = yield* PmService.PmService;
+
+  const handle = Effect.fnUntraced(function* (event: OrchestrationV2DomainEvent) {
+    if (event.type !== "run.updated") return;
+    const status = toPmWorkerStatus(event.payload.status);
+    if (status === null) return;
+    yield* pmService.recordWorkerUpdate({ workerThreadId: event.threadId, status }).pipe(
+      Effect.catchTags({ PmThreadNotFoundError: () => Effect.void }),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("failed to sync PM worker status", {
+          threadId: event.threadId,
+          status,
+          cause,
+        }),
+      ),
+    );
+  });
+
+  yield* Stream.runForEach(orchestrator.streamDomainEvents, handle).pipe(
+    Effect.tapError((error) =>
+      Effect.logWarning("PM worker status sync stream failed; resubscribing", { error }),
+    ),
+    Effect.retry(Schedule.spaced(STREAM_RETRY_DELAY)),
+  );
+});
+
+export const startPmWorkerStatusSync = () => Effect.forkScoped(runPmWorkerStatusSync());
