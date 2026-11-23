@@ -4,6 +4,9 @@ import {
   terminalSequenceStateAfter,
 } from "@t3tools/contracts";
 
+const utf8Encoder = new TextEncoder();
+const utf8ByteLength = (text: string): number => utf8Encoder.encode(text).byteLength;
+
 export const DEFAULT_HISTORY_BYTE_LIMIT = 8 * 1024 * 1024;
 const MAX_HISTORY_CHUNK_LENGTH = 16 * 1024;
 
@@ -101,7 +104,7 @@ export class BoundedTerminalHistory {
   }
 
   private appendChunk(data: string): void {
-    const byteLength = Buffer.byteLength(data);
+    const byteLength = utf8ByteLength(data);
     const lineBreaks = countLineBreaks(data);
     const previous = this.chunks.at(-1);
     if (previous && previous.data.length + data.length <= MAX_HISTORY_CHUNK_LENGTH) {
@@ -153,7 +156,7 @@ export class BoundedTerminalHistory {
       for (let line = 0; line < linesToDrop; line += 1) {
         offset = first.data.indexOf("\n", offset) + 1;
       }
-      this.trimChunk(offset, Buffer.byteLength(first.data.slice(0, offset)), linesToDrop);
+      this.trimChunk(offset, utf8ByteLength(first.data.slice(0, offset)), linesToDrop);
       linesToDrop = 0;
     }
 
@@ -183,7 +186,7 @@ export class BoundedTerminalHistory {
     while (this.sequenceState !== TERMINAL_SEQUENCE_GROUND && this.start < this.chunks.length) {
       const first = this.chunks[this.start]!;
       const dropped = first.data.slice(0, terminalSequenceEnd(this.sequenceState, first.data));
-      this.trimChunk(dropped.length, Buffer.byteLength(dropped), countLineBreaks(dropped));
+      this.trimChunk(dropped.length, utf8ByteLength(dropped), countLineBreaks(dropped));
     }
     if (
       this.start === this.chunks.length ||
@@ -226,7 +229,7 @@ export class BoundedTerminalHistory {
     const append =
       data !== undefined &&
       previous !== undefined &&
-      previous.fileBytes + Buffer.byteLength(data) <= this.maxBytes * 2;
+      previous.fileBytes + utf8ByteLength(data) <= this.maxBytes * 2;
     const output = append && data !== undefined ? data : this.value();
     return {
       data: output,
@@ -234,7 +237,7 @@ export class BoundedTerminalHistory {
       cursor: {
         generation: this.generation,
         offset,
-        fileBytes: (append ? previous.fileBytes : 0) + Buffer.byteLength(output),
+        fileBytes: (append ? previous.fileBytes : 0) + utf8ByteLength(output),
       },
     };
   }
