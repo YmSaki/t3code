@@ -196,6 +196,7 @@ import * as MetaProjectRuntimeWiring from "./metaProject/MetaProjectRuntimeWirin
 import * as GithiveKanbanService from "./kanban/GithiveKanbanService.ts";
 import * as PmStore from "./pm/PmStore.ts";
 import * as PmRuntimeWiring from "./pm/PmRuntimeWiring.ts";
+import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
 import * as ArtifactStore from "./artifact/ArtifactStore.ts";
 import * as ArtifactRuntimeWiring from "./artifact/ArtifactRuntimeWiring.ts";
 import * as RepoMonitorStore from "./repoMonitor/RepoMonitorStore.ts";
@@ -1016,6 +1017,7 @@ const layerMakeRoutes = Layer.mergeAll(
   .pipe(
     Layer.provide(layerMetaProject),
     Layer.provide(layerPm),
+    Layer.provide(ThreadHandoffService.layer),
     Layer.provide(
       GithiveKanbanService.layer.pipe(
         Layer.provide(ProcessRunner.layer),

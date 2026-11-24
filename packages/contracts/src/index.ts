@@ -77,6 +77,7 @@ export * from "./settingsSecretValue.ts";
 export * from "./clientRpcPermissions.ts";
 export * from "./metaProject.ts";
 export * from "./pm.ts";
+export * from "./threadHandoff.ts";
 export * from "./artifact.ts";
 export * from "./repoMonitor.ts";
 export * from "./worklog.ts";

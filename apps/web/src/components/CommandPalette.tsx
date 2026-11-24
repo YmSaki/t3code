@@ -83,6 +83,7 @@ import {
   SquarePenIcon,
   TextSearchIcon,
   UserPlusIcon,
+  ArrowRightLeftIcon,
 } from "lucide-react";
 import { openThreadFind } from "./chat/threadFindStore";
 import { dispatchPreviewAction } from "./preview/previewActionBus";
@@ -269,6 +270,7 @@ import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
+import { ThreadHandoffDialog } from "./chat/ThreadHandoffDialog";
 import { openUseInAnotherApp } from "./mcp/UseInAnotherAppDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
@@ -328,6 +330,10 @@ const NEW_THREAD_NO_PROJECT_VALUE = "new-thread-in:no-project";
 
 export function CommandPalette({ children }: { children: ReactNode }) {
   useCommandPaletteMount();
+  const navigate = useNavigate();
+  const [handoffDialogThreadRef, setHandoffDialogThreadRef] = useState<ReturnType<
+    typeof scopeThreadRef
+  > | null>(null);
   const state = useCommandPaletteStore();
   const setOpen = (open: boolean) => dispatchCommandPalette({ _tag: "SetOpen", open });
   const openChildSearch = (mode: "files" | "content", context: CommandPaletteReturnContext) =>
@@ -358,13 +364,33 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           setOpen={setOpen}
           openChildSearch={openChildSearch}
           initialContext={state.restoredSearch}
+          onHandoff={setHandoffDialogThreadRef}
         />
       </CommandDialog>
+      {handoffDialogThreadRef ? (
+        <ThreadHandoffDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setHandoffDialogThreadRef(null);
+          }}
+          threadRef={handoffDialogThreadRef}
+          onHandoffSuccess={(newThreadId) => {
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: {
+                environmentId: handoffDialogThreadRef.environmentId,
+                threadId: newThreadId,
+              },
+            });
+          }}
+        />
+      ) : null}
     </ComposerHandleContext>
   );
 }
 
 function CommandPaletteDialog(props: {
+  readonly onHandoff: (threadRef: ReturnType<typeof scopeThreadRef>) => void;
   readonly mode: SearchOverlayMode;
   readonly session: number;
   readonly openIntent: CommandPaletteOpenIntent | null;
@@ -416,6 +442,7 @@ function CommandPaletteDialog(props: {
           setOpen={props.setOpen}
           openChildSearch={props.openChildSearch}
           initialContext={props.initialContext}
+          onHandoff={props.onHandoff}
         />
       )}
     </CommandDialogPopup>
@@ -423,6 +450,7 @@ function CommandPaletteDialog(props: {
 }
 
 function OpenCommandPaletteDialog(props: {
+  readonly onHandoff: (threadRef: ReturnType<typeof scopeThreadRef>) => void;
   readonly openIntent: CommandPaletteOpenIntent | null;
   readonly setOpen: (open: boolean) => void;
   readonly openChildSearch: (
@@ -1550,6 +1578,17 @@ function OpenCommandPaletteDialog(props: {
 
   if (activeThread !== null) {
     const thread = activeThread;
+    const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:hand-off-thread",
+      searchTerms: ["handoff", "hand off", "model", "switch", "transfer", "continue"],
+      title: gt("Hand off thread"),
+      icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        props.onHandoff(threadRef);
+      },
+    });
     actionItems.push({
       kind: "action",
       value: "action:restart-agent-session",

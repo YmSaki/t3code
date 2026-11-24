@@ -102,6 +102,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.pmSetKillSwitch]: AuthOrchestrationOperateScope,
   [WS_METHODS.pmDispatchBatch]: AuthOrchestrationOperateScope,
   [WS_METHODS.pmStopAllWorkers]: AuthOrchestrationOperateScope,
+  // Launches a thread that starts a turn, as launchThread does.
+  [WS_METHODS.threadHandoff]: AuthOrchestrationOperateScope,
   [WS_METHODS.artifactsCreate]: AuthOrchestrationOperateScope,
   [WS_METHODS.artifactsRevise]: AuthOrchestrationOperateScope,
   [WS_METHODS.artifactsSwitchVersion]: AuthOrchestrationOperateScope,

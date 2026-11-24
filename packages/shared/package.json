@@ -739,6 +739,10 @@
       "types": "./src/selfHostUiPolicy.core.ts",
       "import": "./src/selfHostUiPolicy.core.ts"
     },
+    "./threadHandoff.core": {
+      "types": "./src/threadHandoff.core.ts",
+      "import": "./src/threadHandoff.core.ts"
+    },
     "./workerBrief.core": {
       "types": "./src/workerBrief.core.ts",
       "import": "./src/workerBrief.core.ts"
