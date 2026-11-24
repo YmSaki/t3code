@@ -13,6 +13,7 @@ import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 
 import migrate107 from "../persistence/Migrations/107_PmOrchestration.ts";
+import migrate112 from "../persistence/Migrations/112_PmDispatchIdempotency.ts";
 import * as PmStore from "./PmStore.ts";
 
 const sqliteLayer = NodeSqliteClient.layer({ filename: ":memory:" });
@@ -36,6 +37,7 @@ it.layer(testLayer)("PmStore", (it) => {
   it.effect("persists PM thread configs, kill switches, and worker dispatches", () =>
     Effect.gen(function* () {
       yield* migrate107;
+      yield* migrate112;
       const store = yield* PmStore.PmStore;
 
       expect(yield* store.getConfig(pmThreadId)).toBeNull();

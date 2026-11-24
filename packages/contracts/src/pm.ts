@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import {
+  CommandId,
   EnvironmentId,
   IsoDateTime,
   NonNegativeInt,
@@ -103,7 +104,7 @@ export type PmBoardSnapshot = typeof PmBoardSnapshot.Type;
 
 export const PmDispatchBatchItem = Schema.Struct({
   clientKey: TrimmedNonEmptyString.annotate({
-    description: "Caller-chosen key, unique within the batch, echoed back in the result.",
+    description: "Caller key; unique per batch; echoed back.",
   }),
   title: TrimmedNonEmptyString,
   targetRepoRole: Schema.optional(TrimmedNonEmptyString),
@@ -117,6 +118,7 @@ export const PmDispatchBatchItem = Schema.Struct({
 export type PmDispatchBatchItem = typeof PmDispatchBatchItem.Type;
 
 export const PmDispatchBatchInput = Schema.Struct({
+  commandId: Schema.optional(CommandId),
   pmThreadId: ThreadId,
   items: Schema.Array(PmDispatchBatchItem).check(
     Schema.isMinLength(1),

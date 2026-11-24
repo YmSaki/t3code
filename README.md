@@ -1,108 +1,159 @@
 <p align="center">
   <a href="https://t3.codes">
-    <img src="./assets/prod/t3-black-web-icon-192x192.png" width="80" height="80" alt="T3 Code logo" />
+    <img src="./assets/prod/t3-black-web-icon-192x192.png" width="80" height="80" alt="T3 Codeのロゴ" />
   </a>
 </p>
 
 <h1 align="center">T3 Code</h1>
 
-<p align="center">The open-source control plane for coding agents.</p>
+<p align="center">コーディングエージェントをまとめて操作できる、オープンソースのアプリケーション。</p>
 
 <p align="center">
-  <a href="https://t3.codes/download"><strong>Download</strong></a> ·
+  <a href="https://t3.codes/download"><strong>ダウンロード</strong></a> ·
   <a href="https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824">iOS</a> ·
   <a href="https://play.google.com/store/apps/details?id=com.t3tools.t3code">Android</a> ·
   <a href="https://app.t3.codes">Web</a> ·
-  <a href="./docs/README.md">Docs</a> ·
+  <a href="./docs/README.md">ドキュメント</a> ·
   <a href="https://discord.gg/jn4EGJjrvv">Discord</a>
 </p>
 
 <p align="center">
   <a href="https://t3.codes">
-    <img src="./.github/readme/hero.webp" width="100%" alt="T3 Code on desktop with a finished Claude thread, next to the phone app asking to approve a command from Codex" />
+    <img src="./.github/readme/hero.webp" width="100%" alt="Claudeの作業が完了したデスクトップ画面と、Codexのコマンド承認を求めるスマートフォン画面" />
   </a>
 </p>
 
-T3 Code runs the coding agents on your machine and gives them one fast interface. Start a thread at your desk, then approve the next step from your phone.
+T3 Codeは、手元のPCで動くコーディングエージェントを、共通の画面から操作できるアプリケーションです。デスクトップで始めた作業の続きを、スマートフォンから確認・承認できます。
 
-It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kiro, Pi, Muse Code, fx, and any [ACP](./docs/user/providers-acp.md) agent. If an agent is set up on your computer, T3 Code can control it.
+Claude Code、Codex、Cursor、OpenCode、Grok Build、Antigravity、Kiro、Pi、Muse Code、fx、および[ACP対応エージェント](./docs/user/providers-acp.md)に対応しています。PCにインストール・設定済みのエージェントを接続して利用します。
 
-## What you get
+## このフォークについて
 
-- **Your subscriptions.** T3 Code does not resell tokens. It drives the agents you are already signed in to.
-- **Every agent in one place.** Change models in the middle of a thread. Let Claude hand a task to Codex.
-- **Desktop, web, and phone.** One server, and every client shows the same threads. There are apps for iOS and Android.
-- **Remote ready.** Run agents on any machine. Connect over your local network, Tailscale, or [T3 Connect](./docs/user/remote-access.md).
-- **Git built in.** Each thread can work in its own worktree. Review the diff, then commit, push, and open a pull request with one button.
-- **Fast.** Performance is a feature here. We measure it, and we treat a dropped frame as a bug.
-- **Open.** MIT licensed. If you don't like something, fork it.
+このリポジトリは[pingdotgg/t3code](https://github.com/pingdotgg/t3code)のフォークです。セルフホストでの複数PC運用、複数リポジトリを束ねる上位プロジェクト（MetaProject）、PMによるワーカーの並列管理、双方向アーティファクト、リポジトリ監視、既存AIセッションの取り込み、稼働カレンダーなどを開発しています。
 
-## Install
+実装状況や残件は、このフォークの[Issues](https://github.com/YmSaki/t3code/issues)と[Pull requests](https://github.com/YmSaki/t3code/pulls)を確認してください。画面やサービスの一部は開発・検証中です。
 
-### Desktop app
+以下の公式ダウンロード、パッケージマネージャー、アプリストアの案内は上流版のものです。このフォークの変更を試す場合は、[ソースからの開発](#ソースからの開発)を参照してください。
 
-[Download T3 Code](https://t3.codes/download) for macOS, Windows, or Linux. You can also use a package manager:
+## 主な機能
 
-| Platform       | Command                                                              |
-| -------------- | -------------------------------------------------------------------- |
-| macOS          | `brew install --cask t3-code`                                        |
-| Windows        | `winget install T3Tools.T3Code` or `scoop install extras/t3code`     |
-| Arch Linux     | `yay -S t3code-bin`                                                  |
-| Nix            | `nix profile add github:NixOS/nixpkgs/nixos-unstable#t3code`         |
-| Debian, Ubuntu | `.deb` from [Releases](https://github.com/pingdotgg/t3code/releases) |
+- **契約済みのエージェントを利用。** T3 Codeはトークンを再販売せず、すでにログインしているエージェントを操作します。
+- **複数のエージェントを一か所で管理。** スレッドの途中でモデルを切り替えたり、ClaudeからCodexへ作業を委譲したりできます。
+- **デスクトップ・Web・スマートフォンに対応。** 同じサーバーに接続すると、各クライアントから同じスレッドを確認できます。iOS・Androidアプリもあります。
+- **リモート操作。** 別のPC上でエージェントを動かし、LAN、Tailscale、[T3 Connect](./docs/user/remote-access.md)経由で接続できます。
+- **Git操作を統合。** スレッドごとにworktreeを分けられます。差分の確認からコミット、プッシュ、PR作成まで操作できます。
+- **パフォーマンスを重視。** 描画や通信の性能を計測し、フレーム落ちも不具合として扱っています。
+- **オープンソース。** MITライセンスで公開されており、フォークして変更できます。
 
-### Command line
+## インストール（上流版）
 
-This installs the `t3` command. Run `t3` to start the server and open the web app.
+### デスクトップアプリ
+
+macOS・Windows・Linux向けの[T3 Codeをダウンロード](https://t3.codes/download)できます。パッケージマネージャーからのインストールにも対応しています。
+
+| プラットフォーム | コマンド・入手先                                                         |
+| ---------------- | ------------------------------------------------------------------------ |
+| macOS            | `brew install --cask t3-code`                                            |
+| Windows          | `winget install T3Tools.T3Code` または `scoop install extras/t3code`     |
+| Arch Linux       | `yay -S t3code-bin`                                                      |
+| Nix              | `nix profile add github:NixOS/nixpkgs/nixos-unstable#t3code`             |
+| Debian・Ubuntu   | [Releases](https://github.com/pingdotgg/t3code/releases)から`.deb`を取得 |
+
+### コマンドライン
+
+次のコマンドで`t3`をインストールできます。インストール後に`t3`を実行すると、サーバーが起動し、Webアプリが開きます。
 
 ```bash
 curl -fsSL https://t3.codes/install.sh | sh
 ```
 
-On Windows, in PowerShell:
+WindowsではPowerShellで実行します。
 
 ```powershell
 irm https://t3.codes/install.ps1 | iex
 ```
 
-To try it once without an install, run `npx t3@latest`.
+インストールせずに試す場合は、`npx t3@latest`を実行してください。
 
-### Phone
+### スマートフォン
 
-Get the app from the [App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) or [Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code). Then follow [remote access](./docs/user/remote-access.md) to connect it to your computer.
+[App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824)または[Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code)からアプリをインストールし、[リモートアクセスの手順](./docs/user/remote-access.md)に沿ってPCへ接続してください。
 
-### Sign in to an agent
+### エージェントへのログイン
 
-T3 Code needs one agent that is installed and signed in. For example, install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`, or install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`.
+T3 Codeを使うには、少なくとも1つのエージェントをインストールし、ログインしておく必要があります。たとえば、[Claude Code](https://claude.com/product/claude-code)では`claude auth login`、[Codex CLI](https://developers.openai.com/codex/cli)では`codex login`を実行します。
 
-[Provider setup](./docs/user/install.md#providers) has the steps for each agent. [Install T3 Code](./docs/user/install.md) covers nightly builds, AppImage, WSL, and NixOS.
+エージェントごとの設定は[プロバイダーのセットアップ](./docs/user/install.md#providers)を参照してください。Nightly版、AppImage、WSL、NixOSについては[インストールガイド](./docs/user/install.md)で説明しています。
 
-## "Wait, what are you selling me?"
+## ソースからの開発
 
-Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
+[Vite+](https://viteplus.dev/guide/)の`vp`コマンドを使用します。`vp`は`package.json`で指定されたNode.jsのバージョンを用意します。
 
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the tool that you want.
+macOS・Linuxでは次のコマンドでインストールします。
 
-## Documentation
+```bash
+curl -fsSL https://vite.plus | bash
+```
 
-- [Install and first run](./docs/user/install.md)
-- [Remote access from a phone or another machine](./docs/user/remote-access.md)
-- [Permission modes](./docs/user/permission-modes.md)
-- [Source control](./docs/user/source-control.md)
-- [Connect outside agents over MCP](./docs/user/outside-agents.md)
-- [FAQ](./docs/user/faq.md)
+WindowsではPowerShellで実行します。
 
-[All docs](./docs/README.md) has the full list.
+```powershell
+irm https://vite.plus/ps1 | iex
+```
 
-## Contributing
+リポジトリを取得し、依存パッケージをインストールします。Windowsの長いパスにも対応できるよう、クローン時に`core.longpaths`を有効にしています。
 
-We have limited review capacity. Small, focused fixes are the most likely to be merged. Features need an approved discussion first.
+```bash
+git clone -c core.longpaths=true https://github.com/YmSaki/t3code.git
+cd t3code
+vp i
+vp run dev --home-dir ./.t3
+```
 
-- Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you report a bug or open a pull request.
-- Put feature requests in [Ideas](https://github.com/pingdotgg/t3code/discussions/categories/ideas).
-- Build from source with the [development runbook](./docs/operations/development.md#first-checkout). The [architecture overview](./docs/internals/overview.md) explains how it works.
-- Get help in [Discord](https://discord.gg/jn4EGJjrvv).
+起動ログに表示されるペアリングURLを開いてください。初回接続では、トークンを含むURLが必要です。上の例では、開発用データをクローン先の`.t3`に保存します。
 
-## License
+変更した範囲の品質チェックには、`vp run check:changed`を使用します。開発環境や検証方法の詳細は[開発ガイド](./docs/operations/development.md#first-checkout)を参照してください。
+
+### リポジトリ構成
+
+| パス                      | 役割                                                          |
+| ------------------------- | ------------------------------------------------------------- |
+| `apps/server`             | WebSocket RPC、エージェント実行、オーケストレーション、永続化 |
+| `apps/web`                | React・ViteによるWeb画面                                      |
+| `apps/desktop`            | Web画面とサーバーを組み込むElectronアプリ                     |
+| `apps/mobile`             | React NativeによるiOS・Androidアプリ                          |
+| `packages/contracts`      | クライアント・サーバー間の型とスキーマ                        |
+| `packages/client-runtime` | Web・モバイル共通の接続処理と状態管理                         |
+| `packages/shared`         | 共通ユーティリティと副作用を持たない処理                      |
+
+設計の全体像は[アーキテクチャ概要](./docs/internals/overview.md)、セルフホストの運用雛形は[セルフホストガイド](./packaging/selfhost/README.md)を参照してください。
+
+## プロジェクトの方針
+
+T3 Codeは、エージェントを使った開発体験をよりよくするために作られました。Codexのデスクトップアプリ、Conductor、Claude Desktop、Cursor Glassなどを参考にしながら、性能、リモート操作、オープンな開発を重視しています。必要に応じてフォークし、自分の求めるツールを作れることも大切にしています。
+
+## ドキュメント
+
+以下の詳細ガイドは主に英語です。
+
+- [インストールと初回起動](./docs/user/install.md)
+- [スマートフォン・別PCからのリモートアクセス](./docs/user/remote-access.md)
+- [権限モード](./docs/user/permission-modes.md)
+- [ソース管理](./docs/user/source-control.md)
+- [外部エージェントとのMCP接続](./docs/user/outside-agents.md)
+- [よくある質問](./docs/user/faq.md)
+
+[ドキュメント一覧](./docs/README.md)から、すべてのガイドを参照できます。
+
+## コントリビュート
+
+このフォークの不具合や開発課題は[Issues](https://github.com/YmSaki/t3code/issues)で扱っています。
+
+上流への報告や貢献を行う場合は、[CONTRIBUTING.md](./CONTRIBUTING.md)を先に確認してください。上流はレビューできる件数に限りがあるため、範囲を絞った修正を優先し、新機能には事前の議論と承認を求めています。
+
+- 上流への機能提案は[Ideas](https://github.com/pingdotgg/t3code/discussions/categories/ideas)へ投稿してください。
+- 上流コミュニティへの質問は[Discord](https://discord.gg/jn4EGJjrvv)を利用できます。
+
+## ライセンス
 
 [MIT](./LICENSE)

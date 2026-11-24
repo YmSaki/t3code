@@ -16,6 +16,7 @@ import { Tool } from "effect/ai";
 
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import migrate107 from "../../../persistence/Migrations/107_PmOrchestration.ts";
+import migrate112 from "../../../persistence/Migrations/112_PmDispatchIdempotency.ts";
 import * as PmService from "../../../pm/PmService.ts";
 import * as PmStore from "../../../pm/PmStore.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -108,6 +109,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       yield* migrate107;
+      yield* migrate112;
       const pmService = yield* PmService.PmService;
 
       yield* pmService.setThreadRole({
@@ -168,6 +170,7 @@ it.effect(
       // 2. Concurrency limit enforcement (maxConcurrentWorkers = 1)
       const batch = yield* runAs(pmThreadId, (toolkit) =>
         callTool(toolkit, "pm_dispatch_batch", {
+          commandId: "pm-tool-batch",
           items: [
             { clientKey: "w1", title: "Frontend card", targetRepoRole: "frontend", brief },
             { clientKey: "w2", title: "Backend api", targetRepoRole: "backend", brief },
@@ -191,6 +194,17 @@ it.effect(
             reason: "concurrency_limit",
           },
         ],
+      });
+
+      const replayed = yield* runAs(pmThreadId, (toolkit) =>
+        callTool(toolkit, "pm_dispatch_batch", {
+          commandId: "pm-tool-batch",
+          items: [{ clientKey: "w1", title: "Retry frontend", targetRepoRole: "frontend", brief }],
+        }),
+      );
+      expect(replayed).toMatchObject({
+        dispatched: [{ threadId: "worker:thread:pm:w1" }],
+        rejected: [],
       });
 
       // Nested worker permission refusal

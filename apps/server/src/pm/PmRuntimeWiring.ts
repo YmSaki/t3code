@@ -106,7 +106,7 @@ export const makePmRuntimeOptions = (deps: PmRuntimeDeps): PmService.PmServiceOp
     );
     const launched = yield* threadLaunch
       .launch({
-        commandId: CommandId.make(`command:pm-worker:${yield* randomUuidV4}`),
+        commandId: request.commandId,
         projectId: request.projectId,
         title: request.title,
         titleRenamed: true,
@@ -141,6 +141,7 @@ export const makePmRuntimeOptions = (deps: PmRuntimeDeps): PmService.PmServiceOp
     );
     const { taskId } = yield* remote
       .delegate(scope, {
+        clientRequestId: request.commandId,
         task: request.promptPack.prompt,
         title: request.title,
         target: {

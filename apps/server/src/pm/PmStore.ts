@@ -1,4 +1,5 @@
 import {
+  CommandId,
   EnvironmentId,
   IsoDateTime,
   NonNegativeInt,
@@ -53,6 +54,7 @@ export const PmThreadConfigRecord = Schema.Struct({
 export type PmThreadConfigRecord = typeof PmThreadConfigRecord.Type;
 
 export const PmWorkerDispatchRecord = Schema.Struct({
+  dispatchCommandId: Schema.NullOr(CommandId),
   workerThreadId: ThreadId,
   pmThreadId: ThreadId,
   clientKey: TrimmedNonEmptyString,
@@ -83,6 +85,7 @@ export interface PmUpsertThreadConfigInput {
 }
 
 export interface PmPutWorkerDispatchInput {
+  readonly dispatchCommandId?: CommandId | undefined;
   readonly workerThreadId: ThreadId;
   readonly pmThreadId: ThreadId;
   readonly clientKey: string;
@@ -137,6 +140,10 @@ export class PmStore extends Context.Service<
     readonly putWorkerDispatch: (
       input: PmPutWorkerDispatchInput,
     ) => Effect.Effect<PmWorkerDispatchRecord, PmStoreError>;
+    readonly recordWorkerLaunch: (
+      input: PmPutWorkerDispatchInput,
+      config: Pick<PmUpsertThreadConfigInput, "metaProjectId" | "policy" | "delegationDepth">,
+    ) => Effect.Effect<PmWorkerDispatchRecord, PmStoreError>;
     readonly updateWorkerProgress: (
       input: PmUpdateWorkerProgressInput,
     ) => Effect.Effect<PmWorkerDispatchRecord | null, PmStoreError>;
@@ -164,6 +171,7 @@ const PmThreadConfigRow = Schema.Struct({
 });
 
 const PmWorkerDispatchRow = Schema.Struct({
+  dispatchCommandId: Schema.NullOr(CommandId),
   workerThreadId: ThreadId,
   pmThreadId: ThreadId,
   clientKey: TrimmedNonEmptyString,
@@ -208,6 +216,7 @@ const make = Effect.gen(function* () {
   `;
 
   const workerColumns = sql`
+    dispatch_command_id AS "dispatchCommandId",
     worker_thread_id AS "workerThreadId",
     pm_thread_id AS "pmThreadId",
     client_key AS "clientKey",
@@ -354,6 +363,7 @@ const make = Effect.gen(function* () {
   )(function* (input) {
     const nowIso = DateTime.formatIso(yield* DateTime.now);
     const status = input.status ?? "running";
+    const dispatchCommandId = input.dispatchCommandId ?? null;
     const turnCount = input.turnCount ?? 1;
     const targetRepoRole = input.targetRepoRole ?? null;
     const providerInstanceId = input.providerInstanceId ?? null;
@@ -369,11 +379,11 @@ const make = Effect.gen(function* () {
 
     yield* sql`
       INSERT INTO pm_worker_dispatches (
-        worker_thread_id, pm_thread_id, client_key, environment_id, project_id,
+        worker_thread_id, pm_thread_id, client_key, dispatch_command_id, environment_id, project_id,
         title, role, provider_instance_id, use_worktree, status, turn_count,
         brief_json, summary, pending_questions_json, started_at, updated_at
       ) VALUES (
-        ${input.workerThreadId}, ${input.pmThreadId}, ${input.clientKey},
+        ${input.workerThreadId}, ${input.pmThreadId}, ${input.clientKey}, ${dispatchCommandId},
         ${input.environmentId}, ${input.projectId}, ${input.title},
         ${targetRepoRole}, ${providerInstanceId}, ${input.useWorktree ? 1 : 0},
         ${status}, ${turnCount}, ${briefJson}, ${summary}, ${pendingQuestionsJson},
@@ -393,6 +403,7 @@ const make = Effect.gen(function* () {
 
     return {
       workerThreadId: input.workerThreadId,
+      dispatchCommandId,
       pmThreadId: input.pmThreadId,
       clientKey: input.clientKey,
       environmentId: input.environmentId,
@@ -417,6 +428,9 @@ const make = Effect.gen(function* () {
     const existing = yield* getWorkerDispatch(input.workerThreadId);
     if (existing === null) return null;
     return yield* putWorkerDispatch({
+      ...(existing.dispatchCommandId === null
+        ? {}
+        : { dispatchCommandId: existing.dispatchCommandId }),
       workerThreadId: existing.workerThreadId,
       pmThreadId: existing.pmThreadId,
       clientKey: existing.clientKey,
@@ -433,6 +447,33 @@ const make = Effect.gen(function* () {
       pendingQuestions: input.pendingQuestions ?? existing.pendingQuestions,
       startedAt: input.startedAt === undefined ? existing.startedAt : input.startedAt,
     });
+  });
+
+  const recordWorkerLaunch: PmStore["Service"]["recordWorkerLaunch"] = Effect.fn(
+    "PmStore.recordWorkerLaunch",
+  )(function* (input, config) {
+    return yield* sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const existing = yield* getWorkerDispatch(input.workerThreadId);
+          if (existing !== null) return existing;
+          yield* upsertConfig({ ...config, threadId: input.workerThreadId, role: "worker" });
+          const worker = yield* putWorkerDispatch(input);
+          yield* incrementDelegatedTurns(input.pmThreadId, 1);
+          return worker;
+        }),
+      )
+      .pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "PmStoreError"
+            ? cause
+            : new PmStoreError({
+                operation: "write",
+                detail: "Could not record PM worker launch.",
+                cause,
+              }),
+        ),
+      );
   });
 
   const cancelActiveWorkers: PmStore["Service"]["cancelActiveWorkers"] = Effect.fn(
@@ -468,6 +509,7 @@ const make = Effect.gen(function* () {
     getWorkerDispatch,
     listWorkersByPmThread,
     putWorkerDispatch,
+    recordWorkerLaunch,
     updateWorkerProgress,
     cancelActiveWorkers,
   });

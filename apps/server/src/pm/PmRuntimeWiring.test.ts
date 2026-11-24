@@ -1,5 +1,6 @@
 import { expect, it } from "@effect/vitest";
 import {
+  CommandId,
   EnvironmentId,
   MetaProjectError,
   NodeId,
@@ -43,6 +44,7 @@ const remoteTask = {
 const launchRequest = (
   overrides: Partial<PmService.PmWorkerLaunchRequest> = {},
 ): PmService.PmWorkerLaunchRequest => ({
+  commandId: CommandId.make("pm-worker-launch"),
   pmThreadId,
   clientKey: "fe",
   title: "Frontend drawer",
@@ -133,6 +135,7 @@ it.effect("launches a local worker through ThreadLaunchService with the PM threa
     expect(launched.workerThreadId).toBe("thread-local-worker");
     expect(harness.launches).toHaveLength(1);
     expect(harness.launches[0]).toMatchObject({
+      commandId: "pm-worker-launch",
       projectId,
       title: "Frontend drawer",
       modelSelection: pmThread.modelSelection,
@@ -180,7 +183,12 @@ it.effect("drives a linked-environment worker through RemoteDelegation as the PM
     const launched = yield* options.launchWorker!(remoteRequest).pipe(pmScope);
     expect(launched.workerThreadId).toBe(remoteWorker);
     expect(harness.delegated).toMatchObject([
-      { task: "WORKER PROMPT", target: { environmentId: there, projectId }, mode: "async" },
+      {
+        clientRequestId: "pm-worker-launch",
+        task: "WORKER PROMPT",
+        target: { environmentId: there, projectId },
+        mode: "async",
+      },
     ]);
 
     const stop = {

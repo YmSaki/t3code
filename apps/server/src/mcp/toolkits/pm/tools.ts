@@ -26,7 +26,7 @@ const sharedDependencies = [
 const WorkerBriefSection = Schema.Literals(["core", "background", "handbook", "excerpts"]);
 
 const PmBoardStatusTool = Tool.make("pm_board_status", {
-  description: "Read the PM worker board snapshot and pending questions.",
+  description: "Read PM workers and pending questions.",
   parameters: Schema.Struct({
     pmThreadId: Schema.optional(ThreadId),
   }),
@@ -50,8 +50,9 @@ const PmBoardStatusTool = Tool.make("pm_board_status", {
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const PmDispatchBatchTool = Tool.make("pm_dispatch_batch", {
-  description: "Dispatch a batch of scoped worker briefs from a PM thread.",
+  description: "Dispatch scoped PM workers; reuse commandId to retry.",
   parameters: Schema.Struct({
+    commandId: PmDispatchBatchInput.fields.commandId,
     pmThreadId: Schema.optional(ThreadId),
     items: PmDispatchBatchInput.fields.items,
   }),
@@ -83,7 +84,7 @@ const PmStopAllWorkersTool = Tool.make("pm_stop_all_workers", {
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const PmBuildWorkerBriefTool = Tool.make("pm_build_worker_brief", {
-  description: "Build a budget-clamped prompt pack from a worker brief.",
+  description: "Build a budget-clamped worker prompt pack.",
   parameters: Schema.Struct({
     title: Schema.optional(TrimmedNonEmptyString),
     brief: WorkerContextBrief,
