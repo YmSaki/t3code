@@ -81,3 +81,4 @@ export * from "./artifact.ts";
 export * from "./repoMonitor.ts";
 export * from "./worklog.ts";
 export * from "./selfHost.ts";
+export * from "./kanban.ts";

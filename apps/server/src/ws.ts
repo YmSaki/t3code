@@ -300,6 +300,7 @@ import * as UnifiedImportService from "./project/importers/UnifiedImportService.
 import * as PeerHealthMonitor from "./peer/PeerHealthMonitor.ts";
 import * as WebPushService from "./push/WebPushService.ts";
 import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
+import * as GithiveKanbanService from "./kanban/GithiveKanbanService.ts";
 import * as PmService from "./pm/PmService.ts";
 import * as ArtifactService from "./artifact/ArtifactService.ts";
 import * as RepoMonitorService from "./repoMonitor/RepoMonitorService.ts";
@@ -1590,6 +1591,7 @@ export const layerWsRpc = (
       const webPushService = yield* WebPushService.WebPushService;
       const metaProjectService = yield* MetaProjectService.MetaProjectService;
       const pmService = yield* PmService.PmService;
+      const kanbanService = yield* GithiveKanbanService.GithiveKanbanService;
       const artifactService = yield* ArtifactService.ArtifactService;
       const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
       const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
@@ -3746,6 +3748,8 @@ export const layerWsRpc = (
         [WS_METHODS.metaProjectsMutate]: (input) => metaProjectService.mutate(input),
         [WS_METHODS.metaProjectsGetContext]: (input) => metaProjectService.getSharedContext(input),
         [WS_METHODS.metaProjectsGetRollup]: (input) => metaProjectService.getRollup(input),
+        [WS_METHODS.kanbanListBoard]: (input) => kanbanService.listBoard(input),
+        [WS_METHODS.kanbanMoveCard]: (input) => kanbanService.moveCard(input),
         [WS_METHODS.pmGetBoard]: (input) =>
           pmService.getBoardSnapshot(input.pmThreadId).pipe(Effect.mapError(toPmRpcError)),
         [WS_METHODS.pmSetRole]: (input) =>
@@ -3852,6 +3856,7 @@ export const layer = Layer.unwrap(
     const webPushService = yield* WebPushService.WebPushService;
     const metaProjectService = yield* MetaProjectService.MetaProjectService;
     const pmService = yield* PmService.PmService;
+    const kanbanService = yield* GithiveKanbanService.GithiveKanbanService;
     const artifactService = yield* ArtifactService.ArtifactService;
     const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
     const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
@@ -3971,6 +3976,9 @@ export const layer = Layer.unwrap(
                   Layer.succeed(MetaProjectService.MetaProjectService, metaProjectService),
                 ),
                 Layer.provide(Layer.succeed(PmService.PmService, pmService)),
+                Layer.provide(
+                  Layer.succeed(GithiveKanbanService.GithiveKanbanService, kanbanService),
+                ),
                 Layer.provide(Layer.succeed(ArtifactService.ArtifactService, artifactService)),
                 Layer.provide(
                   Layer.succeed(RepoMonitorService.RepoMonitorService, repoMonitorService),

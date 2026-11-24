@@ -251,6 +251,10 @@
       "types": "./src/state/filesystem.ts",
       "default": "./src/state/filesystem.ts"
     },
+    "./state/kanban": {
+      "types": "./src/state/kanban.ts",
+      "default": "./src/state/kanban.ts"
+    },
     "./state/git": {
       "types": "./src/state/git.ts",
       "default": "./src/state/git.ts"

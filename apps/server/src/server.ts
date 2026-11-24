@@ -193,6 +193,7 @@ import * as WebPushRuntimeWiring from "./push/WebPushRuntimeWiring.ts";
 import * as MetaProjectStore from "./metaProject/MetaProjectStore.ts";
 import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
 import * as MetaProjectRuntimeWiring from "./metaProject/MetaProjectRuntimeWiring.ts";
+import * as GithiveKanbanService from "./kanban/GithiveKanbanService.ts";
 import * as PmStore from "./pm/PmStore.ts";
 import * as PmRuntimeWiring from "./pm/PmRuntimeWiring.ts";
 import * as ArtifactStore from "./artifact/ArtifactStore.ts";
@@ -1015,6 +1016,12 @@ const layerMakeRoutes = Layer.mergeAll(
   .pipe(
     Layer.provide(layerMetaProject),
     Layer.provide(layerPm),
+    Layer.provide(
+      GithiveKanbanService.layer.pipe(
+        Layer.provide(ProcessRunner.layer),
+        Layer.provide(RuntimeLayer.layerProjectService),
+      ),
+    ),
     Layer.provide(layerArtifact),
     Layer.provide(layerRepoMonitor),
     Layer.provide(layerUnifiedImport),

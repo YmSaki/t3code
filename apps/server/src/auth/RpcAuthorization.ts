@@ -247,6 +247,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.metaProjectsGetTree]: AuthOrchestrationReadScope,
   [WS_METHODS.metaProjectsGetContext]: AuthOrchestrationReadScope,
   [WS_METHODS.metaProjectsGetRollup]: AuthOrchestrationReadScope,
+  [WS_METHODS.kanbanListBoard]: AuthOrchestrationReadScope,
   [WS_METHODS.pmGetBoard]: AuthOrchestrationReadScope,
   [WS_METHODS.artifactsList]: AuthOrchestrationReadScope,
   [WS_METHODS.artifactsGet]: AuthOrchestrationReadScope,
