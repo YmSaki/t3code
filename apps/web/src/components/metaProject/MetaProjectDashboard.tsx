@@ -3,12 +3,13 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import type {
-  EnvironmentId,
-  MetaProject,
+import {
+  type EnvironmentId,
+  type MetaProject,
   MetaProjectId,
-  ProjectId,
-  ThreadId,
+  type ProjectId,
+  type ThreadId,
+  type UnifiedAgentSessionImportResult,
 } from "@t3tools/contracts";
 import type {
   RollupIssueEntry,
@@ -173,7 +174,13 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
   const updateMetaProject = useAtomCommand(metaProjectEnvironment.update, {
     reportFailure: false,
   });
+  const addMember = useAtomCommand(metaProjectEnvironment.addMember, {
+    reportFailure: false,
+  });
   const removeMember = useAtomCommand(metaProjectEnvironment.removeMember, {
+    reportFailure: false,
+  });
+  const linkThread = useAtomCommand(metaProjectEnvironment.linkThread, {
     reportFailure: false,
   });
   const deleteMetaProject = useAtomCommand(metaProjectEnvironment.delete, {
@@ -369,6 +376,73 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
       title: gt("Meta-Project deleted"),
     });
     props.onDeleted?.(metaProject.id);
+  };
+
+  const handleImported = async (
+    result: UnifiedAgentSessionImportResult,
+    targetMetaProjectId: string | null,
+  ) => {
+    if (targetMetaProjectId !== null && props.environmentId !== null) {
+      const resolvedMetaProjectId = MetaProjectId.make(targetMetaProjectId);
+      const matchingProject = allProjects.find(
+        (project) =>
+          project.environmentId === props.environmentId &&
+          project.workspaceRoot === result.workspaceRoot,
+      );
+      if (
+        matchingProject !== undefined &&
+        (resolvedMetaProjectId !== metaProject.id ||
+          !metaProject.members.some(
+            (member) =>
+              member.environmentId === props.environmentId &&
+              member.projectId === matchingProject.id,
+          ))
+      ) {
+        await addMember({
+          environmentId: props.environmentId,
+          input: {
+            metaProjectId: resolvedMetaProjectId,
+            member: {
+              environmentId: props.environmentId,
+              projectId: matchingProject.id,
+              role: "other",
+            },
+          },
+        });
+      }
+      for (const thread of result.threads) {
+        if (thread.threadId === undefined) continue;
+        if (
+          resolvedMetaProjectId === metaProject.id &&
+          metaProject.threadLinks.some(
+            (link) =>
+              link.environmentId === props.environmentId && link.threadId === thread.threadId,
+          )
+        ) {
+          continue;
+        }
+        const threadProject =
+          allProjects.find(
+            (project) =>
+              project.environmentId === props.environmentId &&
+              project.workspaceRoot === thread.workspacePath,
+          ) ?? matchingProject;
+        await linkThread({
+          environmentId: props.environmentId,
+          input: {
+            metaProjectId: resolvedMetaProjectId,
+            threadLink: {
+              environmentId: props.environmentId,
+              threadId: thread.threadId,
+              role: "standard",
+              ...(threadProject !== undefined ? { projectId: threadProject.id } : {}),
+              title: thread.title,
+            },
+          },
+        });
+      }
+    }
+    rollupQuery.refresh();
   };
 
   const uniqueMemberEnvIds = [
@@ -871,7 +945,9 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
               environmentId={props.environmentId}
               initialMetaProjectId={metaProject.id}
               availableMetaProjects={[{ id: metaProject.id, title: metaProject.title }]}
-              onImported={() => rollupQuery.refresh()}
+              onImported={(result, targetMetaProjectId) => {
+                void handleImported(result, targetMetaProjectId);
+              }}
             />
           ) : null}
         </section>

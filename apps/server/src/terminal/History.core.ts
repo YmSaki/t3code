@@ -30,6 +30,19 @@ function countLineBreaks(data: string): number {
   return lineBreaks;
 }
 
+function detachString(data: string): string {
+  // Copy UTF-16 code units so V8 does not retain the larger parent string slice.
+  const codes = new Uint16Array(data.length);
+  for (let index = 0; index < data.length; index += 1) {
+    codes[index] = data.charCodeAt(index);
+  }
+  let detached = "";
+  for (let offset = 0; offset < codes.length; offset += 4096) {
+    detached += String.fromCharCode(...codes.subarray(offset, offset + 4096));
+  }
+  return detached;
+}
+
 export class BoundedTerminalHistory {
   private readonly maxLines: number;
   private readonly maxBytes: number;
@@ -93,11 +106,7 @@ export class BoundedTerminalHistory {
       }
       const data = text.slice(offset, end);
       // Detach small chunks from large input strings so evicted prefixes can be collected.
-      this.appendChunk(
-        text.length > MAX_HISTORY_CHUNK_LENGTH
-          ? Buffer.from(data, "utf16le").toString("utf16le")
-          : data,
-      );
+      this.appendChunk(text.length > MAX_HISTORY_CHUNK_LENGTH ? detachString(data) : data);
       this.trim();
       offset = end;
     }

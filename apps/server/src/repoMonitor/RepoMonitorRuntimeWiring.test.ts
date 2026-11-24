@@ -17,6 +17,8 @@ import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import type { RepoMonitorBranchSnapshot } from "@t3tools/shared/repoMonitorEval.core";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Deferred from "effect/Deferred";
 import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 
@@ -294,5 +296,86 @@ describe("RepoMonitorRuntimeWiring", () => {
         });
       }).pipe(Effect.provide(harness.layer));
     },
+  );
+
+  it.effect("serializes concurrent poll and webhook processing for the same project", () =>
+    Effect.gen(function* () {
+      const trace: string[] = [];
+      const pollStarted = yield* Deferred.make<void>();
+      const releasePoll = yield* Deferred.make<void>();
+      const store = repoMonitorStoreLayer.pipe(
+        Layer.provideMerge(NodeSqliteClient.layer({ filename: ":memory:" })),
+      );
+      const source = RepoMonitorRuntimeWiring.RepoMonitorSnapshotSource.of({
+        lastSelfAccountLogins: () => Effect.succeed([]),
+        observe: (projectId) =>
+          Effect.gen(function* () {
+            trace.push("poll:start");
+            yield* Deferred.succeed(pollStarted, undefined);
+            yield* Deferred.await(releasePoll);
+            trace.push("poll:end");
+            return {
+              snapshot: {
+                projectId,
+                observedAt: "2026-11-22T00:00:00.000Z",
+                branches: [{ name: "main", headSha: "sha-1" }],
+                pullRequests: [],
+                issues: [],
+              },
+              selfAccountLogins: [],
+            };
+          }),
+      });
+      const baseServiceLayer = Layer.effect(
+        RepoMonitorService.RepoMonitorService,
+        RepoMonitorService.make({
+          snapshotProvider: () => Effect.die("unused"),
+          onActionTriggered: () => Effect.sync(() => ({ dispatchedThreadId: null })),
+        }),
+      ).pipe(Layer.provideMerge(store), Layer.provideMerge(PlatformNodeCrypto.layer));
+      const serviceLayer = Layer.effect(
+        RepoMonitorService.RepoMonitorService,
+        Effect.map(RepoMonitorService.RepoMonitorService, (service) => ({
+          ...service,
+          ingestWebhookEvent: (input) =>
+            Effect.sync(() => {
+              trace.push("webhook");
+            }).pipe(Effect.flatMap(() => service.ingestWebhookEvent(input))),
+        })),
+      ).pipe(Layer.provideMerge(baseServiceLayer));
+      const testLayer = Layer.mergeAll(
+        serviceLayer,
+        Layer.succeed(RepoMonitorRuntimeWiring.RepoMonitorSnapshotSource, source),
+      );
+
+      yield* Effect.gen(function* () {
+        yield* Migration0109;
+        yield* TestClock.adjust(Duration.hours(100));
+        const repoService = yield* RepoMonitorService.RepoMonitorService;
+        yield* repoService.upsertRule({ ...pushRule, actionKind: "notify_pm" });
+
+        const pollFiber = yield* Effect.forkChild(
+          RepoMonitorRuntimeWiring.runRepoMonitorPollCycle(),
+        );
+        yield* Deferred.await(pollStarted);
+
+        const body = JSON.stringify({ ref: "refs/heads/main", before: "sha-1", after: "sha-2" });
+        const webhookFiber = yield* Effect.forkChild(
+          RepoMonitorRuntimeWiring.handleRepoMonitorWebhook({
+            projectId: PROJECT_ID,
+            secret: SECRET,
+            headers: { "x-github-event": "push", "x-hub-signature-256": sign(body) },
+            body: new TextEncoder().encode(body),
+          }),
+        );
+        yield* Effect.yieldNow;
+        assert.deepStrictEqual(trace, ["poll:start"]);
+
+        yield* Deferred.succeed(releasePoll, undefined);
+        yield* Fiber.join(pollFiber);
+        yield* Fiber.join(webhookFiber);
+        assert.deepStrictEqual(trace, ["poll:start", "poll:end", "webhook"]);
+      }).pipe(Effect.provide(testLayer));
+    }),
   );
 });

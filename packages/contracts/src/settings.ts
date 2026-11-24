@@ -1624,6 +1624,8 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   peerLinksDefaultEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /** Opt-in product analytics and telemetry. Off by default. */
+  telemetryEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
@@ -2016,6 +2018,7 @@ export const ServerSettingsPatch = Schema.Struct({
   environmentRole: Schema.optionalKey(EnvironmentRole),
   hubConfig: Schema.optionalKey(Schema.NullOr(SelfHostHubConfig)),
   peerLinksDefaultEnabled: Schema.optionalKey(Schema.Boolean),
+  telemetryEnabled: Schema.optionalKey(Schema.Boolean),
 });
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 

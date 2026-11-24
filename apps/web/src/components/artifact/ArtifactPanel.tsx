@@ -355,14 +355,22 @@ export function ArtifactPanel(props: ArtifactPanelProps) {
     });
     setIsBusy(false);
     if (result._tag === "Success") {
-      setCommentText("");
-      if (props.onSendPrompt !== undefined) {
-        await props.onSendPrompt(result.value.prompt);
+      if (result.value.startedTurn) {
+        setCommentText("");
+        if (props.onSendPrompt !== undefined) {
+          await props.onSendPrompt(result.value.prompt);
+        }
+        toastManager.add({
+          type: "success",
+          title: gt("Revision request sent"),
+        });
+      } else {
+        toastManager.add({
+          type: "warning",
+          title: gt("Revision request was not sent"),
+          description: gt("No active turn could be started for this thread."),
+        });
       }
-      toastManager.add({
-        type: "success",
-        title: gt("Revision request sent"),
-      });
       return;
     }
     if (!isAtomCommandInterrupted(result)) {

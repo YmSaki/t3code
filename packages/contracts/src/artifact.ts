@@ -113,6 +113,7 @@ export const ArtifactReviseInput = Schema.Struct({
   author: Schema.optionalKey(ArtifactAuthor),
   title: Schema.optionalKey(ArtifactTitle),
   summary: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(500))),
+  expectedVersion: Schema.optionalKey(ArtifactVersionNumber),
 });
 export type ArtifactReviseInput = typeof ArtifactReviseInput.Type;
 

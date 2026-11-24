@@ -121,7 +121,14 @@ export const makePmRuntimeOptions = (deps: PmRuntimeDeps): PmService.PmServiceOp
         creationSource: "mcp",
       })
       .pipe(Effect.mapError((cause) => dispatchError(cause, request.clientKey)));
-    return { workerThreadId: launched.threadId, status: "running" } as const;
+    const latestRun = launched.resumed
+      ? launched.projection?.runs.reduce<(typeof launched.projection.runs)[number] | undefined>(
+          (latest, run) => (latest === undefined || run.ordinal > latest.ordinal ? run : latest),
+          undefined,
+        )
+      : undefined;
+    const status = (latestRun ? toPmWorkerStatus(latestRun.status) : null) ?? "running";
+    return { workerThreadId: launched.threadId, status } as const;
   });
 
   const launchRemote = Effect.fn("PmRuntimeWiring.launchRemote")(function* (
@@ -139,8 +146,13 @@ export const makePmRuntimeOptions = (deps: PmRuntimeDeps): PmService.PmServiceOp
       "Launching a worker",
       request.clientKey,
     );
+    // Provider sessions rotate across restarts, so remote retry identity uses the durable PM thread.
+    const pmScope: McpInvocationContext.McpThreadInvocationScope = {
+      ...scope,
+      requestNamespace: `pm:${request.pmThreadId}`,
+    };
     const { taskId } = yield* remote
-      .delegate(scope, {
+      .delegate(pmScope, {
         clientRequestId: request.commandId,
         task: request.promptPack.prompt,
         title: request.title,

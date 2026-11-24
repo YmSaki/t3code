@@ -52,6 +52,7 @@ export interface ArtifactStoreReviseInput {
   readonly author?: ArtifactAuthor | undefined;
   readonly title?: string | undefined;
   readonly summary?: string | undefined;
+  readonly expectedVersion?: number | undefined;
 }
 
 export interface ArtifactActionRecord {
@@ -423,44 +424,88 @@ const make = Effect.gen(function* () {
       const nextTitle = input.title !== undefined ? input.title.trim() : existing.title;
       const summary = input.summary?.trim() || null;
 
-      const nextVersion = yield* sql
+      type ReviseTxResult =
+        | { readonly ok: true; readonly versionNumber: number }
+        | { readonly ok: false; readonly error: ArtifactError };
+
+      const txResult = yield* sql
         .withTransaction(
           Effect.gen(function* () {
+            const currentRows = yield* sql<{
+              readonly activeVersion: number;
+              readonly archivedAt: string | null;
+            }>`
+              SELECT active_version AS "activeVersion", archived_at AS "archivedAt"
+              FROM artifacts
+              WHERE id = ${input.artifactId}
+              LIMIT 1
+            `;
+            const current = currentRows[0];
+            if (current === undefined) {
+              return {
+                ok: false,
+                error: new ArtifactNotFoundError({ artifactId: input.artifactId }),
+              } satisfies ReviseTxResult;
+            }
+            if (current.archivedAt !== null) {
+              return {
+                ok: false,
+                error: new ArtifactArchivedError({ artifactId: input.artifactId }),
+              } satisfies ReviseTxResult;
+            }
+            if (
+              input.expectedVersion !== undefined &&
+              current.activeVersion !== input.expectedVersion
+            ) {
+              return {
+                ok: false,
+                error: new ArtifactStateConflictError({
+                  artifactId: input.artifactId,
+                  expectedVersion: input.expectedVersion,
+                  actualVersion: current.activeVersion,
+                }),
+              } satisfies ReviseTxResult;
+            }
             const maxRows = yield* sql<{ readonly maxVersion: number }>`
-            SELECT COALESCE(MAX(version), 0) AS "maxVersion"
-            FROM artifact_versions
-            WHERE artifact_id = ${input.artifactId}
-          `;
-            const versionNumber = (maxRows[0]?.maxVersion ?? existing.currentVersion) + 1;
+              SELECT COALESCE(MAX(version), 0) AS "maxVersion"
+              FROM artifact_versions
+              WHERE artifact_id = ${input.artifactId}
+            `;
+            const versionNumber = (maxRows[0]?.maxVersion ?? current.activeVersion) + 1;
             yield* sql`
-            INSERT INTO artifact_versions (
-              artifact_id,
-              version,
-              author,
-              content,
-              summary,
-              created_at
-            ) VALUES (
-              ${input.artifactId},
-              ${versionNumber},
-              ${author},
-              ${input.content},
-              ${summary},
-              ${now}
-            )
-          `;
+              INSERT INTO artifact_versions (
+                artifact_id,
+                version,
+                author,
+                content,
+                summary,
+                created_at
+              ) VALUES (
+                ${input.artifactId},
+                ${versionNumber},
+                ${author},
+                ${input.content},
+                ${summary},
+                ${now}
+              )
+            `;
             yield* sql`
-            UPDATE artifacts
-            SET
-              active_version = ${versionNumber},
-              title = ${nextTitle},
-              updated_at = ${now}
-            WHERE id = ${input.artifactId}
-          `;
-            return versionNumber;
+              UPDATE artifacts
+              SET
+                active_version = ${versionNumber},
+                title = ${nextTitle},
+                updated_at = ${now}
+              WHERE id = ${input.artifactId}
+            `;
+            return { ok: true, versionNumber } satisfies ReviseTxResult;
           }),
         )
         .pipe(Effect.mapError(storageFailure(input.artifactId, "Could not revise artifact")));
+
+      if (!txResult.ok) {
+        return yield* txResult.error;
+      }
+      const nextVersion = txResult.versionNumber;
 
       const artifact: Artifact = {
         ...existing,

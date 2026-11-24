@@ -761,6 +761,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("timestamp clock locale system browser os 12 hour 24 hour")],
   },
   {
+    id: "product-telemetry",
+    title: msg("Share anonymous usage telemetry"),
+    to: "/settings/general",
+    searchTerms: [msg("analytics telemetry posthog tracking privacy opt-in usage")],
+  },
+  {
     id: "response-streaming",
     title: msg("Response streaming"),
     to: "/settings/threads",

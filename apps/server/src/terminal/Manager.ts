@@ -2221,31 +2221,31 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     threadId: string,
     terminalId: string,
   ) {
-    const nextPath = historyPath(threadId, terminalId);
-    for (const sourcePath of historyPaths(threadId, terminalId)) {
-      const migrating = sourcePath !== nextPath;
-      const operation = migrating ? "migrate" : "read";
-      if (
-        !(yield* historyExists(sourcePath).pipe(
-          Effect.mapError(
-            (cause) => new TerminalHistoryError({ operation, threadId, terminalId, cause }),
-          ),
-        ))
-      )
-        continue;
-      const { history: raw, truncated } = yield* readHistoryTail(sourcePath).pipe(
-        Effect.scoped,
-        Effect.mapError(
-          (cause) => new TerminalHistoryError({ operation, threadId, terminalId, cause }),
-        ),
-      );
-      const history = new BoundedTerminalHistory(historyLineLimit, raw, historyByteLimit);
-      const capped = history.value();
-      if (migrating || truncated || capped !== raw) {
-        const write = historyDiskLock
-          .withLock(
-            "disk",
-            Effect.gen(function* () {
+    return yield* historyDiskLock.withLock(
+      "disk",
+      Effect.gen(function* () {
+        const nextPath = historyPath(threadId, terminalId);
+        for (const sourcePath of historyPaths(threadId, terminalId)) {
+          const migrating = sourcePath !== nextPath;
+          const operation = migrating ? "migrate" : "read";
+          if (
+            !(yield* historyExists(sourcePath).pipe(
+              Effect.mapError(
+                (cause) => new TerminalHistoryError({ operation, threadId, terminalId, cause }),
+              ),
+            ))
+          )
+            continue;
+          const { history: raw, truncated } = yield* readHistoryTail(sourcePath).pipe(
+            Effect.scoped,
+            Effect.mapError(
+              (cause) => new TerminalHistoryError({ operation, threadId, terminalId, cause }),
+            ),
+          );
+          const history = new BoundedTerminalHistory(historyLineLimit, raw, historyByteLimit);
+          const capped = history.value();
+          if (migrating || truncated || capped !== raw) {
+            const write = Effect.gen(function* () {
               const temporaryPath = yield* fileSystem.makeTempFileScoped({
                 directory: logsDir,
                 prefix: ".history-",
@@ -2254,46 +2254,47 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
               yield* fileSystem.rename(temporaryPath, nextPath);
               recordHistoryFile(nextPath, Buffer.byteLength(capped));
               yield* rotateHistory();
-            }).pipe(Effect.scoped),
-          )
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new TerminalHistoryError({
-                  operation: migrating ? "migrate" : "truncate",
-                  threadId,
-                  terminalId,
-                  cause,
-                }),
-            ),
-          );
-        yield* migrating
-          ? write
-          : write.pipe(
+            }).pipe(
+              Effect.scoped,
+              Effect.mapError(
+                (cause) =>
+                  new TerminalHistoryError({
+                    operation: migrating ? "migrate" : "truncate",
+                    threadId,
+                    terminalId,
+                    cause,
+                  }),
+              ),
+            );
+            yield* migrating
+              ? write
+              : write.pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning("failed to compact terminal history", {
+                      threadId,
+                      terminalId,
+                      error,
+                    }),
+                  ),
+                );
+          }
+          if (migrating) {
+            yield* fileSystem.remove(sourcePath, { force: true }).pipe(
+              Effect.tap(() => Effect.sync(() => historyFiles.delete(sourcePath))),
               Effect.catch((error) =>
-                Effect.logWarning("failed to compact terminal history", {
+                Effect.logWarning("failed to remove legacy terminal history", {
                   threadId,
                   terminalId,
                   error,
                 }),
               ),
             );
-      }
-      if (migrating) {
-        yield* fileSystem.remove(sourcePath, { force: true }).pipe(
-          Effect.tap(() => Effect.sync(() => historyFiles.delete(sourcePath))),
-          Effect.catch((error) =>
-            Effect.logWarning("failed to remove legacy terminal history", {
-              threadId,
-              terminalId,
-              error,
-            }),
-          ),
-        );
-      }
-      return history;
-    }
-    return new BoundedTerminalHistory(historyLineLimit, "", historyByteLimit);
+          }
+          return history;
+        }
+        return new BoundedTerminalHistory(historyLineLimit, "", historyByteLimit);
+      }),
+    );
   });
 
   const deleteHistory = Effect.fn("terminal.deleteHistory")(function* (

@@ -92,6 +92,26 @@ testLayer("ArtifactStore", (it) => {
 
       const unarchived = yield* store.setArchived({ artifactId, archived: false });
       expect(unarchived.archivedAt).toBeNull();
+
+      const conflict = yield* store
+        .revise({
+          artifactId,
+          content: "stale revision",
+          expectedVersion: 2,
+        })
+        .pipe(Effect.flip);
+      expect(conflict).toBeInstanceOf(ArtifactStateConflictError);
+      if (isArtifactStateConflictError(conflict)) {
+        expect(conflict.expectedVersion).toBe(2);
+        expect(conflict.actualVersion).toBe(1);
+      }
+
+      const revisedWithExpected = yield* store.revise({
+        artifactId,
+        content: "checked revision",
+        expectedVersion: 1,
+      });
+      expect(revisedWithExpected.artifact.currentVersion).toBe(3);
     }),
   );
 

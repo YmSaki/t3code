@@ -8,7 +8,7 @@ import {
 import type { EnvironmentId } from "@t3tools/contracts";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { BellIcon, BellRingIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { m } from "~/i18n/messages";
 import { useEnvironmentQuery } from "~/state/query";
@@ -57,6 +57,26 @@ export function WebPushSettingsSection({
   const [subscribedEndpoint, setSubscribedEndpoint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- hydrates existing browser PushSubscription from ServiceWorker PushManager on mount
+  useEffect(() => {
+    if (!supportStatus.supported) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const existing = await registration?.pushManager.getSubscription();
+        if (!cancelled) {
+          setSubscribedEndpoint(existing?.endpoint ?? null);
+        }
+      } catch {
+        // Ignore service worker lookup errors during mount hydration.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supportStatus.supported]);
 
   const isSubscribed = subscriptions.length > 0 || subscribedEndpoint !== null;
 
