@@ -707,6 +707,10 @@
       "types": "./src/pmContextBuilder.core.ts",
       "import": "./src/pmContextBuilder.core.ts"
     },
+    "./githiveKanban.core": {
+      "types": "./src/githiveKanban.core.ts",
+      "import": "./src/githiveKanban.core.ts"
+    },
     "./pmGuard.core": {
       "types": "./src/pmGuard.core.ts",
       "import": "./src/pmGuard.core.ts"
@@ -734,6 +738,10 @@
     "./selfHostUiPolicy.core": {
       "types": "./src/selfHostUiPolicy.core.ts",
       "import": "./src/selfHostUiPolicy.core.ts"
+    },
+    "./threadHandoff.core": {
+      "types": "./src/threadHandoff.core.ts",
+      "import": "./src/threadHandoff.core.ts"
     },
     "./workerBrief.core": {
       "types": "./src/workerBrief.core.ts",

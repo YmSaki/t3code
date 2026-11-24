@@ -46,6 +46,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.issuesCreate]: AuthSourceControlWriteScope,
   [WS_METHODS.issuesComment]: AuthSourceControlWriteScope,
   [WS_METHODS.issuesUpdate]: AuthSourceControlWriteScope,
+  [WS_METHODS.kanbanMoveCard]: AuthSourceControlWriteScope,
   [WS_METHODS.issuesSetState]: AuthSourceControlWriteScope,
   [WS_METHODS.issuesReact]: AuthSourceControlWriteScope,
   // A tracker credential and a project's binding are settings, saved under the same grant.
@@ -101,6 +102,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.pmSetKillSwitch]: AuthOrchestrationOperateScope,
   [WS_METHODS.pmDispatchBatch]: AuthOrchestrationOperateScope,
   [WS_METHODS.pmStopAllWorkers]: AuthOrchestrationOperateScope,
+  // Launches a thread that starts a turn, as launchThread does.
+  [WS_METHODS.threadHandoff]: AuthOrchestrationOperateScope,
   [WS_METHODS.artifactsCreate]: AuthOrchestrationOperateScope,
   [WS_METHODS.artifactsRevise]: AuthOrchestrationOperateScope,
   [WS_METHODS.artifactsSwitchVersion]: AuthOrchestrationOperateScope,

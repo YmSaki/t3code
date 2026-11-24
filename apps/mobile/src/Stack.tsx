@@ -128,6 +128,15 @@ import {
   ScheduledTaskThreadPickerRouteScreen,
 } from "./features/settings/ScheduledTaskPickerScreens";
 import { SettingsKeyboardRouteScreen } from "./features/settings/SettingsKeyboardRouteScreen";
+import {
+  SettingsRepoMonitorRuleRouteScreen,
+  SettingsRepoMonitorsRouteScreen,
+} from "./features/settings/SettingsRepoMonitorsRouteScreen";
+import { WorklogRouteScreen } from "./features/worklog/WorklogRouteScreen";
+import { WorklogBlockSheet } from "./features/worklog/WorklogBlockSheet";
+import { PmBoardSheet } from "./features/threads/PmBoardSheet";
+import { ArtifactRouteScreen } from "./features/artifacts/ArtifactRouteScreen";
+import { ThreadArtifactsSheet } from "./features/artifacts/ThreadArtifactsSheet";
 import { SettingsLegalRouteScreen } from "./features/settings/SettingsLegalRouteScreen";
 import { SettingsVoiceRouteScreen } from "./features/settings/SettingsVoiceRouteScreen";
 import { SettingsVoiceModelsRouteScreen } from "./features/settings/SettingsVoiceModelsRouteScreen";
@@ -197,6 +206,9 @@ const ROUTE_TITLES: Readonly<Record<string, string>> = {
   SettingsScheduledTaskEdit: msg("Edit scheduled task"),
   SettingsScheduledTaskBranch: msg("Base branch"),
   SettingsScheduledTaskThread: msg("Destination"),
+  SettingsRepoMonitors: msg("Repo monitors"),
+  SettingsRepoMonitorRule: msg("Repo monitor"),
+  SettingsWorklog: msg("Worklog"),
   SettingsClientStorage: msg("Client Storage"),
   SettingsDiagnostics: msg("Diagnostics"),
   SettingsUsageAccount: msg("Account"),
@@ -394,6 +406,20 @@ const SETTINGS_SCREENS = {
   SettingsScheduledTaskModel: createNativeStackScreen({
     screen: ScheduledTaskModelPickerRouteScreen,
     options: THREAD_SETTINGS_ROUTE,
+  }),
+  SettingsRepoMonitors: createNativeStackScreen({
+    screen: SettingsRepoMonitorsRouteScreen,
+    linking: "settings/repo-monitors",
+    options: settingsPage(),
+  }),
+  SettingsRepoMonitorRule: createNativeStackScreen({
+    screen: SettingsRepoMonitorRuleRouteScreen,
+    options: settingsPage(),
+  }),
+  SettingsWorklog: createNativeStackScreen({
+    screen: WorklogRouteScreen,
+    linking: "settings/worklog",
+    options: settingsPage(),
   }),
   SettingsClientStorage: createNativeStackScreen({
     screen: SettingsClientStorageRouteScreen,
@@ -800,6 +826,22 @@ const RootStackConfig = createWorkspaceStackNavigator({
     LinkedThreadFullscreen: createNativeStackScreen({
       screen: LinkedThreadSheet,
       options: modalRoute({ header: "glass", itemStyle: "editor", duoMinimize: "onScrollUp" }),
+    }),
+    PmBoard: createNativeStackScreen({
+      screen: PmBoardSheet,
+      options: sheetRoute({ detent: 0.75, androidMaxDetent: 0.95 }),
+    }),
+    ThreadArtifacts: createNativeStackScreen({
+      screen: ThreadArtifactsSheet,
+      options: sheetRoute({ detent: 0.5, androidMaxDetent: 0.9 }),
+    }),
+    Artifact: createNativeStackScreen({
+      screen: ArtifactRouteScreen,
+      options: pageRoute({ header: "solid" }),
+    }),
+    WorklogBlock: createNativeStackScreen({
+      screen: WorklogBlockSheet,
+      options: sheetRoute({ detent: 0.6, androidMaxDetent: 0.95 }),
     }),
     ThreadGuestShare: createNativeStackScreen({
       screen: ThreadGuestShareSheet,

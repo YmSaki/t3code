@@ -1,4 +1,11 @@
 import {
+  GithiveKanbanError,
+  KanbanBoard,
+  KanbanCard,
+  KanbanListBoardInput,
+  KanbanMoveCardInput,
+} from "./kanban.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -500,6 +507,12 @@ import {
   ThreadRole,
 } from "./pm.ts";
 import {
+  ThreadHandoffError,
+  ThreadHandoffInput,
+  ThreadHandoffResult,
+  ThreadHandoffSourceNotFoundError,
+} from "./threadHandoff.ts";
+import {
   Artifact,
   ArtifactArchiveInput,
   ArtifactArchivedError,
@@ -815,11 +828,15 @@ export const WS_METHODS = {
   metaProjectsGetContext: "metaProjects.getContext",
   metaProjectsGetRollup: "metaProjects.getRollup",
 
+  kanbanListBoard: "kanban.listBoard",
+  kanbanMoveCard: "kanban.moveCard",
   pmGetBoard: "pm.getBoard",
   pmSetRole: "pm.setRole",
   pmSetKillSwitch: "pm.setKillSwitch",
   pmDispatchBatch: "pm.dispatchBatch",
   pmStopAllWorkers: "pm.stopAllWorkers",
+
+  threadHandoff: "thread.handoff",
 
   artifactsList: "artifacts.list",
   artifactsGet: "artifacts.get",
@@ -2754,6 +2771,17 @@ const PmRpcError = Schema.Union([
   EnvironmentAuthorizationError,
 ]);
 
+const WsKanbanListBoardRpc = Rpc.make(WS_METHODS.kanbanListBoard, {
+  payload: KanbanListBoardInput,
+  success: KanbanBoard,
+  error: Schema.Union([GithiveKanbanError, EnvironmentAuthorizationError]),
+});
+const WsKanbanMoveCardRpc = Rpc.make(WS_METHODS.kanbanMoveCard, {
+  payload: KanbanMoveCardInput,
+  success: KanbanCard,
+  error: Schema.Union([GithiveKanbanError, EnvironmentAuthorizationError]),
+});
+
 const WsPmGetBoardRpc = Rpc.make(WS_METHODS.pmGetBoard, {
   payload: Schema.Struct({ pmThreadId: ThreadId }),
   success: Schema.Struct({
@@ -2831,6 +2859,16 @@ const WsPmStopAllWorkersRpc = Rpc.make(WS_METHODS.pmStopAllWorkers, {
     stoppedWorkerThreadIds: Schema.Array(ThreadId),
   }),
   error: PmRpcError,
+});
+
+const WsThreadHandoffRpc = Rpc.make(WS_METHODS.threadHandoff, {
+  payload: ThreadHandoffInput,
+  success: ThreadHandoffResult,
+  error: Schema.Union([
+    ThreadHandoffSourceNotFoundError,
+    ThreadHandoffError,
+    EnvironmentAuthorizationError,
+  ]),
 });
 
 const ArtifactRpcError = Schema.Union([
@@ -3366,11 +3404,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsMetaProjectsMutateRpc,
   WsMetaProjectsGetContextRpc,
   WsMetaProjectsGetRollupRpc,
+  WsKanbanListBoardRpc,
+  WsKanbanMoveCardRpc,
   WsPmGetBoardRpc,
   WsPmSetRoleRpc,
   WsPmSetKillSwitchRpc,
   WsPmDispatchBatchRpc,
   WsPmStopAllWorkersRpc,
+  WsThreadHandoffRpc,
   WsArtifactsListRpc,
   WsArtifactsGetRpc,
   WsArtifactsCreateRpc,

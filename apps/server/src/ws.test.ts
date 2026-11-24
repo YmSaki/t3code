@@ -108,7 +108,9 @@ import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as PeerHealthMonitor from "./peer/PeerHealthMonitor.ts";
 import * as WebPushService from "./push/WebPushService.ts";
 import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
+import * as GithiveKanbanService from "./kanban/GithiveKanbanService.ts";
 import * as PmService from "./pm/PmService.ts";
+import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
 import * as ArtifactService from "./artifact/ArtifactService.ts";
 import * as RepoMonitorService from "./repoMonitor/RepoMonitorService.ts";
 import * as UnifiedImportService from "./project/importers/UnifiedImportService.ts";
@@ -866,6 +868,8 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(WebPushService.WebPushService)({}),
   Layer.mock(MetaProjectService.MetaProjectService)({}),
   Layer.mock(PmService.PmService)({}),
+  Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+  Layer.mock(GithiveKanbanService.GithiveKanbanService)({}),
   Layer.mock(ArtifactService.ArtifactService)({}),
   Layer.mock(RepoMonitorService.RepoMonitorService)({}),
   Layer.mock(UnifiedImportService.UnifiedImportService)({

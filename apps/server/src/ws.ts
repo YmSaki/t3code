@@ -102,6 +102,7 @@ import {
   RpcClientId,
   EnvironmentAuthorizationError,
   PmDispatchError,
+  ThreadHandoffError,
   type RepoMonitorFilter,
   ThreadId,
   TrimmedNonEmptyString,
@@ -130,6 +131,7 @@ import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as McpSignIn from "./mcpApps/McpSignIn.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
+import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
@@ -300,6 +302,7 @@ import * as UnifiedImportService from "./project/importers/UnifiedImportService.
 import * as PeerHealthMonitor from "./peer/PeerHealthMonitor.ts";
 import * as WebPushService from "./push/WebPushService.ts";
 import * as MetaProjectService from "./metaProject/MetaProjectService.ts";
+import * as GithiveKanbanService from "./kanban/GithiveKanbanService.ts";
 import * as PmService from "./pm/PmService.ts";
 import * as ArtifactService from "./artifact/ArtifactService.ts";
 import * as RepoMonitorService from "./repoMonitor/RepoMonitorService.ts";
@@ -1590,6 +1593,8 @@ export const layerWsRpc = (
       const webPushService = yield* WebPushService.WebPushService;
       const metaProjectService = yield* MetaProjectService.MetaProjectService;
       const pmService = yield* PmService.PmService;
+      const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
+      const kanbanService = yield* GithiveKanbanService.GithiveKanbanService;
       const artifactService = yield* ArtifactService.ArtifactService;
       const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
       const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
@@ -3746,6 +3751,8 @@ export const layerWsRpc = (
         [WS_METHODS.metaProjectsMutate]: (input) => metaProjectService.mutate(input),
         [WS_METHODS.metaProjectsGetContext]: (input) => metaProjectService.getSharedContext(input),
         [WS_METHODS.metaProjectsGetRollup]: (input) => metaProjectService.getRollup(input),
+        [WS_METHODS.kanbanListBoard]: (input) => kanbanService.listBoard(input),
+        [WS_METHODS.kanbanMoveCard]: (input) => kanbanService.moveCard(input),
         [WS_METHODS.pmGetBoard]: (input) =>
           pmService.getBoardSnapshot(input.pmThreadId).pipe(Effect.mapError(toPmRpcError)),
         [WS_METHODS.pmSetRole]: (input) =>
@@ -3756,6 +3763,26 @@ export const layerWsRpc = (
           pmService.dispatchBatch(input).pipe(Effect.mapError(toPmRpcError)),
         [WS_METHODS.pmStopAllWorkers]: (input) =>
           pmService.stopAllWorkers(input).pipe(Effect.mapError(toPmRpcError)),
+        [WS_METHODS.threadHandoff]: (input) =>
+          startup
+            .enqueueCommand(
+              threadHandoff.handoff({
+                ...input,
+                createdBy: "user",
+                creationSource: input.creationSource ?? "web",
+              }),
+            )
+            .pipe(
+              Effect.catchTags({
+                ServerRuntimeStartupError: (cause) =>
+                  new ThreadHandoffError({
+                    sourceThreadId: input.threadId,
+                    operation: "launch",
+                    detail: cause.message,
+                    cause,
+                  }),
+              }),
+            ),
         [WS_METHODS.artifactsList]: (input) => artifactService.list(input),
         [WS_METHODS.artifactsGet]: (input) => artifactService.get(input),
         [WS_METHODS.artifactsCreate]: (input) => artifactService.create(input),
@@ -3852,6 +3879,8 @@ export const layer = Layer.unwrap(
     const webPushService = yield* WebPushService.WebPushService;
     const metaProjectService = yield* MetaProjectService.MetaProjectService;
     const pmService = yield* PmService.PmService;
+    const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
+    const kanbanService = yield* GithiveKanbanService.GithiveKanbanService;
     const artifactService = yield* ArtifactService.ArtifactService;
     const repoMonitorService = yield* RepoMonitorService.RepoMonitorService;
     const unifiedImportService = yield* UnifiedImportService.UnifiedImportService;
@@ -3971,6 +4000,12 @@ export const layer = Layer.unwrap(
                   Layer.succeed(MetaProjectService.MetaProjectService, metaProjectService),
                 ),
                 Layer.provide(Layer.succeed(PmService.PmService, pmService)),
+                Layer.provide(
+                  Layer.succeed(ThreadHandoffService.ThreadHandoffService, threadHandoff),
+                ),
+                Layer.provide(
+                  Layer.succeed(GithiveKanbanService.GithiveKanbanService, kanbanService),
+                ),
                 Layer.provide(Layer.succeed(ArtifactService.ArtifactService, artifactService)),
                 Layer.provide(
                   Layer.succeed(RepoMonitorService.RepoMonitorService, repoMonitorService),

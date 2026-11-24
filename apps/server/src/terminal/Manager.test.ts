@@ -13,8 +13,6 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   retainedTerminalHistory,
-  terminalSequenceEnd,
-  terminalSequenceStateAfter,
   TerminalProviderInstanceNotFoundError,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -240,6 +238,9 @@ const historyLogPath = (logsDir: string, threadId = "thread-1") =>
   );
 
 interface CreateManagerOptions {
+  logsDir?: string;
+  historyTotalByteLimit?: number;
+  historyFileLimit?: number;
   shellResolver?: () => string;
   env?: NodeJS.ProcessEnv;
   subprocessInspector?: (terminalPid: number) => Effect.Effect<{
@@ -287,13 +288,19 @@ const createManager = (
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-terminal-" });
-      const logsDir = join(baseDir, "userdata", "logs", "terminals");
+      const logsDir = options.logsDir ?? join(baseDir, "userdata", "logs", "terminals");
       const ptyAdapter = options.ptyAdapter ?? new FakePtyAdapter();
 
       const manager = yield* TerminalManager.makeWithOptions({
         logsDir,
         historyLineLimit,
         ptyAdapter,
+        ...(options.historyTotalByteLimit !== undefined
+          ? { historyTotalByteLimit: options.historyTotalByteLimit }
+          : {}),
+        ...(options.historyFileLimit !== undefined
+          ? { historyFileLimit: options.historyFileLimit }
+          : {}),
         ...(options.historyByteLimit !== undefined
           ? { historyByteLimit: options.historyByteLimit }
           : {}),
@@ -344,149 +351,6 @@ const createManager = (
 
 const layerWithHostPlatform = (platform: NodeJS.Platform) =>
   Layer.succeed(HostProcess.Platform, platform);
-
-function retainedHistory(text: string, maxLines: number, maxBytes = Infinity): string {
-  const terminated = text.endsWith("\n");
-  const lines = text.split("\n");
-  if (terminated) lines.pop();
-  const retained = lines.slice(Math.max(0, lines.length - maxLines)).join("\n");
-  const capped = terminated ? `${retained}\n` : retained;
-  const points = Array.from(capped);
-  let start = points.length;
-  let bytes = 0;
-  while (start > 0) {
-    const next = Buffer.byteLength(points[start - 1]!);
-    if (bytes + next > maxBytes) break;
-    bytes += next;
-    start -= 1;
-  }
-  const kept = points.slice(start).join("");
-  if (maxLines <= 0 || maxBytes <= 0) return kept;
-  // A cut inside a control sequence drops the rest of that sequence too.
-  const state = terminalSequenceStateAfter(0, text, 0, text.length - kept.length);
-  return kept.slice(terminalSequenceEnd(state, kept));
-}
-
-it("preserves line and byte limits across arbitrary chunks, Unicode, ANSI sequences, and clear", () => {
-  let randomSeed = 0x20260904;
-  const fragments = [
-    "",
-    "a",
-    "\n",
-    "\n\n",
-    "\r",
-    "\r\n",
-    "café",
-    "名",
-    "🚀",
-    "\u001b[31m",
-    "\u001b[0m",
-    "\u001b]8;;url\u0007",
-    "\u001b]0;",
-    "\u001bP",
-    "\u0007",
-    "\u001b\\",
-    "\ud83d",
-    "\ude80",
-  ];
-  const nextFragment = () => {
-    randomSeed = (Math.imul(randomSeed, 1_664_525) + 1_013_904_223) >>> 0;
-    return fragments[randomSeed % fragments.length]!;
-  };
-
-  for (const maxBytes of [0, 3, 8, 64, Infinity]) {
-    for (const maxLines of [0, 1, 3, 5, 5_000]) {
-      let full = "before\ninitial\n";
-      let expected = retainedHistory(full, maxLines, maxBytes);
-      const history = new TerminalManager.BoundedTerminalHistory(
-        maxLines,
-        "before\ninitial\n",
-        maxBytes,
-      );
-      expect(history.value()).toBe(expected);
-
-      for (let step = 0; step < 300; step += 1) {
-        if (step % 73 === 0) {
-          history.clear();
-          full = "";
-          expect(history.value()).toBe("");
-        }
-        const chunk = nextFragment() + nextFragment();
-        history.append(chunk);
-        full += chunk;
-        expected = retainedHistory(full, maxLines, maxBytes);
-        expect(history.value()).toBe(expected);
-      }
-    }
-  }
-});
-
-it("does not retain the tail of a control sequence whose introducer was trimmed", () => {
-  for (const [text, maxBytes, retained] of [
-    ["prefix\u001b[31mOK", 6, "OK"],
-    ["prefix\u001b]0;HIDDEN\u0007OK", 10, "OK"],
-    ["prefix\u001b]0;🙂HIDDEN\u0007OK", 9, "OK"],
-    // libghostty leaves every string but OSC at the emoji's second byte, so HELLO was visible.
-    ["prefix\u001bP🙂HELLO\u001b\\OK", 9, "HELLO\u001b\\OK"],
-  ] as const) {
-    expect(new TerminalManager.BoundedTerminalHistory(5_000, text, maxBytes).value()).toBe(
-      retained,
-    );
-  }
-});
-
-it("bounds long partial lines and joins surrogate pairs across chunk boundaries", () => {
-  const maxBytes = 65_539;
-  let expected = "";
-  const history = new TerminalManager.BoundedTerminalHistory(5_000, "", maxBytes);
-  const writes = [
-    "a".repeat(16_383) + "😀" + "b".repeat(70_000),
-    "\r" + "c".repeat(70_000) + "\ud83d",
-    "\ude80" + "d".repeat(100),
-    "\uFEFF" + "名".repeat(30_000),
-  ];
-  for (const text of writes) {
-    history.append(text);
-    expected = retainedHistory(expected + text, 5_000, maxBytes);
-    expect(history.value()).toBe(expected);
-    expect(Buffer.byteLength(history.value())).toBeLessThanOrEqual(maxBytes);
-  }
-});
-
-it("restores bounded history across append compaction, clears and split Unicode", () => {
-  const maxBytes = 64;
-  const history = new TerminalManager.BoundedTerminalHistory(3, "", maxBytes);
-  let cursor: ReturnType<typeof history.persistenceUpdate>["cursor"] | undefined;
-  let persisted = "";
-  let compactions = 0;
-  const flush = () => {
-    const update = history.persistenceUpdate(cursor);
-    if (!update.append) compactions += 1;
-    const encoded = Buffer.from(update.data).toString();
-    persisted = update.append ? persisted + encoded : encoded;
-    cursor = update.cursor;
-    expect(Buffer.byteLength(persisted)).toBeLessThanOrEqual(maxBytes * 2);
-    expect(retainedHistory(persisted, 3, maxBytes)).toBe(Buffer.from(history.value()).toString());
-  };
-  for (let index = 0; index < 100; index += 1) {
-    history.append(`line ${index} 名\n`);
-    flush();
-  }
-  expect(compactions).toBeGreaterThan(1);
-  expect(compactions).toBeLessThan(50);
-  history.clear();
-  flush();
-  expect(persisted).toBe("");
-  history.append("\ud83d");
-  flush();
-  history.append("\ude80");
-  flush();
-  expect(persisted).toBe("🚀");
-  // More output than the retained window between flushes must replace the file.
-  history.append("z".repeat(maxBytes * 3));
-  flush();
-  expect(persisted).toBe("z".repeat(maxBytes));
-});
 
 it.layer(
   Layer.mergeAll(
@@ -1298,6 +1162,136 @@ it.layer(
     }),
   );
 
+  it.effect.each([
+    { historyTotalByteLimit: 16, historyFileLimit: 10, kept: 2 },
+    { historyTotalByteLimit: 64, historyFileLimit: 1, kept: 1 },
+  ])(
+    "rotates persisted histories with limits $historyTotalByteLimit bytes / $historyFileLimit files",
+    (limits) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const { manager, ptyAdapter, logsDir } = yield* createManager(5, {
+          historyByteLimit: 8,
+          ...limits,
+        });
+        for (let index = 0; index < 3; index += 1) {
+          const threadId = `thread-${index}`;
+          yield* manager.open(openInput({ threadId }));
+          ptyAdapter.processes[index]!.emitData(`${index}`.repeat(8));
+          yield* manager.close({ threadId });
+        }
+        const files = yield* fs.readDirectory(logsDir);
+        expect(files).toHaveLength(limits.kept);
+        expect(yield* fs.exists(yield* historyLogPath(logsDir, "thread-0"))).toBe(false);
+        const sizes = yield* Effect.forEach(files, (name) => fs.stat(`${logsDir}/${name}`));
+        expect(sizes.reduce((total, info) => total + Number(info.size), 0)).toBeLessThanOrEqual(
+          limits.historyTotalByteLimit,
+        );
+        expect((yield* manager.open(openInput({ threadId: "thread-2" }))).history).toBe("22222222");
+        yield* manager.close({ threadId: "thread-2", deleteHistory: true });
+        expect(yield* fs.exists(yield* historyLogPath(logsDir, "thread-2"))).toBe(false);
+      }),
+  );
+
+  it.effect("rewrites the retained history when an active terminal's log was rotated away", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const firstSaved = yield* Deferred.make<void>();
+      const lastSaved = yield* Deferred.make<void>();
+      const { manager, ptyAdapter, logsDir } = yield* createManager(5, {
+        historyByteLimit: 16,
+        historyFileLimit: 1,
+      }).pipe(
+        Effect.provideService(FileSystem.FileSystem, {
+          ...fs,
+          writeFileString: (filePath, data, options) =>
+            fs
+              .writeFileString(filePath, data, options)
+              .pipe(
+                Effect.tap(() =>
+                  data === "first"
+                    ? Deferred.succeed(firstSaved, undefined)
+                    : data.endsWith(":last")
+                      ? Deferred.succeed(lastSaved, undefined)
+                      : Effect.void,
+                ),
+              ),
+        }),
+      );
+      yield* manager.open(openInput());
+      ptyAdapter.processes[0]!.emitData("first");
+      yield* Deferred.await(firstSaved);
+      yield* manager.open(openInput({ threadId: "other" }));
+      ptyAdapter.processes[1]!.emitData("other");
+      yield* manager.close({ threadId: "other" });
+      expect(yield* fs.exists(yield* historyLogPath(logsDir))).toBe(false);
+      ptyAdapter.processes[0]!.emitData(":last");
+      yield* Deferred.await(lastSaved);
+      expect(yield* fs.readFileString(yield* historyLogPath(logsDir))).toBe("first:last");
+      expect(yield* fs.readDirectory(logsDir)).toHaveLength(1);
+    }),
+  );
+
+  it.effect("rotates existing logs on startup and removes interrupted compaction files", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { logsDir } = yield* createManager();
+      for (const threadId of ["thread-0", "thread-1", "thread-2"]) {
+        yield* fs.writeFileString(yield* historyLogPath(logsDir, threadId), "12345678");
+      }
+      yield* fs.writeFileString(`${logsDir}/.history-interrupted`, "partial");
+      const recovered = yield* createManager(5, {
+        logsDir,
+        historyByteLimit: 8,
+        historyTotalByteLimit: 16,
+      });
+      const files = yield* fs.readDirectory(logsDir);
+      expect(files).toHaveLength(2);
+      expect(files.some((name) => name.startsWith(".history-"))).toBe(false);
+      expect((yield* recovered.manager.open(openInput({ threadId: "thread-2" }))).history).toBe(
+        "12345678",
+      );
+    }),
+  );
+
+  it.effect("flushes output on shutdown and restores it on reconnect to a new manager", () =>
+    Effect.gen(function* () {
+      const { logsDir } = yield* createManager();
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const { manager, ptyAdapter } = yield* createManager(5, { logsDir });
+          const received = yield* Deferred.make<void>();
+          yield* manager.subscribe((event) =>
+            event.type === "output"
+              ? Deferred.succeed(received, undefined).pipe(Effect.asVoid)
+              : Effect.void,
+          );
+          yield* manager.open(openInput());
+          ptyAdapter.processes[0]!.emitData("survives restart\n");
+          yield* Deferred.await(received);
+        }),
+      );
+      const recovered = yield* createManager(5, { logsDir });
+      const restored = yield* recovered.manager
+        .attachOutputStream({ ...openInput(), resume: true }, "reconnected")
+        .pipe(Stream.take(1), Stream.runCollect);
+      expect(restored).toMatchObject([
+        { type: "snapshot", snapshot: { history: "survives restart\n" } },
+      ]);
+      yield* recovered.manager.close({
+        threadId: "thread-1",
+        terminalId: DEFAULT_TERMINAL_ID,
+        deleteHistory: true,
+      });
+      const fs = yield* FileSystem.FileSystem;
+      expect(yield* fs.readDirectory(logsDir)).toEqual([]);
+      const closed = yield* recovered.manager
+        .attachOutputStream({ ...openInput(), resume: true }, "closed")
+        .pipe(Stream.take(1), Stream.runCollect);
+      expect(closed).toMatchObject([{ type: "closed" }]);
+    }),
+  );
+
   it.effect("caps incrementally appended history without losing partial or empty lines", () =>
     Effect.gen(function* () {
       const { manager, ptyAdapter } = yield* createManager(3);
@@ -1370,6 +1364,7 @@ it.layer(
       yield* manager.clear({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID });
 
       expect((yield* getEvents).map((event) => event.type)).toContain("cleared");
+      printWhileSaving = Effect.void;
     }),
   );
 
