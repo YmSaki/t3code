@@ -11,7 +11,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { T, useGT, Var } from "gt-react";
-import { ChevronDownIcon } from "lucide-react";
+import { ArrowRightLeftIcon, ChevronDownIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -44,6 +44,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { ThreadHandoffDialog } from "./ThreadHandoffDialog";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -90,6 +91,7 @@ export const ChatHeader = memo(function ChatHeader({
   const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
   const [collapseParentTitle, setCollapseParentTitle] = useState(false);
+  const [handoffDialogOpen, setHandoffDialogOpen] = useState(false);
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
@@ -411,6 +413,31 @@ export const ChatHeader = memo(function ChatHeader({
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
+      {isServerThread && canOperateThread ? (
+        <>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={gt("Hand off thread")}
+                  onClick={() => setHandoffDialogOpen(true)}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                />
+              }
+            >
+              <ArrowRightLeftIcon className="size-3.5" aria-hidden />
+            </TooltipTrigger>
+            <TooltipPopup side="top">{gt("Hand off thread")}</TooltipPopup>
+          </Tooltip>
+          <ThreadHandoffDialog
+            open={handoffDialogOpen}
+            onOpenChange={setHandoffDialogOpen}
+            threadRef={activeThreadRef}
+            onHandoffSuccess={onOpenThread}
+          />
+        </>
+      ) : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );

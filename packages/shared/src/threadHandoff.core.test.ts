@@ -130,4 +130,23 @@ describe("buildThreadHandoffContext", () => {
     expect(result.turnCount).toBe(2);
     expect(result.text.indexOf("Imported preamble")).toBeLessThan(result.text.indexOf("go"));
   });
+
+  it("drops oldest tool outputs in the latest turn on budget pressure before rejecting", () => {
+    const result = build(
+      [
+        { kind: "user", text: "investigate" },
+        { kind: "tool", label: "cat old.log", output: "o".repeat(2_000), exitCode: 0 },
+        { kind: "tool", label: "cat new.log", output: "newest-output", exitCode: 0 },
+        { kind: "assistant", text: "Done." },
+      ],
+      { maxBytes: 1_200 },
+    );
+
+    expect(result.overBudget).toBe(false);
+    expect(result.text).toContain("cat old.log");
+    expect(result.text).not.toContain("oooo");
+    expect(result.text).toContain("newest-output");
+    expect(result.text).toContain("**Assistant:**\nDone.");
+    expect(result.truncatedToolOutputCount).toBe(1);
+  });
 });

@@ -203,7 +203,8 @@ function renderHeader(
 
 export function buildThreadHandoffContext(input: ThreadHandoffBuildInput): ThreadHandoffContext {
   const errors = recentErrors(input.entries);
-  const turns = groupTurns(input.entries).map((turn, index) => {
+  const groupedTurns = groupTurns(input.entries);
+  const turns = groupedTurns.map((turn, index) => {
     const rendered = turn.map((entry) => renderEntry(entry, input.mode));
     const text = [`## Turn ${index + 1}`, ...rendered.map((entry) => entry.text)].join("\n\n");
     return {
@@ -223,6 +224,31 @@ export function buildThreadHandoffContext(input: ThreadHandoffBuildInput): Threa
   while (cut < lastCut && utf8ByteLength(header) + keptBytes[cut]! > input.maxBytes) {
     cut++;
     header = renderHeader(input, errors, turns.length, cut);
+  }
+  if (
+    turns.length > 0 &&
+    cut === lastCut &&
+    input.mode === "raw" &&
+    utf8ByteLength(header) + keptBytes[cut]! > input.maxBytes
+  ) {
+    const latestEntries = groupedTurns[lastCut]!;
+    const rendered = latestEntries.map((entry) => renderEntry(entry, "raw"));
+    const headerBytes = utf8ByteLength(header);
+    for (let index = 0; index < latestEntries.length; index++) {
+      const entry = latestEntries[index]!;
+      if (entry.kind !== "tool" || entry.output === undefined || entry.output.trim() === "") {
+        continue;
+      }
+      rendered[index] = { text: renderEntry(entry, "compact").text, truncated: true };
+      const text = [`## Turn ${lastCut + 1}`, ...rendered.map((item) => item.text)].join("\n\n");
+      const turnBytes = utf8ByteLength(text) + TURN_SEPARATOR.length;
+      turns[lastCut] = {
+        text,
+        bytes: turnBytes,
+        truncatedToolOutputs: rendered.filter((item) => item.truncated).length,
+      };
+      if (headerBytes + turnBytes <= input.maxBytes) break;
+    }
   }
   const kept = turns.slice(cut);
   const text = [header, ...kept.map((turn) => turn.text)].join(TURN_SEPARATOR);

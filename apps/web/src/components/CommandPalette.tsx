@@ -83,6 +83,7 @@ import {
   SquarePenIcon,
   TextSearchIcon,
   UserPlusIcon,
+  ArrowRightLeftIcon,
 } from "lucide-react";
 import { openThreadFind } from "./chat/threadFindStore";
 import { dispatchPreviewAction } from "./preview/previewActionBus";
@@ -269,6 +270,7 @@ import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
+import { ThreadHandoffDialog } from "./chat/ThreadHandoffDialog";
 import { openUseInAnotherApp } from "./mcp/UseInAnotherAppDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
@@ -500,6 +502,9 @@ function OpenCommandPaletteDialog(props: {
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
+  const [handoffDialogThreadRef, setHandoffDialogThreadRef] = useState<ReturnType<
+    typeof scopeThreadRef
+  > | null>(null);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const paletteRouteTarget = useThreadRouteTarget();
@@ -1550,6 +1555,17 @@ function OpenCommandPaletteDialog(props: {
 
   if (activeThread !== null) {
     const thread = activeThread;
+    const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:hand-off-thread",
+      searchTerms: ["handoff", "hand off", "model", "switch", "transfer", "continue"],
+      title: gt("Hand off thread"),
+      icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        setHandoffDialogThreadRef(threadRef);
+      },
+    });
     actionItems.push({
       kind: "action",
       value: "action:restart-agent-session",
@@ -3188,6 +3204,24 @@ function OpenCommandPaletteDialog(props: {
                     ? { emptyStateMessage: gt("Couldn't search thread messages.") }
                     : {})}
       />
+      {handoffDialogThreadRef ? (
+        <ThreadHandoffDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setHandoffDialogThreadRef(null);
+          }}
+          threadRef={handoffDialogThreadRef}
+          onHandoffSuccess={(newThreadId) => {
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: {
+                environmentId: handoffDialogThreadRef.environmentId,
+                threadId: newThreadId,
+              },
+            });
+          }}
+        />
+      ) : null}
     </CommandPaletteContent>
   );
 }
