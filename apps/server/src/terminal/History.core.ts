@@ -1,0 +1,279 @@
+import {
+  TERMINAL_SEQUENCE_GROUND,
+  terminalSequenceEnd,
+  terminalSequenceStateAfter,
+} from "@t3tools/contracts";
+
+const utf8Encoder = new TextEncoder();
+const utf8ByteLength = (text: string): number => utf8Encoder.encode(text).byteLength;
+
+export const DEFAULT_HISTORY_BYTE_LIMIT = 8 * 1024 * 1024;
+const MAX_HISTORY_CHUNK_LENGTH = 16 * 1024;
+
+interface TerminalHistoryChunk {
+  data: string;
+  byteLength: number;
+  lineBreaks: number;
+}
+
+export interface TerminalHistoryPersistenceCursor {
+  readonly generation: number;
+  readonly offset: number;
+  readonly fileBytes: number;
+}
+
+function countLineBreaks(data: string): number {
+  let lineBreaks = 0;
+  for (let index = data.indexOf("\n"); index !== -1; index = data.indexOf("\n", index + 1)) {
+    lineBreaks += 1;
+  }
+  return lineBreaks;
+}
+
+export class BoundedTerminalHistory {
+  private readonly maxLines: number;
+  private readonly maxBytes: number;
+  private chunks: Array<TerminalHistoryChunk | undefined> = [];
+  private start = 0;
+  private byteLength = 0;
+  private lineBreaks = 0;
+  // Reading the old string's tail on each append can force chunk concatenation.
+  private lastCodeUnit: number | undefined;
+  // The terminal parser's state at the first retained code unit, which is where a replay starts.
+  private sequenceState = TERMINAL_SEQUENCE_GROUND;
+  private cachedValue: string | null = "";
+  private generation = 0;
+  private appendedLength = 0;
+
+  constructor(maxLines: number, initial: string, maxBytes = DEFAULT_HISTORY_BYTE_LIMIT) {
+    this.maxLines = maxLines;
+    this.maxBytes = maxBytes;
+    this.append(initial);
+  }
+
+  append(text: string): void {
+    if (text.length === 0) return;
+    this.appendedLength += text.length;
+    this.cachedValue = null;
+    if (this.maxBytes <= 0 || this.maxLines <= 0) {
+      this.clear();
+      if (this.maxBytes > 0 && text.endsWith("\n")) this.appendChunk("\n");
+      return;
+    }
+
+    let offset = 0;
+    const previous = this.chunks.at(-1);
+    const lastCode = this.lastCodeUnit;
+    const firstCode = text.charCodeAt(0);
+    if (
+      previous &&
+      lastCode !== undefined &&
+      lastCode >= 0xd800 &&
+      lastCode <= 0xdbff &&
+      firstCode >= 0xdc00 &&
+      firstCode <= 0xdfff
+    ) {
+      // Joining a split surrogate changes its UTF-8 size from 3 to 4 bytes.
+      // The previous flush may have encoded the lone surrogate as a replacement character.
+      this.generation += 1;
+      previous.data += text[0];
+      previous.byteLength += 1;
+      this.byteLength += 1;
+      this.lastCodeUnit = firstCode;
+      offset = 1;
+      this.trim();
+    }
+
+    while (offset < text.length) {
+      let end = Math.min(offset + MAX_HISTORY_CHUNK_LENGTH, text.length);
+      const before = text.charCodeAt(end - 1);
+      const after = text.charCodeAt(end);
+      if (before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff) {
+        end -= 1;
+      }
+      const data = text.slice(offset, end);
+      // Detach small chunks from large input strings so evicted prefixes can be collected.
+      this.appendChunk(
+        text.length > MAX_HISTORY_CHUNK_LENGTH
+          ? Buffer.from(data, "utf16le").toString("utf16le")
+          : data,
+      );
+      this.trim();
+      offset = end;
+    }
+  }
+
+  private appendChunk(data: string): void {
+    const byteLength = utf8ByteLength(data);
+    const lineBreaks = countLineBreaks(data);
+    const previous = this.chunks.at(-1);
+    if (previous && previous.data.length + data.length <= MAX_HISTORY_CHUNK_LENGTH) {
+      previous.data += data;
+      previous.byteLength += byteLength;
+      previous.lineBreaks += lineBreaks;
+    } else {
+      this.chunks.push({ data, byteLength, lineBreaks });
+    }
+    this.byteLength += byteLength;
+    this.lineBreaks += lineBreaks;
+    this.lastCodeUnit = data.charCodeAt(data.length - 1);
+    this.cachedValue = null;
+  }
+
+  private discardChunk(): void {
+    const first = this.chunks[this.start]!;
+    this.sequenceState = terminalSequenceStateAfter(this.sequenceState, first.data);
+    this.byteLength -= first.byteLength;
+    this.lineBreaks -= first.lineBreaks;
+    this.chunks[this.start++] = undefined;
+  }
+
+  private trimChunk(offset: number, byteLength: number, lineBreaks: number): void {
+    const first = this.chunks[this.start]!;
+    if (offset === first.data.length) {
+      this.discardChunk();
+      return;
+    }
+    this.sequenceState = terminalSequenceStateAfter(this.sequenceState, first.data, 0, offset);
+    first.data = first.data.slice(offset);
+    first.byteLength -= byteLength;
+    first.lineBreaks -= lineBreaks;
+    this.byteLength -= byteLength;
+    this.lineBreaks -= lineBreaks;
+  }
+
+  private trim(): void {
+    const trailingNewline = this.lastCodeUnit === 10;
+    let linesToDrop = this.lineBreaks + (trailingNewline ? 0 : 1) - this.maxLines;
+    while (linesToDrop > 0) {
+      const first = this.chunks[this.start]!;
+      if (first.lineBreaks < linesToDrop) {
+        linesToDrop -= first.lineBreaks;
+        this.discardChunk();
+        continue;
+      }
+      let offset = 0;
+      for (let line = 0; line < linesToDrop; line += 1) {
+        offset = first.data.indexOf("\n", offset) + 1;
+      }
+      this.trimChunk(offset, utf8ByteLength(first.data.slice(0, offset)), linesToDrop);
+      linesToDrop = 0;
+    }
+
+    while (this.byteLength > this.maxBytes) {
+      const first = this.chunks[this.start]!;
+      const bytesToDrop = this.byteLength - this.maxBytes;
+      if (first.byteLength <= bytesToDrop) {
+        this.discardChunk();
+        continue;
+      }
+      if (first.byteLength === first.data.length && first.lineBreaks === 0) {
+        this.trimChunk(bytesToDrop, bytesToDrop, 0);
+        continue;
+      }
+      let offset = 0;
+      let bytes = 0;
+      let lineBreaks = 0;
+      while (bytes < bytesToDrop) {
+        const codePoint = first.data.codePointAt(offset)!;
+        bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+        offset += codePoint <= 0xffff ? 1 : 2;
+        if (codePoint === 10) lineBreaks += 1;
+      }
+      this.trimChunk(offset, bytes, lineBreaks);
+    }
+    // A cut inside a control sequence would replay the rest of it as text.
+    while (this.sequenceState !== TERMINAL_SEQUENCE_GROUND && this.start < this.chunks.length) {
+      const first = this.chunks[this.start]!;
+      const dropped = first.data.slice(0, terminalSequenceEnd(this.sequenceState, first.data));
+      this.trimChunk(dropped.length, utf8ByteLength(dropped), countLineBreaks(dropped));
+    }
+    if (
+      this.start === this.chunks.length ||
+      (this.start > 2_048 && this.start * 2 >= this.chunks.length)
+    ) {
+      this.chunks = this.chunks.slice(this.start);
+      this.start = 0;
+      if (this.chunks.length === 0) this.lastCodeUnit = undefined;
+    }
+  }
+
+  clear(): void {
+    this.generation += 1;
+    this.appendedLength = 0;
+    this.chunks = [];
+    this.start = 0;
+    this.byteLength = 0;
+    this.lineBreaks = 0;
+    this.lastCodeUnit = undefined;
+    this.sequenceState = TERMINAL_SEQUENCE_GROUND;
+    this.cachedValue = "";
+  }
+
+  persistenceUpdate(previous?: TerminalHistoryPersistenceCursor) {
+    const offset = this.appendedLength;
+    let data: string | undefined;
+    if (previous?.generation === this.generation) {
+      let remaining = offset - previous.offset;
+      const tail: string[] = [];
+      for (let index = this.chunks.length - 1; remaining > 0 && index >= this.start; index -= 1) {
+        const chunk = this.chunks[index]!.data;
+        const suffix = chunk.slice(Math.max(0, chunk.length - remaining));
+        tail.push(suffix);
+        remaining -= suffix.length;
+      }
+      if (remaining === 0) data = tail.toReversed().join("");
+    }
+    // Keep the on-disk log bounded while amortizing compaction across new output.
+    // Readers already cap the plain-text tail by bytes and lines.
+    const append =
+      data !== undefined &&
+      previous !== undefined &&
+      previous.fileBytes + utf8ByteLength(data) <= this.maxBytes * 2;
+    const output = append && data !== undefined ? data : this.value();
+    return {
+      data: output,
+      append,
+      cursor: {
+        generation: this.generation,
+        offset,
+        fileBytes: (append ? previous.fileBytes : 0) + utf8ByteLength(output),
+      },
+    };
+  }
+
+  value(): string {
+    if (this.cachedValue !== null) return this.cachedValue;
+    this.cachedValue = this.chunks
+      .slice(this.start)
+      .map((chunk) => chunk!.data)
+      .join("");
+    return this.cachedValue;
+  }
+}
+
+export interface HistoryFile {
+  readonly path: string;
+  readonly bytes: number;
+  readonly modifiedAt: number;
+}
+
+export function historyFilesToEvict(
+  files: ReadonlyArray<HistoryFile>,
+  maxBytes: number,
+  maxFiles: number,
+): ReadonlyArray<string> {
+  let bytes = files.reduce((total, file) => total + file.bytes, 0);
+  let count = files.length;
+  if (bytes <= maxBytes && count <= maxFiles) return [];
+  const evicted: string[] = [];
+  for (const file of files.toSorted(
+    (a, b) => a.modifiedAt - b.modifiedAt || a.path.localeCompare(b.path),
+  )) {
+    if (bytes <= maxBytes && count <= maxFiles) break;
+    evicted.push(file.path);
+    bytes -= file.bytes;
+    count -= 1;
+  }
+  return evicted;
+}
