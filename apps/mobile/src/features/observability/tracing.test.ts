@@ -17,7 +17,37 @@ vi.mock("expo-constants", () => ({
   },
 }));
 
+it.effect("defaults relay tracing off unless mobile telemetry opt-in is enabled", () => {
+  Tracing.setMobileTelemetryOptIn(false);
+  const fetchFn = vi.fn<typeof fetch>(async () => new Response(null, { status: 202 }));
+  const layerTracing = Tracing.layerFromConfig(
+    {
+      tracesUrl: "https://api.axiom.test/v1/traces",
+      tracesDataset: "mobile-traces",
+      tracesToken: "public-ingest-token",
+    },
+    {
+      appVariant: "test",
+      serviceInstanceId: "test-instance",
+      serviceVersion: "1.2.3",
+    },
+  ).pipe(Layer.provide(layerRemoteHttpClient(fetchFn)));
+  const layerTracedApplication = Layer.effectDiscard(
+    Effect.void.pipe(Effect.withSpan("mobile.test.default-off-span"), withRelayClientTracing),
+  ).pipe(Layer.provide(layerTracing));
+
+  return Layer.build(layerTracedApplication).pipe(
+    Effect.scoped,
+    Effect.andThen(
+      Effect.sync(() => {
+        expect(fetchFn).not.toHaveBeenCalled();
+      }),
+    ),
+  );
+});
+
 it.effect("does not let OTLP serialization failures alter application effects", () => {
+  Tracing.setMobileTelemetryOptIn(true);
   const fetchFn = vi.fn<typeof fetch>(async () => new Response(null, { status: 202 }));
   const layerTracing = Tracing.layerFromConfig(
     {
@@ -50,6 +80,7 @@ it.effect("does not let OTLP serialization failures alter application effects", 
 
   return Layer.build(layerTracedApplication).pipe(
     Effect.scoped,
+    Effect.ensuring(Effect.sync(() => Tracing.setMobileTelemetryOptIn(false))),
     Effect.andThen(
       Effect.sync(() => {
         expect(fetchFn).toHaveBeenCalledOnce();

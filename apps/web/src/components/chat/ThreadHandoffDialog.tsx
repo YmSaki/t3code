@@ -12,6 +12,15 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { useGT } from "gt-react";
 import { useState } from "react";
+import { useEnvironmentSettings } from "../../hooks/useSettings";
+import {
+  getDefaultProviderInstanceModel,
+  isProviderInstancePickerVisible,
+  providerInstanceEntriesFor,
+  resolveSelectableProviderInstanceEntry,
+} from "../../providerInstances";
+import { useThreadShell } from "../../state/entities";
+import { useEnvironmentProviders } from "../../state/environments";
 import { threadHandoff } from "../../state/orchestration";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { Button } from "../ui/button";
@@ -27,19 +36,6 @@ import {
 import { Input } from "../ui/input";
 import { toastManager } from "../ui/toast";
 
-const HANDOFF_PROVIDERS: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
-  { value: "codex", label: "Codex" },
-  { value: "claudeAgent", label: "Claude" },
-  { value: "cursor", label: "Cursor" },
-  { value: "opencode", label: "OpenCode" },
-  { value: "pi", label: "Pi" },
-  { value: "grok", label: "Grok" },
-  { value: "antigravity", label: "Antigravity" },
-  { value: "kiro", label: "Kiro" },
-  { value: "muse", label: "Muse Code" },
-  { value: "fx", label: "fx" },
-];
-
 interface ThreadHandoffDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -54,18 +50,40 @@ export function ThreadHandoffDialog({
   onHandoffSuccess,
 }: ThreadHandoffDialogProps) {
   const gt = useGT();
-  const [provider, setProvider] = useState("claudeAgent");
-  const [model, setModel] = useState("claude-sonnet-4-6");
+  const providersByEnvironment = useEnvironmentProviders();
+  const settings = useEnvironmentSettings(threadRef.environmentId);
+  const threadShell = useThreadShell(threadRef);
+  const providers = providersByEnvironment.get(threadRef.environmentId) ?? [];
+  const allEntries = providerInstanceEntriesFor(
+    providers,
+    settings,
+    threadShell?.projectId ?? null,
+  );
+  const enabledEntries = allEntries.filter(isProviderInstancePickerVisible);
+  const providerOptions = enabledEntries.length > 0 ? enabledEntries : allEntries;
+  const defaultEntry =
+    resolveSelectableProviderInstanceEntry(providerOptions, undefined) ?? providerOptions[0];
+
+  const [selectedProviderId, setSelectedProviderId] = useState("");
+  const [modelInput, setModelInput] = useState<string | null>(null);
   const [mode, setMode] = useState<ThreadHandoffMode>("raw");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const activeProviderEntry =
+    providerOptions.find((entry) => entry.instanceId === selectedProviderId) ?? defaultEntry;
+  const provider = activeProviderEntry?.instanceId ?? "";
+  const defaultModel = activeProviderEntry
+    ? (getDefaultProviderInstanceModel(providers, activeProviderEntry.instanceId) ?? "")
+    : "";
+  const model = modelInput ?? defaultModel;
 
   const runHandoff = useOrchestrationCommand(threadHandoff, { reportFailure: false });
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmedModel = model.trim();
-    if (!trimmedModel || submitting) return;
+    if (!provider || !trimmedModel || submitting) return;
 
     setSubmitting(true);
     setErrorMessage(null);
@@ -94,7 +112,7 @@ export function ThreadHandoffDialog({
         type: "success",
         title: gt("Thread handed off"),
         description: gt("Started a new thread on {provider} ({model}).", {
-          provider,
+          provider: activeProviderEntry?.displayName ?? provider,
           model: trimmedModel,
         }),
       });
@@ -129,12 +147,16 @@ export function ThreadHandoffDialog({
                 <select
                   id="thread-handoff-provider"
                   value={provider}
-                  onChange={(event) => setProvider(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedProviderId(event.target.value);
+                    setModelInput(null);
+                  }}
+                  disabled={providerOptions.length === 0}
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  {HANDOFF_PROVIDERS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
+                  {providerOptions.map((option) => (
+                    <option key={option.instanceId} value={option.instanceId}>
+                      {option.displayName}
                     </option>
                   ))}
                 </select>
@@ -149,8 +171,8 @@ export function ThreadHandoffDialog({
                 <Input
                   id="thread-handoff-model"
                   value={model}
-                  onChange={(event) => setModel(event.target.value)}
-                  placeholder="claude-sonnet-4-6"
+                  onChange={(event) => setModelInput(event.target.value)}
+                  placeholder={defaultModel || "claude-sonnet-4-6"}
                   required
                 />
               </div>
@@ -189,7 +211,7 @@ export function ThreadHandoffDialog({
             >
               {gt("Cancel")}
             </Button>
-            <Button type="submit" disabled={submitting || model.trim().length === 0}>
+            <Button type="submit" disabled={submitting || !provider || model.trim().length === 0}>
               {submitting ? gt("Handing off...") : gt("Hand off")}
             </Button>
           </DialogFooter>

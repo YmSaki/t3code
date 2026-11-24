@@ -102,6 +102,7 @@ function MarkdownArtifact(props: {
         artifactId: artifact.id,
         content: setMarkdownTaskChecked(version.content, offset, event.checked),
         author: "user",
+        expectedVersion: version.version,
         // Stored with the version for the agent to read, so it stays in one language.
         summary: TrimmedNonEmptyString.make(
           `${event.checked ? "Checked" : "Unchecked"} "${event.text.trim().slice(0, 400) || "task"}"`,

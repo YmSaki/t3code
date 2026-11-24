@@ -23,11 +23,13 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 import * as IssueService from "../issue/IssueService.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as PmStore from "../pm/PmStore.ts";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as WebPushService from "../push/WebPushService.ts";
 import { verifyWebhookSignature } from "../scheduledTasks/webhookVerification.ts";
@@ -42,6 +44,19 @@ import { RepoMonitorStore } from "./RepoMonitorStore.ts";
 
 const PULL_REQUEST_LIMIT = 100;
 const ISSUE_LIMIT = 100;
+
+const projectLocks = new Map<ProjectId, Semaphore.Semaphore>();
+const withProjectLock = <A, E, R>(
+  projectId: ProjectId,
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> => {
+  let lock = projectLocks.get(projectId);
+  if (lock === undefined) {
+    lock = Semaphore.makeUnsafe(1);
+    projectLocks.set(projectId, lock);
+  }
+  return lock.withPermits(1)(effect);
+};
 
 export interface RepoMonitorObservation {
   readonly snapshot: RepoMonitorSnapshot;
@@ -302,10 +317,18 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const source = yield* RepoMonitorSnapshotSource;
     const ports = yield* dispatchPortsLive;
+    const pmStore = yield* Effect.serviceOption(PmStore.PmStore);
     return yield* makeRepoMonitorService({
       snapshotProvider: (projectId) =>
         source.observe(projectId).pipe(Effect.map((observed) => observed.snapshot)),
       onActionTriggered: makeActionDispatcher(ports),
+      ...(Option.isSome(pmStore)
+        ? {
+            getGlobalKillSwitch: pmStore.value.getGlobalKillSwitch.pipe(
+              Effect.mapError(toRepoMonitorError("Could not read global kill switch.")),
+            ),
+          }
+        : {}),
     });
   }),
 );
@@ -320,18 +343,21 @@ export const runRepoMonitorPollCycle = Effect.fn("RepoMonitorRuntimeWiring.pollC
     const projectIds = [...new Set(rules.filter((r) => r.enabled).map((r) => r.projectId))];
     const triggered: RepoMonitorEventRecord[] = [];
     for (const projectId of projectIds) {
-      yield* source.observe(projectId).pipe(
-        Effect.flatMap((observed) =>
-          service.pollProject({
-            projectId,
-            snapshot: observed.snapshot,
-            selfAccountLogins: observed.selfAccountLogins,
-          }),
-        ),
-        Effect.tap((result) => Effect.sync(() => triggered.push(...result.triggeredEvents))),
-        Effect.catchCauseIf(
-          (cause) => !Cause.hasInterruptsOnly(cause),
-          (cause) => Effect.logWarning("repo monitor poll failed", { projectId, cause }),
+      yield* withProjectLock(
+        projectId,
+        source.observe(projectId).pipe(
+          Effect.flatMap((observed) =>
+            service.pollProject({
+              projectId,
+              snapshot: observed.snapshot,
+              selfAccountLogins: observed.selfAccountLogins,
+            }),
+          ),
+          Effect.tap((result) => Effect.sync(() => triggered.push(...result.triggeredEvents))),
+          Effect.catchCauseIf(
+            (cause) => !Cause.hasInterruptsOnly(cause),
+            (cause) => Effect.logWarning("repo monitor poll failed", { projectId, cause }),
+          ),
         ),
       );
     }
@@ -567,11 +593,16 @@ export const handleRepoMonitorWebhook = Effect.fn("RepoMonitorRuntimeWiring.hand
 
     const service = yield* RepoMonitorService;
     const source = yield* RepoMonitorSnapshotSource;
-    const events = yield* service.ingestWebhookEvent({
-      projectId: request.projectId,
-      event,
-      selfAccountLogins: yield* source.lastSelfAccountLogins(request.projectId),
-    });
+    const events = yield* withProjectLock(
+      request.projectId,
+      Effect.gen(function* () {
+        return yield* service.ingestWebhookEvent({
+          projectId: request.projectId,
+          event,
+          selfAccountLogins: yield* source.lastSelfAccountLogins(request.projectId),
+        });
+      }),
+    );
     return { status: "accepted", events } satisfies RepoMonitorWebhookOutcome;
   },
 );

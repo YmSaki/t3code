@@ -554,4 +554,13 @@ describe("server model preferences", () => {
     expect(encodeServerSettings(decodeServerSettings(input))).toMatchObject(input);
     expect(decodeServerSettingsPatch(input)).toEqual(input);
   });
+
+  it("defaults telemetryEnabled to false and accepts opt-in patches", () => {
+    expect(DEFAULT_SERVER_SETTINGS.telemetryEnabled).toBe(false);
+    expect(decodeServerSettings({}).telemetryEnabled).toBe(false);
+    expect(decodeServerSettings({ telemetryEnabled: true }).telemetryEnabled).toBe(true);
+    expect(decodeServerSettingsPatch({ telemetryEnabled: true })).toEqual({
+      telemetryEnabled: true,
+    });
+  });
 });

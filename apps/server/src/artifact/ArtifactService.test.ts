@@ -253,6 +253,22 @@ testLayer("ArtifactService", (it) => {
         comments: [{ startLine: 3, endLine: 3, comment: "Split into store and service" }],
       });
       expect(prompt).toContain("Split into store and service");
+
+      const staleRevise = yield* service
+        .revise({
+          artifactId: id,
+          content: "# Tasks\n- [x] Stale\n",
+          expectedVersion: 1,
+        })
+        .pipe(Effect.flip);
+      expect(staleRevise).toBeInstanceOf(ArtifactStateConflictError);
+
+      const freshRevise = yield* service.revise({
+        artifactId: id,
+        content: "# Tasks\n- [x] Write core\n- [x] Write shell\n",
+        expectedVersion: 2,
+      });
+      expect(freshRevise.version.version).toBe(3);
     }),
   );
 });

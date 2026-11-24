@@ -80,7 +80,15 @@ const makeHarness = () => {
   const dispatched: Array<OrchestrationV2ServerCommand> = [];
   const delegated: Array<Parameters<RemoteDelegation.RemoteDelegation["Service"]["delegate"]>[1]> =
     [];
+  const delegateScopes: Array<
+    Parameters<RemoteDelegation.RemoteDelegation["Service"]["delegate"]>[0]
+  > = [];
   const cancelled: Array<{ readonly taskId: NodeId; readonly reason: string | undefined }> = [];
+  let launchOverride:
+    | ((
+        input: ThreadLaunch.ThreadLaunchInput,
+      ) => Effect.Success<ReturnType<ThreadLaunch.ThreadLaunchService["Service"]["launch"]>>)
+    | undefined;
   const deps: PmRuntimeDeps = {
     hereEnvironmentId: here,
     threads: {
@@ -101,14 +109,18 @@ const makeHarness = () => {
       launch: (input) =>
         Effect.sync(() => {
           launches.push(input);
+          if (launchOverride !== undefined) {
+            return launchOverride(input);
+          }
           return { threadId: ThreadId.make("thread-local-worker") } as Effect.Success<
             ReturnType<ThreadLaunch.ThreadLaunchService["Service"]["launch"]>
           >;
         }),
     },
     remote: {
-      delegate: (_scope, input) =>
+      delegate: (scope, input) =>
         Effect.sync(() => {
+          delegateScopes.push(scope);
           delegated.push(input);
           return { taskId: remoteTaskId };
         }),
@@ -123,7 +135,21 @@ const makeHarness = () => {
         Effect.fail(new MetaProjectError({ reason: "not_found", message: "Missing meta project" })),
     },
   };
-  return { deps, launches, dispatched, delegated, cancelled };
+  return {
+    deps,
+    launches,
+    dispatched,
+    delegated,
+    delegateScopes,
+    cancelled,
+    setLaunchOverride: (
+      fn: (
+        input: ThreadLaunch.ThreadLaunchInput,
+      ) => Effect.Success<ReturnType<ThreadLaunch.ThreadLaunchService["Service"]["launch"]>>,
+    ) => {
+      launchOverride = fn;
+    },
+  };
 };
 
 it.effect("launches a local worker through ThreadLaunchService with the PM thread's model", () =>
@@ -182,6 +208,7 @@ it.effect("drives a linked-environment worker through RemoteDelegation as the PM
 
     const launched = yield* options.launchWorker!(remoteRequest).pipe(pmScope);
     expect(launched.workerThreadId).toBe(remoteWorker);
+    expect(harness.delegateScopes[0]?.requestNamespace).toBe(`pm:${pmThreadId}`);
     expect(harness.delegated).toMatchObject([
       {
         clientRequestId: "pm-worker-launch",
@@ -210,5 +237,32 @@ it.effect("resolves a deleted meta-project as none", () =>
   Effect.gen(function* () {
     const options = makePmRuntimeOptions(makeHarness().deps);
     expect(yield* options.resolveMetaProject!("meta-gone")).toBeNull();
+  }),
+);
+
+it.effect("recovers terminal worker status from launch projection on local replay", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness();
+    harness.setLaunchOverride(
+      () =>
+        ({
+          threadId: ThreadId.make("thread-local-worker"),
+          resumed: true,
+          projection: {
+            runs: [
+              { ordinal: 1, status: "running" },
+              { ordinal: 2, status: "completed" },
+            ],
+          },
+        }) as unknown as Effect.Success<
+          ReturnType<ThreadLaunch.ThreadLaunchService["Service"]["launch"]>
+        >,
+    );
+    const options = makePmRuntimeOptions(harness.deps);
+    const launched = yield* options.launchWorker!(launchRequest());
+    expect(launched).toEqual({
+      workerThreadId: "thread-local-worker",
+      status: "completed",
+    });
   }),
 );

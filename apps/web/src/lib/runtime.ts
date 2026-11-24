@@ -21,6 +21,12 @@ function configuredRelayUrl(): string {
   return resolveCloudPublicConfig().relayUrl ?? "http://relay.invalid";
 }
 
+let browserTelemetryOptIn = false;
+
+export function setBrowserTelemetryOptIn(enabled: boolean): void {
+  browserTelemetryOptIn = enabled;
+}
+
 const layerHttpClient = layerRemoteHttpClient((input, init) => globalThis.fetch(input, init));
 const layerRelayTracing = RelayTracing.layer(
   resolveRelayTracingConfig(),
@@ -31,7 +37,12 @@ const layerRelayTracing = RelayTracing.layer(
     serviceInstanceId: ClientTracer.serviceInstanceId,
     client: typeof window !== "undefined" && window.desktopBridge ? "desktop" : "web",
   },
-  { isEnabled: () => relayTelemetryEnabled() === true },
+  {
+    isEnabled: () =>
+      typeof window !== "undefined" && window.desktopBridge
+        ? relayTelemetryEnabled() === true
+        : browserTelemetryOptIn,
+  },
 ).pipe(Layer.provide(layerHttpClient));
 
 type RuntimeLayerSource =

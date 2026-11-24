@@ -875,7 +875,12 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   Layer.provideMerge(TraceDiagnostics.layer),
   Layer.provideMerge(TriageService.layer.pipe(Layer.provide(GitVcsDriver.layer))),
   // Layers memoize by reference, so this is the same policy the settings layer reads.
-  Layer.provideMerge(AnalyticsService.layer.pipe(Layer.provide(ManagedPolicy.layer))),
+  Layer.provideMerge(
+    AnalyticsService.layer.pipe(
+      Layer.provide(ManagedPolicy.layer),
+      Layer.provide(layerServerSettings),
+    ),
+  ),
   Layer.provideMerge(ExternalLauncher.layer),
   Layer.provideMerge(RemoteOpenTargets.layer),
   Layer.provideMerge(DirectEndpoints.layer.pipe(Layer.provide(layerServerEnvironment))),
@@ -911,8 +916,9 @@ const layerMetaProject = MetaProjectService.layer.pipe(
   Layer.provide(MetaProjectRuntimeWiring.layer),
   Layer.provide(layerPeerCore),
 );
+const layerPmStore = PmStore.layer;
 const layerPm = PmRuntimeWiring.layer.pipe(
-  Layer.provide(PmStore.layer),
+  Layer.provide(layerPmStore),
   Layer.provide(layerMetaProject),
   Layer.provide(layerRemoteDelegation),
 );
@@ -926,6 +932,7 @@ const layerRepoMonitor = RepoMonitorRuntimeWiring.layer.pipe(
   Layer.provide(RepoMonitorStore.layer),
   Layer.provide(layerRepoMonitorSnapshotSource),
   Layer.provide(layerWebPush),
+  Layer.provide(layerPmStore),
 );
 const layerUnifiedImport = UnifiedImportService.layer.pipe(
   Layer.provide(ExtendedAgentSessionScanner.layer()),

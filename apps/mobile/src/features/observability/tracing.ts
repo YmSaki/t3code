@@ -31,19 +31,29 @@ export function resolveTracingConfig(): TracingConfig | null {
   return { tracesUrl, tracesDataset, tracesToken };
 }
 
+let mobileTelemetryOptIn = false;
+
+export function setMobileTelemetryOptIn(enabled: boolean): void {
+  mobileTelemetryOptIn = enabled;
+}
+
 export function layerFromConfig(config: TracingConfig | null, resource: TracingResource) {
   const channel =
     typeof __DEV__ !== "undefined" && __DEV__
       ? "dev"
       : RELEASE_CHANNEL_BY_VARIANT[resource.appVariant];
-  return RelayTracing.layer(config, {
-    serviceName: "t3code-mobile",
-    serviceVersion: resource.serviceVersion,
-    runtime: "react-native",
-    serviceInstanceId: resource.serviceInstanceId,
-    client: `mobile-${resource.appVariant}`,
-    attributes: channel && releaseResourceAttributes(channel),
-  });
+  return RelayTracing.layer(
+    config,
+    {
+      serviceName: "t3code-mobile",
+      serviceVersion: resource.serviceVersion,
+      runtime: "react-native",
+      serviceInstanceId: resource.serviceInstanceId,
+      client: `mobile-${resource.appVariant}`,
+      attributes: channel && releaseResourceAttributes(channel),
+    },
+    { isEnabled: () => mobileTelemetryOptIn },
+  );
 }
 
 export const layer = layerFromConfig(resolveTracingConfig(), {

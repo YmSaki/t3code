@@ -1210,6 +1210,38 @@ export function GeneralSettingsPanel() {
           }
         />
       </SettingsSection>
+
+      <SettingsSection id="telemetry" title={gt("Telemetry")}>
+        <SettingsRow
+          {...setting("product-telemetry")}
+          description={
+            <T>
+              Share anonymous product usage events (such as provider, model, and feature usage
+              counts) to help improve T3 Code. No prompts, code, or file contents are collected.
+            </T>
+          }
+          resetAction={
+            settings.telemetryEnabled !== DEFAULT_UNIFIED_SETTINGS.telemetryEnabled ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset telemetry preference to default")}
+                onClick={() => {
+                  updateSettings({ telemetryEnabled: DEFAULT_UNIFIED_SETTINGS.telemetryEnabled });
+                }}
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.telemetryEnabled}
+              onCheckedChange={(checked) => {
+                const next = Boolean(checked);
+                updateSettings({ telemetryEnabled: next });
+              }}
+              aria-label={gt("Share anonymous usage telemetry")}
+            />
+          }
+        />
+      </SettingsSection>
     </SettingsPageContainer>
   );
 }

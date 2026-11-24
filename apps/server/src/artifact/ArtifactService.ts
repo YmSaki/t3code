@@ -259,6 +259,7 @@ const make = Effect.fn("ArtifactService.make")(function* (serviceOptions?: Artif
         ...(input.author === undefined ? {} : { author: input.author }),
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(input.summary === undefined ? {} : { summary: input.summary }),
+        ...(input.expectedVersion === undefined ? {} : { expectedVersion: input.expectedVersion }),
       });
     },
   );
@@ -449,6 +450,7 @@ const make = Effect.fn("ArtifactService.make")(function* (serviceOptions?: Artif
       artifactId: input.artifactId,
       content: toggled.markdown,
       author: input.author ?? "user",
+      expectedVersion: current.artifact.currentVersion,
       summary: `Toggled task #${input.index + 1} to ${toggled.checked ? "checked" : "unchecked"}`,
     });
   });

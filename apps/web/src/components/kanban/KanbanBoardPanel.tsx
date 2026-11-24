@@ -11,6 +11,10 @@ import { useAtomCommand } from "../../state/use-atom-command";
 
 type EnvironmentProject = ReturnType<typeof useProjects>[number];
 
+function projectSelectionKey(project: Pick<EnvironmentProject, "environmentId" | "id">): string {
+  return JSON.stringify([project.environmentId, project.id]);
+}
+
 const KANBAN_COLUMNS: ReadonlyArray<KanbanColumn> = [
   "backlog",
   "todo",
@@ -63,14 +67,17 @@ function KanbanBoardView({
           <select
             aria-label={gt("Select project")}
             className="rounded-md border border-border bg-background px-2.5 py-1 text-xs text-foreground"
-            value={project.id}
+            value={projectSelectionKey(project)}
             onChange={(event) => onSelectProject(event.target.value)}
           >
-            {projects.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
+            {projects.map((item) => {
+              const key = projectSelectionKey(item);
+              return (
+                <option key={key} value={key}>
+                  {item.title}
+                </option>
+              );
+            })}
           </select>
         </div>
         <button
@@ -182,10 +189,12 @@ function KanbanBoardView({
 export function KanbanBoardPanel() {
   const gt = useGT();
   const projects = useProjects();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
 
   const activeProject =
-    projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
+    projects.find((project) => projectSelectionKey(project) === selectedProjectKey) ??
+    projects[0] ??
+    null;
 
   if (!activeProject) {
     return (
@@ -199,7 +208,7 @@ export function KanbanBoardPanel() {
     <KanbanBoardView
       project={activeProject}
       projects={projects}
-      onSelectProject={setSelectedProjectId}
+      onSelectProject={setSelectedProjectKey}
     />
   );
 }

@@ -75,6 +75,7 @@ describe("githive kanban core", () => {
       ["issue", "archived", "backlog", null],
       ["issue", "open", "done", "closed"],
       ["task", "todo", "in_progress", "doing"],
+      ["task", "blocked", "in_progress", "doing"],
       ["task", "todo", "done", null],
       ["task", "blocked", "review", null],
       ["task", "doing", "review", "review"],

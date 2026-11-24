@@ -43,6 +43,7 @@ import { StandalonePage, StandalonePageHeader } from "../components/ui/standalon
 import { AnchoredToastProvider, ToastProvider } from "../components/ui/toast";
 import { isElectron } from "../env";
 import { useClientSettings } from "../hooks/useSettings";
+import { setBrowserTelemetryOptIn } from "../lib/runtime";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
@@ -56,7 +57,14 @@ import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
 import { useHostedPromptLinkLanding } from "../components/promptLinks/HostedPromptLinkLanding";
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
 import { useAtomValue } from "@effect/atom-react";
-import { primaryServerConfigAtom, primaryServerWelcomeAtom } from "../state/server";
+import { Atom } from "effect/reactivity";
+import { environmentPresentations } from "../state/presentation";
+import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
+import {
+  primaryServerConfigAtom,
+  primaryServerWelcomeAtom,
+  serverEnvironment,
+} from "../state/server";
 import { readProject } from "../state/entities";
 
 import { getDesktopSnapShotBridge } from "../lib/desktopSnapShot";
@@ -159,6 +167,33 @@ function WebPushServiceWorkerRegistration() {
   return null;
 }
 
+const browserTelemetryOptInAtom = Atom.make((get) => {
+  const primaryId = get(primaryEnvironmentIdAtom);
+  if (primaryId !== null) {
+    return get(serverEnvironment.settingsValueAtom(primaryId))?.telemetryEnabled === true;
+  }
+  const presentations = get(environmentPresentations.presentationsAtom);
+  for (const [environmentId, presentation] of presentations.entries()) {
+    if (presentation.connection.phase !== "connected") continue;
+    if (get(serverEnvironment.settingsValueAtom(environmentId))?.telemetryEnabled === true) {
+      return true;
+    }
+  }
+  return false;
+});
+
+function BrowserTelemetryConsentSync() {
+  const telemetryEnabled = useAtomValue(browserTelemetryOptInAtom);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- syncs persisted server telemetry consent to the module-level browser relay tracer gate
+  useEffect(() => {
+    setBrowserTelemetryOptIn(telemetryEnabled);
+    return () => {
+      setBrowserTelemetryOptIn(false);
+    };
+  }, [telemetryEnabled]);
+  return null;
+}
+
 function RootRouteBranch() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();
@@ -197,6 +232,7 @@ function RootRouteBranch() {
   // first-run gate and the event router, whose first navigation would leave the page.
   const appHosts = (
     <>
+      <BrowserTelemetryConsentSync />
       {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
         <>
           <DesktopAppActivationCoordinator />

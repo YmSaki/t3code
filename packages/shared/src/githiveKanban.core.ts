@@ -75,6 +75,9 @@ export function groupKanbanCards(cards: ReadonlyArray<KanbanCard>, query = "") {
 }
 
 export function kanbanTransitionStatus(card: KanbanCard, target: KanbanColumn): string | null {
+  if (card.kind === "task" && card.status === "blocked" && target === "in_progress") {
+    return "doing";
+  }
   if (card.column === target) return card.status;
   if (card.kind === "issue") {
     if (card.status === "archived") return null;
