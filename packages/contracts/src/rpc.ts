@@ -1,4 +1,11 @@
 import {
+  GithiveKanbanError,
+  KanbanBoard,
+  KanbanCard,
+  KanbanListBoardInput,
+  KanbanMoveCardInput,
+} from "./kanban.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -821,6 +828,8 @@ export const WS_METHODS = {
   metaProjectsGetContext: "metaProjects.getContext",
   metaProjectsGetRollup: "metaProjects.getRollup",
 
+  kanbanListBoard: "kanban.listBoard",
+  kanbanMoveCard: "kanban.moveCard",
   pmGetBoard: "pm.getBoard",
   pmSetRole: "pm.setRole",
   pmSetKillSwitch: "pm.setKillSwitch",
@@ -2762,6 +2771,17 @@ const PmRpcError = Schema.Union([
   EnvironmentAuthorizationError,
 ]);
 
+const WsKanbanListBoardRpc = Rpc.make(WS_METHODS.kanbanListBoard, {
+  payload: KanbanListBoardInput,
+  success: KanbanBoard,
+  error: Schema.Union([GithiveKanbanError, EnvironmentAuthorizationError]),
+});
+const WsKanbanMoveCardRpc = Rpc.make(WS_METHODS.kanbanMoveCard, {
+  payload: KanbanMoveCardInput,
+  success: KanbanCard,
+  error: Schema.Union([GithiveKanbanError, EnvironmentAuthorizationError]),
+});
+
 const WsPmGetBoardRpc = Rpc.make(WS_METHODS.pmGetBoard, {
   payload: Schema.Struct({ pmThreadId: ThreadId }),
   success: Schema.Struct({
@@ -3383,6 +3403,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsMetaProjectsMutateRpc,
   WsMetaProjectsGetContextRpc,
   WsMetaProjectsGetRollupRpc,
+  WsKanbanListBoardRpc,
+  WsKanbanMoveCardRpc,
   WsPmGetBoardRpc,
   WsPmSetRoleRpc,
   WsPmSetKillSwitchRpc,

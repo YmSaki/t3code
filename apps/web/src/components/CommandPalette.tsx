@@ -1762,6 +1762,17 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:kanban",
+    searchTerms: ["kanban", "board", "githive", "cards", "columns", "tasks"],
+    title: gt("Open Kanban board"),
+    icon: <IssueGlyph.issue className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/kanban" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:use-in-another-app",
     searchTerms: [
       "mcp",

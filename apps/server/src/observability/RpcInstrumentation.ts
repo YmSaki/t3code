@@ -269,6 +269,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.metaProjectsMutate]: "metaProjects",
   [WS_METHODS.metaProjectsGetContext]: "metaProjects",
   [WS_METHODS.metaProjectsGetRollup]: "metaProjects",
+  [WS_METHODS.kanbanListBoard]: "kanban",
+  [WS_METHODS.kanbanMoveCard]: "kanban",
   [WS_METHODS.pmGetBoard]: "pm",
   [WS_METHODS.pmSetRole]: "pm",
   [WS_METHODS.pmSetKillSwitch]: "pm",
