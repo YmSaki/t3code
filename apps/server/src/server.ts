@@ -916,8 +916,9 @@ const layerMetaProject = MetaProjectService.layer.pipe(
   Layer.provide(MetaProjectRuntimeWiring.layer),
   Layer.provide(layerPeerCore),
 );
+const layerPmStore = PmStore.layer;
 const layerPm = PmRuntimeWiring.layer.pipe(
-  Layer.provide(PmStore.layer),
+  Layer.provide(layerPmStore),
   Layer.provide(layerMetaProject),
   Layer.provide(layerRemoteDelegation),
 );
@@ -931,6 +932,7 @@ const layerRepoMonitor = RepoMonitorRuntimeWiring.layer.pipe(
   Layer.provide(RepoMonitorStore.layer),
   Layer.provide(layerRepoMonitorSnapshotSource),
   Layer.provide(layerWebPush),
+  Layer.provide(layerPmStore),
 );
 const layerUnifiedImport = UnifiedImportService.layer.pipe(
   Layer.provide(ExtendedAgentSessionScanner.layer()),

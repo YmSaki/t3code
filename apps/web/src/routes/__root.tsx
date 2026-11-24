@@ -42,7 +42,8 @@ import { Button } from "../components/ui/button";
 import { StandalonePage, StandalonePageHeader } from "../components/ui/standalone-page";
 import { AnchoredToastProvider, ToastProvider } from "../components/ui/toast";
 import { isElectron } from "../env";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, usePrimarySettings } from "../hooks/useSettings";
+import { setBrowserTelemetryOptIn } from "../lib/runtime";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
@@ -159,6 +160,18 @@ function WebPushServiceWorkerRegistration() {
   return null;
 }
 
+function BrowserTelemetryConsentSync() {
+  const telemetryEnabled = usePrimarySettings((settings) => settings.telemetryEnabled);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- syncs persisted server telemetry consent to the module-level browser relay tracer gate
+  useEffect(() => {
+    setBrowserTelemetryOptIn(telemetryEnabled);
+    return () => {
+      setBrowserTelemetryOptIn(false);
+    };
+  }, [telemetryEnabled]);
+  return null;
+}
+
 function RootRouteBranch() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();
@@ -197,6 +210,7 @@ function RootRouteBranch() {
   // first-run gate and the event router, whose first navigation would leave the page.
   const appHosts = (
     <>
+      {primaryEnvironmentAuthenticated ? <BrowserTelemetryConsentSync /> : null}
       {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
         <>
           <DesktopAppActivationCoordinator />
