@@ -64,7 +64,11 @@ const handlers = {
         "pm_dispatch_batch",
       );
       return yield* pmService
-        .dispatchBatch({ pmThreadId, items: input.items })
+        .dispatchBatch({
+          pmThreadId,
+          items: input.items,
+          ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
+        })
         .pipe(Effect.mapError(toMcpFailure));
     }),
   ),

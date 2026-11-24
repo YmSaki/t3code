@@ -1,10 +1,15 @@
+// @effect-diagnostics nodeBuiltinImport:off -- hashes retry identities without retaining the worker briefs in ids.
+import * as NodeCrypto from "node:crypto";
+
 import {
+  CommandId,
   type EnvironmentId,
   type PmBoardSnapshot,
   type PmBoardWorkerSummary,
   type PmDispatchAccepted,
   type PmDispatchBatchInput,
   type PmDispatchBatchResult,
+  type PmDispatchRejected,
   PmDispatchError,
   PmThreadNotFoundError,
   type PmWorkerPolicy,
@@ -24,6 +29,7 @@ import {
   type PmContextMetaProject,
 } from "@t3tools/shared/pmContextBuilder.core";
 import { evaluateDispatchBatch, type PmGuardRepoMember } from "@t3tools/shared/pmGuard.core";
+import { stableStringify } from "@t3tools/shared/relaySigning";
 import {
   buildWorkerBriefPrompt,
   type WorkerBriefBudget,
@@ -36,6 +42,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Result from "effect/Result";
+import * as Semaphore from "effect/Semaphore";
 
 import * as PmStore from "./PmStore.ts";
 
@@ -53,6 +60,7 @@ export interface PmBoardSnapshotWithQuestions extends PmBoardSnapshot {
 }
 
 export interface PmWorkerLaunchRequest {
+  readonly commandId: CommandId;
   readonly pmThreadId: ThreadId;
   readonly clientKey: string;
   readonly title: string;
@@ -206,6 +214,23 @@ const notConfigured = (what: "launcher" | "stopper") =>
 /** @public */
 export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmServiceOptions) {
   const store = yield* PmStore.PmStore;
+  const dispatchLocks = new Map<ThreadId, { semaphore: Semaphore.Semaphore; users: number }>();
+  const withDispatchLock = Effect.fn("PmService.withDispatchLock")(function* <A, E, R>(
+    threadId: ThreadId,
+    effect: Effect.Effect<A, E, R>,
+  ) {
+    const lock = dispatchLocks.get(threadId) ?? { semaphore: Semaphore.makeUnsafe(1), users: 0 };
+    dispatchLocks.set(threadId, lock);
+    lock.users++;
+    return yield* lock.semaphore.withPermit(effect).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          lock.users--;
+          if (lock.users === 0) dispatchLocks.delete(threadId);
+        }),
+      ),
+    );
+  });
 
   const getConfig: PmService["Service"]["getConfig"] = Effect.fn("PmService.getConfig")(
     function* (threadId) {
@@ -320,6 +345,32 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
       const config = yield* getConfig(input.pmThreadId);
       const globalKillSwitch = yield* store.getGlobalKillSwitch;
       const existingWorkers = yield* store.listWorkersByPmThread(input.pmThreadId);
+      // Older clients have no commandId; identical payloads still share a durable retry identity.
+      const batchCommandId =
+        input.commandId ??
+        CommandId.make(
+          `pm-batch:${NodeCrypto.createHash("sha256").update(stableStringify(input.items)).digest("hex")}`,
+        );
+      const replayed = new Map(
+        existingWorkers
+          .filter((worker) => worker.dispatchCommandId === batchCommandId)
+          .map((worker) => [worker.clientKey, worker]),
+      );
+      const uniqueItems: Array<PmDispatchBatchInput["items"][number]> = [];
+      const duplicateRejections: PmDispatchRejected[] = [];
+      const seenKeys = new Set<string>();
+      for (const item of input.items) {
+        if (seenKeys.has(item.clientKey)) {
+          duplicateRejections.push({
+            clientKey: item.clientKey,
+            reason: "duplicate_client_key",
+            detail: `clientKey "${item.clientKey}" repeats in the batch.`,
+          });
+        } else {
+          seenKeys.add(item.clientKey);
+          uniqueItems.push(item);
+        }
+      }
       const activeWorkerCount = existingWorkers.filter((worker) =>
         isActivePmWorkerStatus(worker.status),
       ).length;
@@ -351,12 +402,24 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
         members,
         activeWorkerCount,
         delegatedTurnCount: config.delegatedTurnCount,
-        items: input.items,
+        items: uniqueItems.filter((item) => !replayed.has(item.clientKey)),
       });
 
-      const itemsByKey = new Map(input.items.map((item) => [item.clientKey, item]));
+      const itemsByKey = new Map(uniqueItems.map((item) => [item.clientKey, item]));
       const launcher = options?.launchWorker ?? serviceOptions?.launchWorker;
-      const dispatched: Array<PmDispatchAccepted> = [];
+      const dispatched = new Map<string, PmDispatchAccepted>();
+      for (const item of uniqueItems) {
+        const worker = replayed.get(item.clientKey);
+        if (worker !== undefined) {
+          dispatched.set(item.clientKey, {
+            clientKey: item.clientKey,
+            threadId: worker.workerThreadId,
+            environmentId: worker.environmentId,
+            projectId: worker.projectId,
+            useWorktree: worker.useWorktree,
+          });
+        }
+      }
 
       for (const accepted of decision.accepted) {
         const item = itemsByKey.get(accepted.clientKey);
@@ -377,6 +440,11 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
           budget: options?.budget,
         });
         const launched = yield* launcher({
+          commandId: CommandId.make(
+            `command:pm-worker:${NodeCrypto.createHash("sha256")
+              .update(stableStringify([input.pmThreadId, batchCommandId, item.clientKey]))
+              .digest("hex")}`,
+          ),
           pmThreadId: input.pmThreadId,
           clientKey: item.clientKey,
           title: item.title,
@@ -389,29 +457,29 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
           brief: item.brief,
           promptPack,
         });
-        yield* store.upsertConfig({
-          threadId: launched.workerThreadId,
-          metaProjectId: config.metaProjectId,
-          role: "worker",
-          delegationDepth: config.delegationDepth + 1,
-          policy: config.policy,
-        });
-        yield* store.putWorkerDispatch({
-          workerThreadId: launched.workerThreadId,
-          pmThreadId: input.pmThreadId,
-          clientKey: item.clientKey,
-          environmentId: accepted.environmentId,
-          projectId: accepted.projectId,
-          title: item.title,
-          targetRepoRole: item.targetRepoRole ?? null,
-          providerInstanceId: item.providerInstanceId ?? null,
-          useWorktree: accepted.useWorktree,
-          status: launched.status ?? "running",
-          turnCount: 1,
-          brief: item.brief,
-        });
-        yield* store.incrementDelegatedTurns(input.pmThreadId, 1);
-        dispatched.push({
+        yield* store.recordWorkerLaunch(
+          {
+            dispatchCommandId: batchCommandId,
+            workerThreadId: launched.workerThreadId,
+            pmThreadId: input.pmThreadId,
+            clientKey: item.clientKey,
+            environmentId: accepted.environmentId,
+            projectId: accepted.projectId,
+            title: item.title,
+            targetRepoRole: item.targetRepoRole ?? null,
+            providerInstanceId: item.providerInstanceId ?? null,
+            useWorktree: accepted.useWorktree,
+            status: launched.status ?? "running",
+            turnCount: 1,
+            brief: item.brief,
+          },
+          {
+            metaProjectId: config.metaProjectId,
+            delegationDepth: config.delegationDepth + 1,
+            policy: config.policy,
+          },
+        );
+        dispatched.set(accepted.clientKey, {
           clientKey: accepted.clientKey,
           threadId: launched.workerThreadId,
           environmentId: accepted.environmentId,
@@ -422,10 +490,14 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
 
       return {
         pmThreadId: input.pmThreadId,
-        dispatched,
-        rejected: [...decision.rejected],
+        dispatched: uniqueItems.flatMap((item) => {
+          const worker = dispatched.get(item.clientKey);
+          return worker === undefined ? [] : [worker];
+        }),
+        rejected: [...duplicateRejections, ...decision.rejected],
       };
     },
+    (effect, input) => withDispatchLock(input.pmThreadId, effect),
   );
 
   const stopAllWorkers: PmService["Service"]["stopAllWorkers"] = Effect.fn(
