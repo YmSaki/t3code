@@ -190,4 +190,60 @@ describe("RepoMonitorService", () => {
         assert.strictEqual(selfLoopResults[0]!.outcome, "skipped_loop_guard");
       }).pipe(Effect.provide(makeTestLayer([]))),
   );
+
+  it.effect("serializes concurrent poll and webhook operations per project", () =>
+    Effect.gen(function* () {
+      yield* Migration0109;
+      yield* TestClock.adjust(Duration.hours(100));
+      const service = yield* RepoMonitorService;
+
+      yield* service.upsertRule({
+        projectId: PROJECT_ID,
+        name: TrimmedNonEmptyString.make("PR Comment Serialization"),
+        enabled: true,
+        eventKinds: ["pr_comment"],
+        filter: { excludeBots: true },
+        actionKind: "launch_thread",
+        promptTemplate: TrimmedNonEmptyString.make("PR #{{pr.number}}: {{body}}"),
+        cooldownSec: NonNegativeInt.make(0),
+        maxTriggersPerHour: PositiveInt.make(10),
+      });
+
+      yield* service.pollProject({ projectId: PROJECT_ID, snapshot: initialSnapshot });
+
+      const webhookEvent: RepoMonitorCandidateEvent = {
+        kind: "pr_comment",
+        projectId: PROJECT_ID,
+        title: "Initial PR",
+        body: "Concurrent comment",
+        authorLogin: "reviewer-bob",
+        isBot: false,
+        labels: ["feature"],
+        branch: "feature/init",
+        headBranch: "feature/init",
+        baseBranch: "main",
+        previousCommitSha: null,
+        commitSha: null,
+        pullRequestNumber: 1,
+        issueKey: null,
+        commentId: "c-101",
+        path: "src/app.ts",
+        url: "https://github.com/org/repo/pull/1#discussion_r101",
+        occurredAt: "2026-11-22T10:04:00Z",
+      };
+
+      const [pollResult, webhookResult] = yield* Effect.all(
+        [
+          service.pollProject({ projectId: PROJECT_ID, snapshot: secondSnapshot }),
+          service.ingestWebhookEvent({ projectId: PROJECT_ID, event: webhookEvent }),
+        ],
+        { concurrency: "unbounded" },
+      );
+
+      const totalTriggered =
+        pollResult.triggeredEvents.length +
+        webhookResult.filter((r) => r.outcome === "triggered").length;
+      assert.strictEqual(totalTriggered, 1);
+    }).pipe(Effect.provide(makeTestLayer([]))),
+  );
 });

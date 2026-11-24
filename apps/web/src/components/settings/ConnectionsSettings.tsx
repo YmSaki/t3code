@@ -56,6 +56,7 @@ import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { usePeerLinkHosts } from "~/state/peerLinks";
 import { LoadBalancingSettings } from "./LoadBalancingSettings";
+import { PeerNodeHealthSection } from "./PeerNodeHealthSection";
 import { PullRequestRoutingSettings } from "./PullRequestRoutingSettings";
 import { Input } from "../ui/input";
 import {
@@ -275,6 +276,12 @@ function ConnectionsSettingsContent({
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
   const peerLinkHosts = usePeerLinkHosts();
+  // The section has a fixed anchor id, so it renders once, preferring the primary host.
+  const nodeHealthEnvironmentId =
+    (
+      peerLinkHosts.find((host) => host.environmentId === primaryEnvironment?.environmentId) ??
+      peerLinkHosts[0]
+    )?.environmentId ?? null;
   const removeEnvironment = useAtomCommand(environmentCatalog.remove, { reportFailure: false });
   const setEnvironmentEnabled = useAtomCommand(environmentCatalog.setEnabled, {
     reportFailure: false,
@@ -1941,6 +1948,9 @@ function ConnectionsSettingsContent({
             />
           ))
         : null}
+      {nodeHealthEnvironmentId !== null ? (
+        <PeerNodeHealthSection environmentId={nodeHealthEnvironmentId} />
+      ) : null}
       <LoadBalancingSettings environments={loadBalancingEnvironments} />
       <PullRequestRoutingSettings environments={loadBalancingEnvironments} />
     </SettingsPageContainer>

@@ -32,6 +32,8 @@ const RIGHT_PANEL_KINDS = [
   "issue",
   "thread",
   "linked-thread",
+  "pm",
+  "artifact",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -88,6 +90,9 @@ export type RightPanelSurface =
       detailTab?: PullRequestDetailTab;
     }
   | { id: "pull-requests"; kind: "pull-requests" }
+  | { id: "pm"; kind: "pm" }
+  /** `artifact` lists the thread's artifacts; `artifact:<id>` opens one as its own tab. */
+  | { id: "artifact" | `artifact:${string}`; kind: "artifact"; artifactId?: string }
   /**
    * An issue opened in the issues list's shared panel, or beside a thread. Like `pull-request`,
    * the reference lives in the id so several issues can stay open as peer tabs.
@@ -223,6 +228,8 @@ interface RightPanelStoreState {
     },
   ) => void;
   openIssue: (ref: ScopedThreadRef, target: IssueSurfaceTarget) => void;
+  /** Without an id, opens the thread's artifact list. */
+  openArtifact: (ref: ScopedThreadRef, artifactId?: string) => void;
   setPullRequestDetailTab: (
     ref: ScopedThreadRef,
     surfaceId: string,
@@ -297,6 +304,10 @@ const singletonSurface = (
       return { id: "files", kind };
     case "pull-requests":
       return { id: "pull-requests", kind };
+    case "pm":
+      return { id: "pm", kind };
+    case "artifact":
+      return { id: "artifact", kind };
     case "device":
       return { id: "device", kind };
   }
@@ -971,6 +982,17 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
                 }
               : next;
           }),
+        ),
+      openArtifact: (ref, artifactId) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            upsertSurface(
+              current,
+              artifactId === undefined
+                ? singletonSurface("artifact")
+                : { id: `artifact:${artifactId}`, kind: "artifact", artifactId },
+            ),
+          ),
         ),
       setPullRequestDetailTab: (ref, surfaceId, detailTab) =>
         set((state) => {

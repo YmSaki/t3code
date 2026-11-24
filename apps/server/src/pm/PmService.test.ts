@@ -159,6 +159,10 @@ it.layer(
         });
 
         const snapshot = yield* service.getBoardSnapshot(pmThreadId);
+        expect(snapshot.role).toBe("pm");
+        expect((yield* service.getBoardSnapshot(ThreadId.make("thread-unconfigured"))).role).toBe(
+          "standard",
+        );
         expect(snapshot.delegatedTurnCount).toBe(2);
         expect(snapshot.pendingQuestions).toEqual([
           {

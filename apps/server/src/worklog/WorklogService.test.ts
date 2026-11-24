@@ -11,6 +11,7 @@ import {
   PositiveInt,
 } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -241,6 +242,51 @@ describe("WorklogService", () => {
       yield* service.deleteIcalFeed(created.feed.id);
       const deletedExit = yield* Effect.exit(service.renderIcalFeedByToken("feed-token-456"));
       assert.isTrue(Exit.isFailure(deletedExit));
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("handles large datasets and produces RFC 5545 compliant folded iCal output", () =>
+    Effect.gen(function* () {
+      yield* Migration110Worklog;
+      const service = yield* WorklogService;
+
+      const baseTime = DateTime.makeUnsafe("2026-11-01T00:00:00.000Z");
+      const batch = Array.from({ length: 500 }, (_, i) => ({
+        sessionId: `bulk-${i}`,
+        provider: (i % 2 === 0 ? "codex" : "claudeAgent") as "codex" | "claudeAgent",
+        title:
+          i === 0
+            ? "Fix, parse; escaped\\chars\nand a very long summary line that definitely exceeds seventy five octets in UTF-8"
+            : `Bulk session #${i}`,
+        startedAt: DateTime.formatIso(DateTime.add(baseTime, { minutes: i * 2 })),
+        endedAt: DateTime.formatIso(DateTime.add(baseTime, { minutes: i * 2 + 1 })),
+        turnCount: 1,
+      }));
+
+      yield* service.ingestExternalSessions(batch);
+      const queried = yield* service.queryWorklog({});
+      assert.strictEqual(queried.entries.length, 500);
+
+      const stats = yield* service.getStats({ timeZone: "UTC" });
+      assert.strictEqual(stats.totalEntriesCount, 500);
+
+      yield* service.createIcalFeed({
+        name: "Large Feed",
+        rawToken: "bulk-token",
+        timeZone: "UTC",
+      });
+
+      const rendered = yield* service.renderIcalFeedByToken("bulk-token.ics");
+      assert.include(rendered.icsText, "BEGIN:VCALENDAR\r\n");
+      assert.include(rendered.icsText, "END:VCALENDAR\r\n");
+      // RFC 5545 escaping and line folding (\r\n followed by space)
+      assert.include(rendered.icsText, "Fix\\, parse\\; escaped\\\\chars\\n");
+      assert.include(rendered.icsText, "\r\n ");
+      const lines = rendered.icsText.split("\r\n");
+      const encoder = new TextEncoder();
+      for (const line of lines) {
+        assert.isAtMost(encoder.encode(line).length, 75);
+      }
     }).pipe(Effect.provide(testLayer)),
   );
 });

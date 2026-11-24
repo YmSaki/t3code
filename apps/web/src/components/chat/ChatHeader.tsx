@@ -3,6 +3,7 @@ import {
   type EnvironmentId,
   type ScopedThreadRef,
   type ThreadId,
+  type ThreadRole,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
@@ -11,7 +12,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { T, useGT, Var } from "gt-react";
-import { ArrowRightLeftIcon, ChevronDownIcon } from "lucide-react";
+import { ArrowRightLeftIcon, Bot, ChevronDownIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -43,6 +44,10 @@ import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
+import { useRightPanelStore } from "../../rightPanelStore";
+import { usePmBoard } from "../../state/pmBoard";
+import { Button } from "../ui/button";
+import { PmThreadRoleSwitch } from "../pm/PmLaunchControls";
 import { GuestShareIndicator } from "./GuestShareControls";
 import { ThreadHandoffDialog } from "./ThreadHandoffDialog";
 
@@ -439,6 +444,56 @@ export const ChatHeader = memo(function ChatHeader({
         </>
       ) : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+      {isServerThread ? (
+        <PmHeaderControls
+          key={`${activeThreadEnvironmentId}:${activeThreadId}`}
+          environmentId={activeThreadEnvironmentId}
+          threadId={activeThreadId}
+          threadRef={activeThreadRef}
+        />
+      ) : null}
     </div>
   );
 });
+
+function PmHeaderControls(props: {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+  readonly threadRef: ScopedThreadRef;
+}) {
+  const { board } = usePmBoard(props.environmentId, props.threadId);
+  const [optimisticRole, setOptimisticRole] = useState<ThreadRole | null>(null);
+  const currentRole = optimisticRole ?? board?.role ?? "standard";
+  const pendingCount = board?.pendingQuestions.length ?? 0;
+
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 [-webkit-app-region:no-drag]">
+      <PmThreadRoleSwitch
+        environmentId={props.environmentId}
+        threadId={props.threadId}
+        role={currentRole}
+        onRoleChanged={(nextRole) => {
+          setOptimisticRole(nextRole);
+          if (nextRole === "pm") {
+            useRightPanelStore.getState().open(props.threadRef, "pm");
+          }
+        }}
+      />
+      <Button
+        size="xs"
+        variant="outline"
+        onClick={() => useRightPanelStore.getState().toggle(props.threadRef, "pm")}
+      >
+        <Bot className="size-3.5" aria-hidden />
+        <span>
+          <T>PM Board</T>
+        </span>
+        {pendingCount > 0 ? (
+          <Badge variant="warning" size="sm">
+            {pendingCount}
+          </Badge>
+        ) : null}
+      </Button>
+    </div>
+  );
+}

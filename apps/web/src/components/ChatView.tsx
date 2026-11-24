@@ -2495,6 +2495,8 @@ export default function ChatView(props: ChatViewProps) {
     moveRightPanelSurfaceStable,
     onOpenToolDiffStable,
     onOpenTurnDiffStable,
+    onOpenArtifactStable,
+    onOpenPmStable,
     openChangesFromThreadPanelStable,
     openFileSurfaceStable,
     toggleRightPanelMaximizedStable,
@@ -4209,10 +4211,14 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequest={addPullRequestSurfaceStable}
           onAddPullRequests={addPullRequestsSurfaceStable}
           onAddDevice={addDeviceSurfaceStable}
+          onAddPm={onOpenPmStable}
+          onAddArtifact={onOpenArtifactStable}
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && diffAvailable}
+          pmAvailable={isServerThread}
+          artifactAvailable={isServerThread}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={linkedItemsSurfaceAvailable}

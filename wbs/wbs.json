@@ -134,7 +134,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["0.1.1"],
+                  "_deps": [
+                    "0.1.1"
+                  ],
                   "note": "[infra] oxlint-plugin-t3code へ新規ルール追加。*.core.ts / *.logic.ts からの node:* / effect/FileSystem / effect/sql / fetch / Date.now 直接参照を機械禁止。検証: vp lint 単体テスト。",
                   "_archLayer": "infra",
                   "_req": "common",
@@ -153,7 +155,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["0.1.1"],
+                  "_deps": [
+                    "0.1.1"
+                  ],
                   "note": "[imperative-shell-db] apps/server/src/persistence/Migrations.ts (106〜111予約) と DatabaseMaintenance 向け FTS5 再構築整合テスト雛形を整備。完了条件: マイグレーション検証テスト通過。",
                   "_archLayer": "imperative-shell-db",
                   "_req": "common",
@@ -172,7 +176,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["0.1.1"],
+                  "_deps": [
+                    "0.1.1"
+                  ],
                   "note": "[contract] apps/server/src/provider/agentContextBudget.json と McpToolExposure.ts の遅延ロード(tool_search)枠配分を設計。完了条件: Phase1新規MCPツールの常時公開枠上限の策定。",
                   "_archLayer": "contract",
                   "_req": "common",
@@ -191,7 +197,10 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["0.1.2", "0.1.3"],
+                  "_deps": [
+                    "0.1.2",
+                    "0.1.3"
+                  ],
                   "note": "[verify] 純粋コア単体テスト用ビルダー・インメモリStubリポジトリヘルパを整備(sleep/実時計禁止)。完了条件: テストユーティリティが vp test run で通ること。",
                   "_archLayer": "verify",
                   "_req": "common",
@@ -222,10 +231,15 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["0.1.1"],
+                  "_deps": [
+                    "0.1.1"
+                  ],
                   "note": "[contract] packages/contracts/src/settings.ts に environmentRole('hub'|'worker'|'standalone') と hubEnvironmentId を追加。完了条件: 後方互換デコードテスト通過。",
                   "_archLayer": "contract",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-11-25"
@@ -241,10 +255,15 @@
                   "qty": 1,
                   "hours": 2,
                   "assignee": "AI",
-                  "_deps": ["1.1.1"],
+                  "_deps": [
+                    "1.1.1"
+                  ],
                   "note": "[contract] packages/contracts/src/settings.ts の linkedEnvironmentsEnabled 既定値を true 化し、selfHostedHubMode フラグを追加。完了条件: 既存設定テスト追従。",
                   "_archLayer": "contract",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-11-26",
                     "end": "2026-11-26"
@@ -260,10 +279,16 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["1.1.1", "0.1.4"],
+                  "_deps": [
+                    "1.1.1",
+                    "0.1.4"
+                  ],
                   "note": "[contract] packages/contracts/src/{peerLink,rpc,clientRpcPermissions}.ts と RpcAuthorization.ts へノード稼働ヘルス取得RPC・スコープを追加。完了条件: 全RPC網羅型検査通過。",
                   "_archLayer": "contract",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-11-26",
                     "end": "2026-11-26"
@@ -279,10 +304,15 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["1.1.3"],
+                  "_deps": [
+                    "1.1.3"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/nodeHealth.core.ts (I/Oゼロ)。遅延・CPU/メモリ負荷・稼働ワーカー数・オフライン状態から推奨ターゲットを純粋算出。検証: 単体テスト網羅。",
                   "_archLayer": "functional-core",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-11-27",
                     "end": "2026-11-27"
@@ -298,7 +328,9 @@
                   "qty": 1,
                   "hours": 3,
                   "assignee": "AI",
-                  "_deps": ["1.1.2"],
+                  "_deps": [
+                    "1.1.2"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/selfHostUiPolicy.core.ts (I/Oゼロ)。Clerk/T3 Connect 未構成時のクラウド案内抑制・Tailscale案内切替を純粋判定。検証: 単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#8",
@@ -323,10 +355,16 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["1.1.3", "1.1.4"],
+                  "_deps": [
+                    "1.1.3",
+                    "1.1.4"
+                  ],
                   "note": "[imperative-shell-io] apps/server/src/peer/PeerLinks.ts に遅延・稼働スレッド数・利用可能プロバイダを収集する疎通サービスを追加し ws.ts 薄ハンドラへ接続。検証: PeerLinks結合テスト。",
                   "_archLayer": "imperative-shell-io",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-11-30",
                     "end": "2026-11-30"
@@ -342,7 +380,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["1.1.2", "1.2.1"],
+                  "_deps": [
+                    "1.1.2",
+                    "1.2.1"
+                  ],
                   "note": "[imperative-shell-io] apps/server/src/config.ts, binCli.ts にハブ起動プロファイルと tailscale serve 自動公開確認・ペアリング案内補助を追加。検証: CLIユニットテスト。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#8",
@@ -361,7 +402,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI/人間",
-                  "_deps": ["1.2.2"],
+                  "_deps": [
+                    "1.2.2"
+                  ],
                   "note": "[infra] packaging/selfhost/ (新設) へ systemd ユニット・Docker Compose・Tailscale/Headscale 構成手順とヘルスチェック定義を整備。完了条件: コンテナ/サービス起動確認。",
                   "_archLayer": "infra",
                   "_req": "#8",
@@ -380,10 +423,15 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["1.2.1"],
+                  "_deps": [
+                    "1.2.1"
+                  ],
                   "note": "[imperative-shell-io] apps/server/src/peer/PeerClientPairing.ts と EnvironmentAuth のセルフホストTailnet間リンク初期化エラー案内を改善。検証: Peer認証テスト。",
                   "_archLayer": "imperative-shell-io",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-12-01",
                     "end": "2026-12-01"
@@ -405,10 +453,16 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["1.1.3", "1.2.1"],
+                  "_deps": [
+                    "1.1.3",
+                    "1.2.1"
+                  ],
                   "note": "[client-runtime] packages/client-runtime/src/state/peerLinks.ts にノードヘルス購読Atomと createEnvironmentRpcCommand ベースの再疎通コマンドを実装。",
                   "_archLayer": "client-runtime",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-12-01",
                     "end": "2026-12-01"
@@ -424,17 +478,22 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["1.3.1"],
+                  "_deps": [
+                    "1.3.1"
+                  ],
                   "note": "[ui-shell] apps/web/src/components/settings/ (Connections画面) とヘッダにHub/Worker状態バッジ・遅延・稼働スレッド数・ワンクリックPeerLinkUIを追加。i18n対応。",
                   "_archLayer": "ui-shell",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-12-02",
                     "end": "2026-12-02"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -443,7 +502,10 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["1.1.5", "1.3.1"],
+                  "_deps": [
+                    "1.1.5",
+                    "1.3.1"
+                  ],
                   "note": "[ui-shell] apps/web/src/routes/__root.tsx 等のT3 Connect強制導線に selfHostUiPolicy.core.ts を適用し、セルフホスト運用時の不要警告を排除。i18n 10言語更新。",
                   "_archLayer": "ui-shell",
                   "_req": "#8",
@@ -452,8 +514,8 @@
                     "end": "2026-12-02"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -462,10 +524,16 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI/人間",
-                  "_deps": ["1.2.3", "1.3.2"],
+                  "_deps": [
+                    "1.2.3",
+                    "1.3.2"
+                  ],
                   "note": "[verify] Hub 1台 + 作業PC 1台以上を Tailscale 経由で Peer Link 接続し RemoteDelegation 実行・完了回収を確認。vp run check:changed 通過。",
                   "_archLayer": "verify",
-                  "_req": ["#7", "#8"],
+                  "_req": [
+                    "#7",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2026-12-03",
                     "end": "2026-12-03"
@@ -493,7 +561,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["1.1.1", "0.1.4"],
+                  "_deps": [
+                    "1.1.1",
+                    "0.1.4"
+                  ],
                   "note": "[contract] 新設: packages/contracts/src/metaProject.ts (MetaProject, Member, ThreadLink, 共通指示instructionsMd) と rpc.ts / clientRpcPermissions.ts 権限定義。",
                   "_archLayer": "contract",
                   "_req": "#3",
@@ -512,7 +583,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/metaProjectTree.core.ts (I/Oゼロ)。上位プロジェクト配下のPM/横断スレッド/複数PCリポ階層化と未分類抽出を純粋関数実装＋単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#3",
@@ -531,7 +604,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/metaProjectContext.core.ts (I/Oゼロ)。instructionsMd・配下リポロール・環境構成をエージェント向けXML/Markdownへ決定的整形＋単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#3",
@@ -550,7 +625,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/metaProjectValidation.core.ts (I/Oゼロ)。重複メンバー・削除時参照解除・循環/不正ロール検証を純粋関数化＋単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#3",
@@ -569,7 +646,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["2.1.2"],
+                  "_deps": [
+                    "2.1.2"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/metaProjectRollup.core.ts (I/Oゼロ)。複数リポジトリ・複数環境から届いたPR/Issue/スレッド稼働集計の重複排除・優先度ソート＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#3",
@@ -594,7 +673,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["0.1.3", "2.1.1"],
+                  "_deps": [
+                    "0.1.3",
+                    "2.1.1"
+                  ],
                   "note": "[imperative-shell-db] 新設: Migrations/106_MetaProjects.ts (meta_projects, meta_project_members, meta_project_threads) と専用Storeを実装。検証: 永続層単体テスト。",
                   "_archLayer": "imperative-shell-db",
                   "_req": "#3",
@@ -613,7 +695,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["2.1.4", "2.2.1"],
+                  "_deps": [
+                    "2.1.4",
+                    "2.2.1"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/metaProject/MetaProjectService.ts。CRUD・メンバー追加/解除・横断スレッド紐付け・既存Project削除連動クリーンアップを実装。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#3",
@@ -632,7 +717,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["2.2.2"],
+                  "_deps": [
+                    "2.2.2"
+                  ],
                   "note": "[imperative-shell-io] apps/server/src/ws.ts と RpcAuthorization.ts へ薄ハンドラ(decode→1サービス呼出→エラー変換)を配線し権限テストを追加。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#3",
@@ -651,7 +738,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["2.1.3", "2.2.2"],
+                  "_deps": [
+                    "2.1.3",
+                    "2.2.2"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/mcp/toolkits/metaProject/tools.ts (t3_meta_project_list, t3_meta_project_read)。McpToolAccess必須ラップ＋遅延ロード登録。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#3",
@@ -670,10 +760,16 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["1.2.4", "2.2.2"],
+                  "_deps": [
+                    "1.2.4",
+                    "2.2.2"
+                  ],
                   "note": "[imperative-shell-io] Peer Links 経由で別PC上の配属物理Project状態(ブランチ・存在確認)を収集するサービス層を実装。検証: 2環境モック結合テスト。",
                   "_archLayer": "imperative-shell-io",
-                  "_req": ["#3", "#7"],
+                  "_req": [
+                    "#3",
+                    "#7"
+                  ],
                   "plan": {
                     "start": "2026-12-04",
                     "end": "2026-12-04"
@@ -695,7 +791,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["2.1.2", "2.2.3"],
+                  "_deps": [
+                    "2.1.2",
+                    "2.2.3"
+                  ],
                   "note": "[client-runtime] 新設: packages/client-runtime/src/state/metaProjects.ts。list/detail Atom と createEnvironmentRpcCommand による楽観作成・編集・配属コマンド。",
                   "_archLayer": "client-runtime",
                   "_req": "#3",
@@ -714,7 +813,10 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["2.1.2", "2.3.1"],
+                  "_deps": [
+                    "2.1.2",
+                    "2.3.1"
+                  ],
                   "note": "[ui-core] 新設: apps/web/src/sidebarMetaProject.logic.ts (I/Oゼロ)。上位プロジェクトツリー展開・D&Dドロップ可否・未分類折りたたみ計算＋高速単体テスト。",
                   "_archLayer": "ui-core",
                   "_req": "#3",
@@ -733,7 +835,9 @@
                   "qty": 1,
                   "hours": 8,
                   "assignee": "AI",
-                  "_deps": ["2.3.2"],
+                  "_deps": [
+                    "2.3.2"
+                  ],
                   "note": "[ui-shell] apps/web/src/components/Sidebar.tsx を刷新し第1階層に上位プロジェクト・配下にPM/横断スレッド/環境バッジ付リポを表示。@dnd-kit 配属D&D・未分類欄実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#3",
@@ -742,8 +846,8 @@
                     "end": "2026-12-09"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -752,7 +856,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["2.3.1"],
+                  "_deps": [
+                    "2.3.1"
+                  ],
                   "note": "[ui-shell] 新設: apps/web/src/routes/_chat.workspace.$metaProjectId.tsx。上位プロジェクト概要・共通指示(instructions_md)エディタ・配下リポ一覧を実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#3",
@@ -761,8 +867,8 @@
                     "end": "2026-12-08"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -771,7 +877,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["2.3.3", "2.3.4"],
+                  "_deps": [
+                    "2.3.3",
+                    "2.3.4"
+                  ],
                   "note": "[ui-shell] 上位プロジェクト新規作成/編集ダイアログ、CommandPalette横断検索登録、および新規UIキーの vp run i18n:generate + 10言語翻訳更新。",
                   "_archLayer": "ui-shell",
                   "_req": "#3",
@@ -780,8 +889,8 @@
                     "end": "2026-12-10"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -790,7 +899,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["2.1.5", "2.3.4"],
+                  "_deps": [
+                    "2.1.5",
+                    "2.3.4"
+                  ],
                   "note": "[ui-shell] ダッシュボード内に複数リポ/複数PC横断のPR・Issue・アクティブスレッド一覧タブを実装(React Compiler 準拠・shadcn/no-restyle 遵守)。",
                   "_archLayer": "ui-shell",
                   "_req": "#3",
@@ -799,8 +911,8 @@
                     "end": "2026-12-09"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -809,7 +921,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI/人間",
-                  "_deps": ["2.3.5", "2.3.6"],
+                  "_deps": [
+                    "2.3.5",
+                    "2.3.6"
+                  ],
                   "note": "[verify] vp run check:changed / test:perf:v2-wire / reactCompilerCoverage / i18n:check 全通過。test-t3-app でフォルダレス上位プロジェクト操作を確認。",
                   "_archLayer": "verify",
                   "_req": "#3",
@@ -840,7 +955,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[contract] 新設: packages/contracts/src/pm.ts (ThreadRole='standard'|'pm'|'worker', WorkerPolicy, PmBoardSnapshot) と orchestratorMcp.ts の delegate_task 構造化拡張。",
                   "_archLayer": "contract",
                   "_req": "#1",
@@ -859,7 +976,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["3.1.1", "2.1.3"],
+                  "_deps": [
+                    "3.1.1",
+                    "2.1.3"
+                  ],
                   "note": "[functional-core] 新設: packages/provider-core/src/server/pmContextBuilder.core.ts。PM方針・上位情報・配下ワーカー状態をプロバイダ注入形式(system vs inline)へ変換＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#1",
@@ -878,7 +998,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["3.1.1"],
+                  "_deps": [
+                    "3.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/provider-core/src/server/workerBrief.core.ts。背景・制約・関連ファイル抜粋・完了条件・検証コマンドを含む高品質プロンプト生成＋単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#1",
@@ -897,7 +1019,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["3.1.1"],
+                  "_deps": [
+                    "3.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/pmGuard.core.ts。並列ワーカー上限・孫委譲深度ガード・targetRepoRole→環境/Project自動解決・KillSwitch判定＋単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#1",
@@ -922,7 +1046,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["2.2.1", "3.1.1"],
+                  "_deps": [
+                    "2.2.1",
+                    "3.1.1"
+                  ],
                   "note": "[imperative-shell-db] 新設: Migrations/107_PmOrchestration.ts (thread_pm_configs, pm_worker_metadata) と永続Store実装。完了条件: CRUDおよび索引テスト通過。",
                   "_archLayer": "imperative-shell-db",
                   "_req": "#1",
@@ -941,7 +1068,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["3.1.2", "3.2.1"],
+                  "_deps": [
+                    "3.1.2",
+                    "3.2.1"
+                  ],
                   "note": "[imperative-shell-io] ProviderTurnStartService.ts へ PM コンテキスト注入フックを接続(Codex/Claudeはsystem、ACP等は先頭インライン)。既存ターンテスト維持。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#1",
@@ -960,7 +1090,10 @@
                   "qty": 1,
                   "hours": 8,
                   "assignee": "AI",
-                  "_deps": ["3.1.3", "3.1.4"],
+                  "_deps": [
+                    "3.1.3",
+                    "3.1.4"
+                  ],
                   "note": "[imperative-shell-io] OrchestratorMcpService.ts 拡張: metaProjectId/targetRepoRole/contextFiles/contextBrief対応＋ pm_board_status, pm_dispatch_batch ツール実装。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#1",
@@ -979,7 +1112,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["3.2.2", "3.2.3"],
+                  "_deps": [
+                    "3.2.2",
+                    "3.2.3"
+                  ],
                   "note": "[verify] DispatchModeLimit・pmGuard・DelegatedTaskQuestionReactor 連動のサーバー結合テスト(並列上限超過拒否・孫委譲抑止・子質問の親転送を検証)。",
                   "_archLayer": "verify",
                   "_req": "#1",
@@ -998,7 +1134,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["3.2.1", "3.2.3"],
+                  "_deps": [
+                    "3.2.1",
+                    "3.2.3"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/pm/PmBoardService.ts。配下ワーカーの状態・worktree/ブランチ・承認/質問待ち・コストを即時集約しWS購読配信。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#1",
@@ -1023,7 +1162,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["3.2.5"],
+                  "_deps": [
+                    "3.2.5"
+                  ],
                   "note": "[client-runtime] 新設: packages/client-runtime/src/state/pmBoard.ts。PMボード購読Atomと一括停止(KillSwitch)/設定更新コマンド定義。",
                   "_archLayer": "client-runtime",
                   "_req": "#1",
@@ -1042,7 +1183,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["3.3.1"],
+                  "_deps": [
+                    "3.3.1"
+                  ],
                   "note": "[ui-core] 新設: apps/web/src/pmBoard.logic.ts (I/Oゼロ)。稼働/質問待ち/完了/失敗分類、経過時間表示、承認バッジ優先順位算出＋高速単体テスト。",
                   "_archLayer": "ui-core",
                   "_req": "#1",
@@ -1061,7 +1204,9 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["3.3.2"],
+                  "_deps": [
+                    "3.3.2"
+                  ],
                   "note": "[ui-shell] rightPanelStore.ts に 'pm' サーフェス追加。PmControlPanel.tsx でワーカーカード一覧(PC環境/リポ/ブランチ)・SideThreadPane即開き連携を実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#1",
@@ -1080,7 +1225,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["3.3.3", "2.3.5"],
+                  "_deps": [
+                    "3.3.3",
+                    "2.3.5"
+                  ],
                   "note": "[ui-shell] スレッド新規作成時のPMモードトグル・上位プロジェクト画面1クリックPM起動・KillSwitch全停止ボタンを配置。i18n 10言語更新。",
                   "_archLayer": "ui-shell",
                   "_req": "#1",
@@ -1099,7 +1247,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI/人間",
-                  "_deps": ["3.2.4", "3.3.4"],
+                  "_deps": [
+                    "3.2.4",
+                    "3.3.4"
+                  ],
                   "note": "[verify] Replay(dev)および実プロバイダでPMから複数ワーカー(worktree隔離・別PC含む)を並列起動し自動起床・結果統合を検証。check:changed 通過。",
                   "_archLayer": "verify",
                   "_req": "#1",
@@ -1118,7 +1269,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["3.3.3"],
+                  "_deps": [
+                    "3.3.3"
+                  ],
                   "note": "[ui-shell] PmControlPanel.tsx 内に配下全ワーカーの承認要求・構造化質問を直接承認/回答できる集約インボックスを実装(React Compiler 準拠)。",
                   "_archLayer": "ui-shell",
                   "_req": "#1",
@@ -1149,7 +1302,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[contract] 新設: packages/contracts/src/artifact.ts (Artifact, ArtifactVersion, StatePatch, UserAction) と rpc.ts / clientRpcPermissions.ts 定義。",
                   "_archLayer": "contract",
                   "_req": "#2",
@@ -1168,7 +1323,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["4.1.1"],
+                  "_deps": [
+                    "4.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/artifactBridge.ts (I/Oゼロ)。window.t3Artifact のJSON-RPC検証・userActivation判定・CSP生成＋単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#2",
@@ -1187,7 +1344,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["4.1.1"],
+                  "_deps": [
+                    "4.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/artifactState.core.ts (I/Oゼロ)。JSONパッチ適用・16KiBサイズ上限・次回ターン向け <t3_artifact_state> 整形＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#2",
@@ -1206,7 +1365,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["4.1.1"],
+                  "_deps": [
+                    "4.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/markdownArtifact.core.ts (I/Oゼロ)。チェックボックス位置トグル・段落範囲コメント抽出・版間ユニファイドDiff生成＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#2",
@@ -1231,7 +1392,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["0.1.3", "4.1.1"],
+                  "_deps": [
+                    "0.1.3",
+                    "4.1.1"
+                  ],
                   "note": "[imperative-shell-db] 新設: Migrations/108_Artifacts.ts (artifacts, artifact_versions) と永続Store実装。slug単位の版管理・楽観同時更新制御＋テスト。",
                   "_archLayer": "imperative-shell-db",
                   "_req": "#2",
@@ -1250,7 +1414,10 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["4.1.3", "4.2.1"],
+                  "_deps": [
+                    "4.1.3",
+                    "4.2.1"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/artifact/ArtifactService.ts。既存 HtmlRender.ts パイプライン再利用・PubSub配信・ProviderTurnStartへの自動状態注入を実装。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#2",
@@ -1269,7 +1436,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["4.2.2", "0.1.4"],
+                  "_deps": [
+                    "4.2.2",
+                    "0.1.4"
+                  ],
                   "note": "[imperative-shell-io] artifacts.* WS RPC と toolkits/artifact/ (artifact_create, artifact_update, artifact_read, artifact_list) を実装し全プロバイダで利用可能化。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#2",
@@ -1288,7 +1458,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["4.1.2", "4.2.3"],
+                  "_deps": [
+                    "4.1.2",
+                    "4.2.3"
+                  ],
                   "note": "[verify] userActivation=false の自動スクリプト送信拒否・CSP外部通信遮断・状態上限超過保護を検証する結合テスト実装。",
                   "_archLayer": "verify",
                   "_req": "#2",
@@ -1307,7 +1480,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["4.2.2"],
+                  "_deps": [
+                    "4.2.2"
+                  ],
                   "note": "[imperative-shell-io] HTML単体ファイルダウンロード・Markdownエクスポート・上位プロジェクトへのピン留め保存パスを提供。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#2",
@@ -1332,7 +1507,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["4.2.3"],
+                  "_deps": [
+                    "4.2.3"
+                  ],
                   "note": "[client-runtime] 新設: packages/client-runtime/src/state/artifacts.ts。スレッド/上位プロジェクト別Artifact購読・状態パッチ送信・Action実行コマンド。",
                   "_archLayer": "client-runtime",
                   "_req": "#2",
@@ -1351,7 +1528,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["4.1.2", "4.3.1"],
+                  "_deps": [
+                    "4.1.2",
+                    "4.3.1"
+                  ],
                   "note": "[ui-shell] packages/shared/src/htmlRender.ts の BOOTSTRAP_SCRIPT と HtmlRenderDocument へ window.t3Artifact (getState/setState/sendAction/onUpdate) を接続。",
                   "_archLayer": "ui-shell",
                   "_req": "#2",
@@ -1370,7 +1550,9 @@
                   "qty": 1,
                   "hours": 8,
                   "assignee": "AI",
-                  "_deps": ["4.3.2"],
+                  "_deps": [
+                    "4.3.2"
+                  ],
                   "note": "[ui-shell] rightPanelStore.ts へ 'artifact' サーフェス追加。ArtifactPanel.tsx で Preview / Source / Shared State / フルスクリーン切替を実装(Tiptap/MD切替含む)。",
                   "_archLayer": "ui-shell",
                   "_req": "#2",
@@ -1379,8 +1561,8 @@
                     "end": "2026-12-24"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -1389,7 +1571,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["4.1.4", "4.3.3"],
+                  "_deps": [
+                    "4.1.4",
+                    "4.3.3"
+                  ],
                   "note": "[ui-shell] チャット行に ArtifactCard.tsx を追加し、Markdownチェックボックストグル・段落選択修正依頼の双方向送信を実装。i18n 10言語対応。",
                   "_archLayer": "ui-shell",
                   "_req": "#2",
@@ -1398,8 +1583,8 @@
                     "end": "2026-12-25"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -1408,7 +1593,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI/人間",
-                  "_deps": ["4.2.4", "4.3.4"],
+                  "_deps": [
+                    "4.2.4",
+                    "4.3.4"
+                  ],
                   "note": "[verify] HTML画面操作→AIターン起動→Artifact版更新、およびMD編集→AI反映の往復を実ブラウザで確認。check:changed / reactCompilerCoverage 通過。",
                   "_archLayer": "verify",
                   "_req": "#2",
@@ -1427,7 +1615,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["4.1.4", "4.3.3"],
+                  "_deps": [
+                    "4.1.4",
+                    "4.3.3"
+                  ],
                   "note": "[ui-shell] ArtifactPanel 内にバージョンセレクタと StyledDiffCodeView による vN vs vN-1 差分比較タブを実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#2",
@@ -1436,8 +1627,8 @@
                     "end": "2026-12-25"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 }
               ]
@@ -1458,7 +1649,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[contract] 新設: packages/contracts/src/repoMonitor.ts (eventKind 6種, filter, actionKind, cursor, dryRun) と rpc.ts / clientRpcPermissions.ts 定義。",
                   "_archLayer": "contract",
                   "_req": "#4",
@@ -1477,7 +1670,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["5.1.1"],
+                  "_deps": [
+                    "5.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/repoMonitorEval.core.ts (I/Oゼロ)。カーソル比較で新規push/PR/コメント/Issueを抽出しglob/ラベル/bot除外評価＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#4",
@@ -1496,7 +1691,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["5.1.1"],
+                  "_deps": [
+                    "5.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/repoMonitorGuard.core.ts (I/Oゼロ)。dedupeKey・自アカウント/エージェント発信除外・cooldown・1時間上限・KillSwitch判定＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#4",
@@ -1515,7 +1712,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["5.1.1"],
+                  "_deps": [
+                    "5.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/repoMonitorPrompt.core.ts。既存 webhookTemplate のランダムフレーム隔離＆Word Joinerサニタイズを再利用したプロンプト展開＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#4",
@@ -1534,7 +1733,9 @@
                   "qty": 1,
                   "hours": 3,
                   "assignee": "AI",
-                  "_deps": ["5.1.4"],
+                  "_deps": [
+                    "5.1.4"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/repoMonitorPresets.core.ts。「PRコメント自動修正」「新規IssueをPM通知」「mainマージ後処理」の初期テンプレート＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#4",
@@ -1559,7 +1760,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["0.1.3", "5.1.1"],
+                  "_deps": [
+                    "0.1.3",
+                    "5.1.1"
+                  ],
                   "note": "[imperative-shell-db] 新設: Migrations/109_RepoMonitors.ts (repo_monitor_rules, repo_monitor_cursors, repo_monitor_events) と永続Store実装＋テスト。",
                   "_archLayer": "imperative-shell-db",
                   "_req": "#4",
@@ -1578,7 +1782,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["5.1.2", "5.2.1"],
+                  "_deps": [
+                    "5.1.2",
+                    "5.2.1"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/monitor/BranchHeadProbe.ts。GitVcsDriver 経由の軽量 git ls-remote により作業ツリー非破壊で全ブランチSHA変化を取得＋テスト。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#4",
@@ -1597,7 +1804,10 @@
                   "qty": 1,
                   "hours": 8,
                   "assignee": "AI",
-                  "_deps": ["5.1.3", "5.2.2"],
+                  "_deps": [
+                    "5.1.3",
+                    "5.2.2"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/monitor/RepoMonitorService.ts。PullRequestService/IssueService＋SourceControlRateLimit で評価しDryRun・PM通知・スレッド起動を実行。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#4",
@@ -1616,7 +1826,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["5.2.3"],
+                  "_deps": [
+                    "5.2.3"
+                  ],
                   "note": "[imperative-shell-io] Scheduler.ts へ 'repo-monitors' (DueHint併用) を登録し、ScheduledTaskService Webhook からの即時評価パス・WS RPCも配線。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#4",
@@ -1635,7 +1847,10 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["5.2.4", "0.1.4"],
+                  "_deps": [
+                    "5.2.4",
+                    "0.1.4"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/mcp/toolkits/repoMonitor/tools.ts (t3_monitor_list, t3_monitor_toggle, t3_monitor_dry_run) を遅延枠へ登録＋権限テスト。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#4",
@@ -1660,7 +1875,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["5.2.4"],
+                  "_deps": [
+                    "5.2.4"
+                  ],
                   "note": "[client-runtime] 新設: packages/client-runtime/src/state/repoMonitors.ts。監視ルール一覧・発火ログ購読・作成/切替/DryRun実行コマンド。",
                   "_archLayer": "client-runtime",
                   "_req": "#4",
@@ -1679,7 +1896,10 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["5.1.5", "5.3.1"],
+                  "_deps": [
+                    "5.1.5",
+                    "5.3.1"
+                  ],
                   "note": "[ui-shell] 上位プロジェクト画面＆設定画面に自動化ルール管理タブ(プリセット作成・glob/ラベルフィルタ・全体KillSwitch・i18n 10言語)を実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#4",
@@ -1688,8 +1908,8 @@
                     "end": "2026-12-31"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -1698,7 +1918,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI/人間",
-                  "_deps": ["5.2.4", "5.3.2"],
+                  "_deps": [
+                    "5.2.4",
+                    "5.3.2"
+                  ],
                   "note": "[verify] テスト用Git/Mock Forgeでブランチpush・PRコメント・PRマージ・新規Issueの検知と自発アクション非再帰を検証。check:changed 通過。",
                   "_archLayer": "verify",
                   "_req": "#4",
@@ -1717,7 +1940,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["5.3.2"],
+                  "_deps": [
+                    "5.3.2"
+                  ],
                   "note": "[ui-shell] DryRun 結果(対象イベント候補・展開プロンプトプレビュー)と過去発火ログ→起動スレッドジャンプUIを実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#4",
@@ -1726,8 +1951,8 @@
                     "end": "2027-01-04"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 }
               ]
@@ -1748,7 +1973,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[contract] packages/contracts/src/agentSessions.ts を拡張: 6ソース化(cursor/opencode/antigravity追加)・期間指定/ページング/個別選択/ルール取込/スキップ診断返却。",
                   "_archLayer": "contract",
                   "_req": "#6",
@@ -1767,7 +1994,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["6.1.1"],
+                  "_deps": [
+                    "6.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/importNormalizer.core.ts。Windows大小文字・UNC/WSLパス(\\wsl$⇔/home)正規化・壊れレコード耐性集計＋単体テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#6",
@@ -1786,7 +2015,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["6.1.2"],
+                  "_deps": [
+                    "6.1.2"
+                  ],
                   "note": "[functional-core] AgentSessionScanner から Claude/Codex/Pi のJSONL解析部を純粋関数化。30日/100件上限オプション化＋破損行スキップ理由記録＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#6",
@@ -1805,7 +2036,9 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["6.1.2"],
+                  "_deps": [
+                    "6.1.2"
+                  ],
                   "note": "[functional-core] 新設: apps/server/src/project/importers/cursorImport.core.ts (I/Oゼロ)。workspace.json + state.vscdb 抽出JSONからのComposer/Chat会話復元＋フィクスチャテスト。",
                   "_archLayer": "functional-core",
                   "_req": "#6",
@@ -1824,7 +2057,9 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["6.1.2"],
+                  "_deps": [
+                    "6.1.2"
+                  ],
                   "note": "[functional-core] 新設: opencodeImport.core.ts と antigravityImport.core.ts (I/Oゼロ)。各ローカルセッション履歴構造から統一会話列へデコード＋フィクスチャテスト。",
                   "_archLayer": "functional-core",
                   "_req": "#6",
@@ -1843,7 +2078,10 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["6.1.1", "2.1.3"],
+                  "_deps": [
+                    "6.1.1",
+                    "2.1.3"
+                  ],
                   "note": "[functional-core] 新設: projectRulesImport.core.ts (I/Oゼロ)。CLAUDE.md, AGENTS.md, .cursorrules, .cursor/rules/*.mdc, .gemini/ を検出し MetaProject 用指示へ統合整形＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#6",
@@ -1868,7 +2106,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["6.1.3"],
+                  "_deps": [
+                    "6.1.3"
+                  ],
                   "note": "[imperative-shell-io] モノリシックな AgentSessionScanner.ts (2,331行) から Claude/Codex/Pi のファイル走査I/Oシェルを importers/ 配下へ分割移行。既存テスト維持。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#6",
@@ -1887,7 +2127,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["6.1.6", "2.2.2"],
+                  "_deps": [
+                    "6.1.6",
+                    "2.2.2"
+                  ],
                   "note": "[imperative-shell-io] AgentSessionImporter.ts を刷新: 個別スレッド選択・差分再取込・ルール→MetaProject反映・非resume系への ContextHandoff 連携を実装。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#6",
@@ -1906,7 +2149,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["6.2.2", "6.2.4"],
+                  "_deps": [
+                    "6.2.2",
+                    "6.2.4"
+                  ],
                   "note": "[verify] 6系統すべてのフィクスチャを使い スキャン→選択インポート→MetaProjectルール取込→新ターン送信(resumeまたはHandoff) を結合テストで検証。",
                   "_archLayer": "verify",
                   "_req": "#6",
@@ -1925,7 +2171,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["6.1.4", "6.1.5"],
+                  "_deps": [
+                    "6.1.4",
+                    "6.1.5"
+                  ],
                   "note": "[imperative-shell-io] importers/{cursor,opencode,antigravity}.ts に OS標準パス探索・node:sqlite readOnly 読取・ロック回避タイムアウトを実装しスキャナ登録。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#6",
@@ -1950,7 +2199,10 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["6.2.1", "6.2.2"],
+                  "_deps": [
+                    "6.2.1",
+                    "6.2.2"
+                  ],
                   "note": "[client-runtime] 新設: packages/client-runtime/src/state/agentSessionImport.ts。ソース別フィルタ・全期間スキャン・選択状態・再取込コマンドを定義。",
                   "_archLayer": "client-runtime",
                   "_req": "#6",
@@ -1969,7 +2221,10 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["6.3.1", "2.3.5"],
+                  "_deps": [
+                    "6.3.1",
+                    "2.3.5"
+                  ],
                   "note": "[ui-shell] 設定＆上位プロジェクト画面から常時起動できるAIインポートウィザードを実装(ソースタブ・期間切替・スレッド/ルール個別チェック・i18n 10言語)。",
                   "_archLayer": "ui-shell",
                   "_req": "#6",
@@ -1978,8 +2233,8 @@
                     "end": "2027-01-12"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -1988,7 +2243,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI/人間",
-                  "_deps": ["6.2.3", "6.3.2"],
+                  "_deps": [
+                    "6.2.3",
+                    "6.3.2"
+                  ],
                   "note": "[verify] 手元環境のClaude Code/Codex/Cursor等実データで重複無し再インポート・会話継続を確認。vp run check:changed 通過。",
                   "_archLayer": "verify",
                   "_req": "#6",
@@ -2007,7 +2265,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["6.3.2"],
+                  "_deps": [
+                    "6.3.2"
+                  ],
                   "note": "[ui-shell] ウィザード内に「壊れ行・非対応形式・権限エラーでスキップされたセッション件数と原因詳細」の診断ドロワーを実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#6",
@@ -2016,8 +2276,8 @@
                     "end": "2027-01-13"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 }
               ]
@@ -2038,7 +2298,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["2.1.1"],
+                  "_deps": [
+                    "2.1.1"
+                  ],
                   "note": "[contract] 新設: packages/contracts/src/worklog.ts (WorklogEntry, MergedWorkBlock, IcalFeedConfig, 統計型) と rpc.ts / clientRpcPermissions.ts 定義。",
                   "_archLayer": "contract",
                   "_req": "#9",
@@ -2057,7 +2319,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["7.1.1"],
+                  "_deps": [
+                    "7.1.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/worklogGrouping.ts (I/Oゼロ)。ギャップ結合(5/15分)・00:00日跨ぎ分割・並列合算時間(33.1h)算出＋境界テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#9",
@@ -2076,7 +2340,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["7.1.2"],
+                  "_deps": [
+                    "7.1.2"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/worklogLayout.core.ts (I/Oゼロ)。添付画像準拠の同時並列バー横並びレイアウト(greedyレーン割当・過密圧縮)＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#9",
@@ -2095,7 +2361,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["7.1.2"],
+                  "_deps": [
+                    "7.1.2"
+                  ],
                   "note": "[functional-core] 新設: apps/server/src/worklog/icalGenerator.core.ts (I/Oゼロ)。75オクテット折返し・UTC/TZID・エスケープ・まとめログDESCRIPTION生成＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#9",
@@ -2114,7 +2382,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["7.1.2"],
+                  "_deps": [
+                    "7.1.2"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/worklogStats.core.ts (I/Oゼロ)。総稼働時間・エージェント別割合・上位プロジェクト別コスト・最大同時並列数算出＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#9",
@@ -2139,7 +2409,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["0.1.3", "7.1.1"],
+                  "_deps": [
+                    "0.1.3",
+                    "7.1.1"
+                  ],
                   "note": "[imperative-shell-db] 新設: Migrations/110_AgentWorklogs.ts (agent_worklog_entries, ical_feed_tokens) と範囲検索複合インデックス・永続Store実装＋テスト。",
                   "_archLayer": "imperative-shell-db",
                   "_req": "#9",
@@ -2158,7 +2431,10 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["7.1.2", "7.2.1"],
+                  "_deps": [
+                    "7.1.2",
+                    "7.2.1"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/worklog/WorklogService.ts。既存 projection_runs バックフィル・イベント購読ライブ記録・実行中Run合成を実装＋テスト。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#9",
@@ -2177,10 +2453,16 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["7.1.4", "7.2.2"],
+                  "_deps": [
+                    "7.1.4",
+                    "7.2.2"
+                  ],
                   "note": "[imperative-shell-io] GET /api/worklog/ical/:feedId/:token.ics 実装。GuestShare方式HMAC読取専用認証・Hub経由複数PC稼働集約・ダウンロードエンドポイント提供。",
                   "_archLayer": "imperative-shell-io",
-                  "_req": ["#9", "#7"],
+                  "_req": [
+                    "#9",
+                    "#7"
+                  ],
                   "plan": {
                     "start": "2027-01-14",
                     "end": "2027-01-14"
@@ -2196,7 +2478,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["7.2.3"],
+                  "_deps": [
+                    "7.2.3"
+                  ],
                   "note": "[imperative-shell-io] worklog.* RPC(範囲取得・まとめログ詳細・フィード作成/失効)を ws.ts 配線し、iCal RFC検証と権限境界の結合テストを追加。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#9",
@@ -2215,10 +2499,16 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["7.2.2", "6.2.1"],
+                  "_deps": [
+                    "7.2.2",
+                    "6.2.1"
+                  ],
                   "note": "[imperative-shell-io] UsageService / M5 取込トランスクリプトの稼働区間を WorklogService へ重複除外マージするオプショナル統合アダプタを実装＋テスト。",
                   "_archLayer": "imperative-shell-io",
-                  "_req": ["#9", "#6"],
+                  "_req": [
+                    "#9",
+                    "#6"
+                  ],
                   "plan": {
                     "start": "2027-01-14",
                     "end": "2027-01-14"
@@ -2240,7 +2530,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["7.1.5", "7.2.4"],
+                  "_deps": [
+                    "7.1.5",
+                    "7.2.4"
+                  ],
                   "note": "[client-runtime] 新設: packages/client-runtime/src/state/worklog.ts。接続中全環境(Hub+各PC)の稼働ログを並列取得マージし絞り込み/ギャップ設定を保持。",
                   "_archLayer": "client-runtime",
                   "_req": "#9",
@@ -2259,7 +2552,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["7.3.1"],
+                  "_deps": [
+                    "7.3.1"
+                  ],
                   "note": "[ui-shell] 新設: apps/web/src/routes/_chat.worklog.tsx とサイドバー導線。◀▶/最新/期間/週・日トグル/絞り込み/集計/iCal出力＆購読URLコピーボタンを実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#9",
@@ -2268,8 +2563,8 @@
                     "end": "2027-01-19"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -2278,7 +2573,10 @@
                   "qty": 1,
                   "hours": 8,
                   "assignee": "AI",
-                  "_deps": ["7.1.3", "7.3.2"],
+                  "_deps": [
+                    "7.1.3",
+                    "7.3.2"
+                  ],
                   "note": "[ui-shell] 新設: WorklogCalendarGrid.tsx (React Compiler準拠)。日別合算時間ヘッダ・並列横配置・cx/cl短縮コード+時刻+タイトル・現在時刻赤ラインを描画。",
                   "_archLayer": "ui-shell",
                   "_req": "#9",
@@ -2287,8 +2585,8 @@
                     "end": "2027-01-20"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -2297,7 +2595,9 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["7.3.3"],
+                  "_deps": [
+                    "7.3.3"
+                  ],
                   "note": "[ui-shell] ブロッククリック時のまとめログ詳細ドロワー(ターン/Diff/PR/コスト/スレッドジャンプ)と集計モーダル(日別/エージェント別/最大並列)実装。i18n対応。",
                   "_archLayer": "ui-shell",
                   "_req": "#9",
@@ -2306,8 +2606,8 @@
                     "end": "2027-01-21"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -2316,7 +2616,10 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI/人間",
-                  "_deps": ["7.3.4", "7.2.5"],
+                  "_deps": [
+                    "7.3.4",
+                    "7.2.5"
+                  ],
                   "note": "[verify] 高密度並列テストデータ(1日33h相当)での60fps描画と、出力.ics の Apple Calendar / Google Calendar 実読込・文字化け無しを検証。check:changed 通過。",
                   "_archLayer": "verify",
                   "_req": "#9",
@@ -2347,7 +2650,10 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["2.3.3", "3.3.3"],
+                  "_deps": [
+                    "2.3.3",
+                    "3.3.3"
+                  ],
                   "note": "[ui-core] 新設: apps/web/src/mobileWebNav.logic.ts (I/Oゼロ)。768px未満のボトムナビ切替・シートスタック・カレンダー日付スワイプ遷移計算＋単体テスト。",
                   "_archLayer": "ui-core",
                   "_req": "#5",
@@ -2366,7 +2672,10 @@
                   "qty": 1,
                   "hours": 8,
                   "assignee": "AI",
-                  "_deps": ["8.1.1", "4.3.3"],
+                  "_deps": [
+                    "8.1.1",
+                    "4.3.3"
+                  ],
                   "note": "[ui-shell] _chat.tsx, Sidebar.tsx, RightPanelSurfaceContent.tsx をモバイル最適化。ボトムナビ・全画面スライドシート・dvh/safe-area-inset/44pxタッチ対応。",
                   "_archLayer": "ui-shell",
                   "_req": "#5",
@@ -2375,8 +2684,8 @@
                     "end": "2027-01-19"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -2385,7 +2694,10 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["8.1.2", "7.3.4"],
+                  "_deps": [
+                    "8.1.2",
+                    "7.3.4"
+                  ],
                   "note": "[ui-shell] PmControlPanel / ArtifactPanel / RepoMonitor / Worklog(_chat.worklog.tsx 既定日ビュー＆横スワイプ) をモバイル幅で崩れゼロへ調整。i18n更新。",
                   "_archLayer": "ui-shell",
                   "_req": "#5",
@@ -2394,8 +2706,8 @@
                     "end": "2027-01-22"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 },
                 {
@@ -2404,7 +2716,9 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["8.1.2"],
+                  "_deps": [
+                    "8.1.2"
+                  ],
                   "note": "[ui-shell] ChatComposer.tsx にモバイル幅向けの簡潔アクションバー(音声入力・承認・スラッシュ呼出)とソフトキーボード時レイアウト(interactive-widget)を実装。",
                   "_archLayer": "ui-shell",
                   "_req": "#5",
@@ -2413,8 +2727,8 @@
                     "end": "2027-01-20"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 }
               ]
@@ -2429,10 +2743,16 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["0.1.3", "5.2.3"],
+                  "_deps": [
+                    "0.1.3",
+                    "5.2.3"
+                  ],
                   "note": "[imperative-shell-db] 新設: Migrations/111_WebPushSubscriptions.ts と ServerSecretStore への VAPID キーペア自動生成・保持処理を実装＋テスト。",
                   "_archLayer": "imperative-shell-db",
-                  "_req": ["#5", "#8"],
+                  "_req": [
+                    "#5",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2027-01-18",
                     "end": "2027-01-18"
@@ -2448,7 +2768,9 @@
                   "qty": 1,
                   "hours": 4,
                   "assignee": "AI",
-                  "_deps": ["8.2.1"],
+                  "_deps": [
+                    "8.2.1"
+                  ],
                   "note": "[functional-core] 新設: packages/shared/src/pushNotificationPolicy.core.ts (I/Oゼロ)。承認待ち/PM完了/監視発火ごとの通知判定・重複抑止・クワイエットアワー＋テスト。",
                   "_archLayer": "functional-core",
                   "_req": "#5",
@@ -2467,10 +2789,16 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["8.2.2", "3.2.5"],
+                  "_deps": [
+                    "8.2.2",
+                    "3.2.5"
+                  ],
                   "note": "[imperative-shell-io] 新設: apps/server/src/push/WebPushService.ts。Orchestration/Monitorイベント購読でPWAへ直接Web Push送信し購読RPCを配線＋テスト。",
                   "_archLayer": "imperative-shell-io",
-                  "_req": ["#5", "#8"],
+                  "_req": [
+                    "#5",
+                    "#8"
+                  ],
                   "plan": {
                     "start": "2027-01-20",
                     "end": "2027-01-20"
@@ -2486,7 +2814,10 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["8.2.3", "8.1.3"],
+                  "_deps": [
+                    "8.2.3",
+                    "8.1.3"
+                  ],
                   "note": "[ui-shell] apps/web/public/sw.js と manifest.webmanifest (standalone/shortcuts) 整備、設定画面のPush購読トグル＆テスト送信ボタン追加。i18n更新。",
                   "_archLayer": "ui-shell",
                   "_req": "#5",
@@ -2495,8 +2826,8 @@
                     "end": "2027-01-25"
                   },
                   "actual": {
-                    "start": null,
-                    "end": null
+                    "start": "2026-11-23",
+                    "end": "2026-11-23"
                   }
                 }
               ]
@@ -2511,10 +2842,16 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["2.3.1", "8.1.1"],
+                  "_deps": [
+                    "2.3.1",
+                    "8.1.1"
+                  ],
                   "note": "[ui-shell] apps/mobile/src/features/home へ MetaProject 階層表示・折りたたみ・リポ切替を追加(5層レイアウト＆selectWorkspaceDetail規約遵守・ネイティブ無変更)。",
                   "_archLayer": "ui-shell",
-                  "_req": ["#5", "#3"],
+                  "_req": [
+                    "#5",
+                    "#3"
+                  ],
                   "plan": {
                     "start": "2027-01-19",
                     "end": "2027-01-19"
@@ -2530,10 +2867,16 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["3.3.1", "8.3.1"],
+                  "_deps": [
+                    "3.3.1",
+                    "8.3.1"
+                  ],
                   "note": "[ui-shell] apps/mobile/src/features/threads 等へ PM ボードシートと配下ワーカー承認待ち一括処理画面を追加(React Compiler 準拠・i18n更新)。",
                   "_archLayer": "ui-shell",
-                  "_req": ["#5", "#1"],
+                  "_req": [
+                    "#5",
+                    "#1"
+                  ],
                   "plan": {
                     "start": "2027-01-20",
                     "end": "2027-01-20"
@@ -2549,10 +2892,16 @@
                   "qty": 1,
                   "hours": 7,
                   "assignee": "AI",
-                  "_deps": ["4.3.1", "8.3.1"],
+                  "_deps": [
+                    "4.3.1",
+                    "8.3.1"
+                  ],
                   "note": "[ui-shell] McpAppWebView.tsx の二重iframe＋シークレット＋userActivation検証機構を再利用し、Mobile版双方向 Artifact WebView (HTML/MD) を実装。",
                   "_archLayer": "ui-shell",
-                  "_req": ["#5", "#2"],
+                  "_req": [
+                    "#5",
+                    "#2"
+                  ],
                   "plan": {
                     "start": "2027-01-20",
                     "end": "2027-01-20"
@@ -2568,10 +2917,16 @@
                   "qty": 1,
                   "hours": 5,
                   "assignee": "AI",
-                  "_deps": ["5.3.1", "8.3.1"],
+                  "_deps": [
+                    "5.3.1",
+                    "8.3.1"
+                  ],
                   "note": "[ui-shell] apps/mobile の設定/ワークスペース配下へ RepoMonitor ルールON/OFF切替・DryRun実行・直近発火ログ閲覧画面を追加。",
                   "_archLayer": "ui-shell",
-                  "_req": ["#5", "#4"],
+                  "_req": [
+                    "#5",
+                    "#4"
+                  ],
                   "plan": {
                     "start": "2027-01-20",
                     "end": "2027-01-20"
@@ -2587,10 +2942,16 @@
                   "qty": 1,
                   "hours": 6,
                   "assignee": "AI",
-                  "_deps": ["7.3.1", "8.3.1"],
+                  "_deps": [
+                    "7.3.1",
+                    "8.3.1"
+                  ],
                   "note": "[ui-shell] apps/mobile へエージェント稼働日別タイムライン・日別合算・ブロックタップまとめログ詳細シートを追加(JS層のみ・5層レイアウト準拠)。",
                   "_archLayer": "ui-shell",
-                  "_req": ["#5", "#9"],
+                  "_req": [
+                    "#5",
+                    "#9"
+                  ],
                   "plan": {
                     "start": "2027-01-20",
                     "end": "2027-01-20"
@@ -2606,7 +2967,10 @@
                   "qty": 1,
                   "hours": 8,
                   "assignee": "AI/人間",
-                  "_deps": ["8.2.4", "8.3.6"],
+                  "_deps": [
+                    "8.2.4",
+                    "8.3.6"
+                  ],
                   "note": "[verify] 全8マイルストーン横断フロー実機確認(スマホPWA/Push・iOS/Android Mobile 循環依存＆ReactCompilerテスト・check:changed・test:perf:v2-wire 全通過)。",
                   "_archLayer": "verify",
                   "_req": "common",

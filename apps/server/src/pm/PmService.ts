@@ -278,6 +278,7 @@ export const make = Effect.fn("PmService.make")(function* (serviceOptions?: PmSe
     }
     return {
       pmThreadId,
+      role: config.role,
       metaProjectId: config.metaProjectId,
       policy: config.policy,
       killSwitchActive: globalKillSwitch || config.killSwitchActive,

@@ -14,6 +14,7 @@ import {
   createLucideIcon,
   CalendarClockIcon,
   FileDiffIcon,
+  FileInputIcon,
   FolderTreeIcon,
   GitBranchIcon,
   GlobeIcon,
@@ -25,6 +26,7 @@ import {
   KeyRoundIcon,
   MicIcon,
   PaletteIcon,
+  RadarIcon,
   SearchIcon,
   ServerIcon,
   Settings2Icon,
@@ -35,7 +37,7 @@ import {
 } from "lucide-react";
 import { resolveEventKeys } from "@t3tools/shared/keybindings";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -77,6 +79,12 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
   ["rect", { width: "10", height: "8", x: "7", y: "8", rx: "2", key: "window" }],
   ["circle", { cx: "12", cy: "12", r: "1.5", key: "lens" }],
 ]);
+
+// Phase 1 pages outside settingsSearch's SettingsPath; rendered at the end of the last group.
+const PHASE1_SETTINGS_NAV_ITEMS = [
+  { to: "/settings/repo-monitors", label: msg("Repo Monitors"), Icon: RadarIcon },
+  { to: "/settings/import", label: msg("AI Import"), Icon: FileInputIcon },
+] as const;
 
 const T3ConnectSidebarSignIn = lazy(() =>
   import("../clerk/T3ConnectSidebarSignIn").then((module) => ({
@@ -424,6 +432,38 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                               </SidebarMenuItem>
                             );
                           })}
+                          {index === navGroups.length - 1
+                            ? PHASE1_SETTINGS_NAV_ITEMS.map(({ to, label, Icon }) => {
+                                const isActive = activePath === to;
+                                return (
+                                  <SidebarMenuItem key={to}>
+                                    <SidebarMenuButton
+                                      data-settings-section={to}
+                                      aria-current={isActive ? "page" : undefined}
+                                      isActive={isActive}
+                                      onClick={() =>
+                                        void navigate({
+                                          to,
+                                          hash: "",
+                                          replace: true,
+                                          hashScrollIntoView: false,
+                                        })
+                                      }
+                                    >
+                                      <Icon />
+                                      <span
+                                        className={cn(
+                                          "truncate",
+                                          !compactSearchOpen && "max-md:sr-only",
+                                        )}
+                                      >
+                                        {m(label)}
+                                      </span>
+                                    </SidebarMenuButton>
+                                  </SidebarMenuItem>
+                                );
+                              })
+                            : null}
                         </SidebarMenu>
                       </div>
                     </div>

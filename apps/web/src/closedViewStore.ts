@@ -64,7 +64,12 @@ const isClosedViewEntry = (entry: unknown): entry is ClosedViewEntry => {
     case "diff":
     case "files":
     case "pull-requests":
+    case "pm":
       return surface.id === surface.kind;
+    case "artifact":
+      return surface.artifactId === undefined
+        ? surface.id === "artifact"
+        : typeof surface.artifactId === "string" && surface.id === `artifact:${surface.artifactId}`;
     case "preview":
       return surface.resourceId === null || typeof surface.resourceId === "string";
     case "file":

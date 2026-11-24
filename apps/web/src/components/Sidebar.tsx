@@ -2,7 +2,12 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m } from "../i18n/messages";
 import { attachSidebarTree } from "../lib/sidebarTree";
-import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  MetaProjectId,
+  MetaProjectRole,
+  type ScopedProjectRef,
+} from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import {
   dropThreadContext,
@@ -17,6 +22,7 @@ import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import {
   DndContext,
+  PointerSensor,
   useSensor,
   useSensors,
   type AutoScrollOptions,
@@ -69,6 +75,7 @@ import {
 } from "@t3tools/client-runtime/state/threads";
 
 import {
+  CalendarClockIcon,
   CheckIcon,
   ChevronDownIcon,
   FolderIcon,
@@ -87,7 +94,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
-import { type AnyRouter, useRouter } from "@tanstack/react-router";
+import { type AnyRouter, Link, useLocation, useParams, useRouter } from "@tanstack/react-router";
 
 import {
   isAtomCommandInterrupted,
@@ -173,6 +180,13 @@ import {
 import type { SidebarThreadSummary } from "../types";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { cn } from "~/lib/utils";
+import { metaProjectEnvironment, useMetaProject, useMetaProjectTree } from "../state/metaProjects";
+import { useAtomCommand } from "../state/use-atom-command";
+import { MetaProjectDialog } from "./metaProject/MetaProjectDialog";
+import {
+  MetaProjectSidebarSection,
+  resolveMetaProjectDragEndAssignment,
+} from "./metaProject/MetaProjectSidebarSection";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ProjectRowActions } from "./ProjectComboboxRow";
 import {
@@ -896,6 +910,114 @@ const SIDEBAR_AUTO_SCROLL: AutoScrollOptions = { threshold: { x: 0, y: 0.05 }, a
 const SIDEBAR_DRAG_LABEL_HEIGHT = 24;
 
 const threadSearchResultId = (index: number) => `sidebar-thread-search-result-${index}`;
+
+const decodeMetaProjectRole = Schema.decodeOption(MetaProjectRole);
+
+function SidebarHubSection(props: {
+  readonly environmentId: EnvironmentId | null;
+  readonly searchQuery: string;
+  readonly onNavigate: () => void;
+  readonly onSelectThread: (threadRef: ScopedThreadRef) => void;
+}) {
+  const router = useRouter();
+  const { metaProjectId: activeMetaProjectId } = useParams({ strict: false });
+  const pathname = useLocation({ select: (location) => location.pathname });
+  // null = closed; metaProjectId null = create, otherwise edit once the record loads.
+  const [dialogTarget, setDialogTarget] = useState<{
+    readonly metaProjectId: MetaProjectId | null;
+  } | null>(null);
+  const editingQuery = useMetaProject(props.environmentId, dialogTarget?.metaProjectId ?? null, {
+    includeArchived: true,
+  });
+  const editingMetaProject = dialogTarget?.metaProjectId ? editingQuery.data : null;
+  const dialogOpen =
+    dialogTarget !== null && (dialogTarget.metaProjectId === null || editingMetaProject !== null);
+  const worklogActive = pathname === "/worklog";
+  const treeQuery = useMetaProjectTree(props.environmentId);
+  const addMember = useAtomCommand(metaProjectEnvironment.addMember);
+  const removeMember = useAtomCommand(metaProjectEnvironment.removeMember);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: SIDEBAR_DRAG_DISTANCE } }),
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const environmentId = props.environmentId;
+    const tree = treeQuery.data;
+    if (environmentId === null || tree === null) return;
+    const assignment = resolveMetaProjectDragEndAssignment(event, tree);
+    if (assignment === null) return;
+    const role = Option.getOrNull(decodeMetaProjectRole(assignment.role));
+    if (role === null) return;
+    const added = await addMember({
+      environmentId,
+      input: {
+        metaProjectId: MetaProjectId.make(assignment.targetMetaProjectId),
+        member: { environmentId: assignment.environmentId, projectId: assignment.projectId, role },
+      },
+    });
+    if (added._tag === "Failure" || assignment.sourceMetaProjectId === null) return;
+    if (!assignment.shouldRemoveFromSource) return;
+    await removeMember({
+      environmentId,
+      input: {
+        metaProjectId: MetaProjectId.make(assignment.sourceMetaProjectId),
+        environmentId: assignment.environmentId,
+        projectId: assignment.projectId,
+      },
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-3 pb-3">
+      <Link
+        to="/worklog"
+        onClick={props.onNavigate}
+        aria-current={worklogActive ? "page" : undefined}
+        className={cn(
+          "flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-sm hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+          worklogActive
+            ? "bg-sidebar-row-active text-sidebar-foreground"
+            : "text-sidebar-muted-foreground",
+        )}
+      >
+        <CalendarClockIcon aria-hidden className="size-4 shrink-0" />
+        <T>Worklog</T>
+      </Link>
+      <DndContext sensors={sensors} onDragEnd={(event) => void handleDragEnd(event)}>
+        <MetaProjectSidebarSection
+          environmentId={props.environmentId}
+          activeMetaProjectId={activeMetaProjectId ?? null}
+          searchQuery={props.searchQuery}
+          onCreateMetaProject={() => setDialogTarget({ metaProjectId: null })}
+          onEditMetaProject={(metaProjectId) => setDialogTarget({ metaProjectId })}
+          onOpenMetaProject={(metaProjectId) => {
+            props.onNavigate();
+            void router.navigate({ to: "/workspace/$metaProjectId", params: { metaProjectId } });
+          }}
+          onSelectThread={({ environmentId, threadId }) =>
+            props.onSelectThread(scopeThreadRef(environmentId, threadId))
+          }
+        />
+      </DndContext>
+      <MetaProjectDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setDialogTarget(null);
+        }}
+        environmentId={props.environmentId}
+        initialMetaProject={editingMetaProject}
+        onSaved={(metaProject) => {
+          if (dialogTarget?.metaProjectId !== null) return;
+          props.onNavigate();
+          void router.navigate({
+            to: "/workspace/$metaProjectId",
+            params: { metaProjectId: metaProject.id },
+          });
+        }}
+      />
+    </div>
+  );
+}
 
 // Continuations that outlive a render read the open thread from the router.
 function readRouteThreadKey(router: AnyRouter): string | null {
@@ -3275,6 +3397,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         }
       >
         <SidebarGroup className="flex-1" role="presentation">
+          <SidebarHubSection
+            environmentId={primaryEnvironmentId}
+            searchQuery={threadSearchQuery}
+            onNavigate={() => {
+              if (isMobile) setOpenMobile(false);
+            }}
+            onSelectThread={(threadRef) => void navigateToThread(threadRef)}
+          />
           {isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider

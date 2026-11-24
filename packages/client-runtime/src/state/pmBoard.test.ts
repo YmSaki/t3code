@@ -88,6 +88,7 @@ function createTestBoardAtoms() {
           boardReads += 1;
           return {
             pmThreadId,
+            role: "pm" as const,
             metaProjectId: "meta-1",
             policy: basePolicy,
             killSwitchActive: activeKillSwitch,

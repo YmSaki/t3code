@@ -1,5 +1,6 @@
 import { useGT } from "gt-react";
 import type {
+  ArtifactId,
   EditorId,
   EnvironmentId,
   IssueTrackerKind,
@@ -28,6 +29,9 @@ import { PullRequestDetailPanel } from "../pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "../pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
 import { ThreadPullRequestsPanel } from "../pullRequest/ThreadPullRequestsPanel";
+import { ArtifactCard } from "../artifact/ArtifactCard";
+import { ScrollArea } from "../ui/scroll-area";
+import { useThreadArtifacts } from "../../state/artifacts";
 
 const PreviewPanel = lazy(() =>
   import("../preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
@@ -37,6 +41,64 @@ const DevicePanel = lazy(() =>
   import("../device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
 const FilePreviewPanel = lazy(() => import("../files/FilePreviewPanel"));
+const PmControlPanel = lazy(() =>
+  import("../pm/PmControlPanel").then((module) => ({ default: module.PmControlPanel })),
+);
+const ArtifactPanel = lazy(() =>
+  import("../artifact/ArtifactPanel").then((module) => ({ default: module.ArtifactPanel })),
+);
+
+function ArtifactSurfaceContent(props: {
+  readonly surface: Extract<RightPanelSurface, { kind: "artifact" }>;
+  readonly threadRef: ScopedThreadRef;
+  readonly environmentId: EnvironmentId;
+  readonly onClose: () => void;
+}) {
+  const gt = useGT();
+  const { surface, threadRef, environmentId } = props;
+  const listQuery = useThreadArtifacts(
+    surface.artifactId === undefined ? environmentId : null,
+    threadRef.threadId,
+  );
+  if (surface.artifactId !== undefined) {
+    return (
+      <Suspense fallback={null}>
+        <ArtifactPanel
+          key={surface.artifactId}
+          environmentId={environmentId}
+          threadId={threadRef.threadId}
+          artifactId={surface.artifactId as ArtifactId}
+          onClose={props.onClose}
+        />
+      </Suspense>
+    );
+  }
+  const artifacts = listQuery.data?.artifacts ?? [];
+  if (artifacts.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        {listQuery.isPending ? null : gt("No artifacts in this thread yet.")}
+      </div>
+    );
+  }
+  return (
+    <ScrollArea className="h-full">
+      <div className="flex flex-col gap-3 p-3">
+        {artifacts.map((artifact) => (
+          <ArtifactCard
+            key={artifact.id}
+            environmentId={environmentId}
+            threadId={threadRef.threadId}
+            artifact={artifact}
+            onOpenPanel={(artifactId) =>
+              useRightPanelStore.getState().openArtifact(threadRef, artifactId)
+            }
+          />
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
 
 type RightPanelTerminalProps = Omit<
   PersistentThreadTerminalPanelProps,
@@ -215,6 +277,51 @@ export function RightPanelSurfaceContent(props: {
       );
     case "pull-requests":
       return <ThreadPullRequestsPanel threadRef={threadRef} />;
+    case "pm":
+      return (
+        <Suspense fallback={null}>
+          <PmControlPanel
+            environmentId={props.environmentId}
+            pmThreadId={threadRef.threadId}
+            onOpenWorkerThread={(worker) => {
+              if (worker.environmentId === props.environmentId) {
+                useRightPanelStore.getState().openThread(threadRef, worker.threadId);
+              } else {
+                useRightPanelStore.getState().openLinkedThread(threadRef, {
+                  viaEnvironmentId: props.environmentId,
+                  environmentId: worker.environmentId,
+                  threadId: worker.threadId,
+                  label: worker.targetRepoRole ?? worker.environmentId,
+                  title: worker.title,
+                });
+              }
+            }}
+            onAnswerPendingWorker={(item) => {
+              if (!item.worker) return;
+              if (item.worker.environmentId === props.environmentId) {
+                useRightPanelStore.getState().openThread(threadRef, item.worker.threadId);
+              } else {
+                useRightPanelStore.getState().openLinkedThread(threadRef, {
+                  viaEnvironmentId: props.environmentId,
+                  environmentId: item.worker.environmentId,
+                  threadId: item.worker.threadId,
+                  label: item.worker.targetRepoRole ?? item.worker.environmentId,
+                  title: item.worker.title,
+                });
+              }
+            }}
+          />
+        </Suspense>
+      );
+    case "artifact":
+      return (
+        <ArtifactSurfaceContent
+          surface={surface}
+          threadRef={threadRef}
+          environmentId={props.environmentId}
+          onClose={() => onCloseSurface(surface)}
+        />
+      );
     case "thread":
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
       return (
