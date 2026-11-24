@@ -413,6 +413,13 @@ export function CommandPalette(props: {
           run: () => runCommand(command),
         })),
       );
+      actions.push({
+        key: "artifacts",
+        kind: "action",
+        title: gt("Open artifacts"),
+        searchTerms: ["artifact", "html", "markdown", "document"],
+        run: () => navigation.navigate("ThreadArtifacts", activeThreadRef),
+      });
       if (canShareWithGuest) {
         actions.push({
           key: "shareWithGuest",
