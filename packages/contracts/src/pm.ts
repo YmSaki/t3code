@@ -91,6 +91,7 @@ export type PmBoardWorkerSummary = typeof PmBoardWorkerSummary.Type;
 
 export const PmBoardSnapshot = Schema.Struct({
   pmThreadId: ThreadId,
+  role: ThreadRole,
   metaProjectId: Schema.NullOr(TrimmedNonEmptyString),
   policy: PmWorkerPolicy,
   killSwitchActive: Schema.Boolean,

@@ -11,6 +11,7 @@ import {
   PositiveInt,
 } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -249,6 +250,7 @@ describe("WorklogService", () => {
       yield* Migration110Worklog;
       const service = yield* WorklogService;
 
+      const baseTime = DateTime.makeUnsafe("2026-11-01T00:00:00.000Z");
       const batch = Array.from({ length: 500 }, (_, i) => ({
         sessionId: `bulk-${i}`,
         provider: (i % 2 === 0 ? "codex" : "claudeAgent") as "codex" | "claudeAgent",
@@ -256,13 +258,13 @@ describe("WorklogService", () => {
           i === 0
             ? "Fix, parse; escaped\\chars\nand a very long summary line that definitely exceeds seventy five octets in UTF-8"
             : `Bulk session #${i}`,
-        startedAt: new Date(Date.UTC(2026, 10, 1, 0, i * 2)).toISOString(),
-        endedAt: new Date(Date.UTC(2026, 10, 1, 0, i * 2 + 1)).toISOString(),
+        startedAt: DateTime.formatIso(DateTime.add(baseTime, { minutes: i * 2 })),
+        endedAt: DateTime.formatIso(DateTime.add(baseTime, { minutes: i * 2 + 1 })),
         turnCount: 1,
       }));
 
       yield* service.ingestExternalSessions(batch);
-      const queried = yield* service.queryWorklog({ limit: PositiveInt.make(500) });
+      const queried = yield* service.queryWorklog({});
       assert.strictEqual(queried.entries.length, 500);
 
       const stats = yield* service.getStats({ timeZone: "UTC" });

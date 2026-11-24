@@ -1,5 +1,8 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import type {
   EnvironmentId,
   MetaProject,
@@ -38,6 +41,7 @@ import {
   useMetaProject,
   useMetaProjectRollup,
 } from "../../state/metaProjects";
+import { usePmBoardActions } from "../../state/pmBoard";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { UnifiedImportWizard } from "../import/UnifiedImportWizard";
@@ -159,6 +163,7 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
   const allProjects = useProjects();
   const navigate = useNavigate();
   const handleNewThread = useNewThreadHandler();
+  const pmActions = usePmBoardActions();
 
   const metaProjectQuery = useMetaProject(props.environmentId, props.metaProjectId, {
     includeArchived: true,
@@ -181,7 +186,10 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
     icon: "layers",
     color: "default",
   });
-  const [instructionsDraft, setInstructionsDraft] = useState<string | null>(null);
+  const [instructionsDraftState, setInstructionsDraftState] = useState<{
+    readonly metaProjectId: MetaProjectId;
+    readonly text: string;
+  } | null>(null);
   const [savingInstructions, setSavingInstructions] = useState(false);
   const [togglingPin, setTogglingPin] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -258,6 +266,10 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
     allProjects.map((project) => [`${project.environmentId}\u0000${project.id}`, project] as const),
   );
 
+  const instructionsDraft =
+    instructionsDraftState?.metaProjectId === metaProject.id ? instructionsDraftState.text : null;
+  const setInstructionsDraft = (text: string | null) =>
+    setInstructionsDraftState(text === null ? null : { metaProjectId: metaProject.id, text });
   const effectiveInstructions = instructionsDraft ?? metaProject.instructionsMd;
   const instructionsDirty =
     instructionsDraft !== null && instructionsDraft !== metaProject.instructionsMd;
@@ -421,9 +433,23 @@ export function MetaProjectDashboard(props: MetaProjectDashboardProps) {
               disabled={pmLaunchMember === null}
               onLaunchPmSession={async () => {
                 if (pmLaunchMember === null) return;
-                await handleNewThread(
+                const created = await handleNewThread(
                   scopeProjectRef(pmLaunchMember.environmentId, pmLaunchMember.projectId),
                 );
+                if (created === null) return;
+                const result = await pmActions.setRole({
+                  environmentId: pmLaunchMember.environmentId,
+                  threadId: created.threadId,
+                  role: "pm",
+                  metaProjectId: metaProject.id,
+                });
+                if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+                  toastManager.add({
+                    type: "error",
+                    title: gt("Could not change thread role"),
+                    description: String(squashAtomCommandFailure(result)),
+                  });
+                }
               }}
             />
             <Button

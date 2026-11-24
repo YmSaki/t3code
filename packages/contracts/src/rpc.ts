@@ -2758,6 +2758,7 @@ const WsPmGetBoardRpc = Rpc.make(WS_METHODS.pmGetBoard, {
   payload: Schema.Struct({ pmThreadId: ThreadId }),
   success: Schema.Struct({
     pmThreadId: ThreadId,
+    role: ThreadRole,
     metaProjectId: Schema.NullOr(TrimmedNonEmptyString),
     policy: PmWorkerPolicy,
     killSwitchActive: Schema.Boolean,

@@ -27,6 +27,7 @@ export interface PmBoardPendingQuestionItem {
 
 export interface PmBoardSnapshotData {
   readonly pmThreadId: ThreadId;
+  readonly role: ThreadRole;
   readonly metaProjectId: string | null;
   readonly policy: PmWorkerPolicy;
   readonly killSwitchActive: boolean;

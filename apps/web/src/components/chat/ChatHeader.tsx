@@ -3,6 +3,7 @@ import {
   type EnvironmentId,
   type ScopedThreadRef,
   type ThreadId,
+  type ThreadRole,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
@@ -418,6 +419,7 @@ export const ChatHeader = memo(function ChatHeader({
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
       {isServerThread ? (
         <PmHeaderControls
+          key={`${activeThreadEnvironmentId}:${activeThreadId}`}
           environmentId={activeThreadEnvironmentId}
           threadId={activeThreadId}
           threadRef={activeThreadRef}
@@ -433,8 +435,8 @@ function PmHeaderControls(props: {
   readonly threadRef: ScopedThreadRef;
 }) {
   const { board } = usePmBoard(props.environmentId, props.threadId);
-  const [optimisticRole, setOptimisticRole] = useState<"standard" | "pm" | null>(null);
-  const currentRole = optimisticRole ?? (board ? "pm" : "standard");
+  const [optimisticRole, setOptimisticRole] = useState<ThreadRole | null>(null);
+  const currentRole = optimisticRole ?? board?.role ?? "standard";
   const pendingCount = board?.pendingQuestions.length ?? 0;
 
   return (
@@ -444,7 +446,7 @@ function PmHeaderControls(props: {
         threadId={props.threadId}
         role={currentRole}
         onRoleChanged={(nextRole) => {
-          setOptimisticRole(nextRole === "pm" ? "pm" : "standard");
+          setOptimisticRole(nextRole);
           if (nextRole === "pm") {
             useRightPanelStore.getState().open(props.threadRef, "pm");
           }

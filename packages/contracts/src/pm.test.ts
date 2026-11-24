@@ -134,6 +134,7 @@ describe("PmBoardSnapshot", () => {
   it("decodes a snapshot with workers", () => {
     const snapshot = {
       pmThreadId: "pm-1",
+      role: "pm",
       metaProjectId: null,
       policy,
       killSwitchActive: false,
