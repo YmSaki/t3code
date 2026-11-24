@@ -8,9 +8,12 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 // Desktop only depends on gt-i18n, so the gt CLI hides `generate` there; its script adds it back.
+// oxlint-disable-next-line t3code/no-global-process-runtime -- one-shot Node CLI script
+const isWin32 = NodeOS.platform() === "win32";
+const gtBin = NodePath.join("node_modules", ".bin", isWin32 ? "gt.cmd" : "gt");
 const GENERATE: Record<string, readonly [string, ...string[]]> = {
-  "apps/web": ["node_modules/.bin/gt", "generate"],
-  "apps/mobile": ["node_modules/.bin/gt", "generate"],
+  "apps/web": [gtBin, "generate"],
+  "apps/mobile": [gtBin, "generate"],
   "apps/desktop": [process.execPath, "scripts/i18n-generate.mjs"],
 };
 const APPS = Object.keys(GENERATE);
@@ -41,6 +44,7 @@ for (const [app, [command, ...args]] of Object.entries(GENERATE)) {
     const gt = NodeChildProcess.spawnSync(command, [...args, "--config", tmpConfig], {
       cwd: appDir,
       encoding: "utf8",
+      shell: isWin32 && command.endsWith(".cmd"),
     });
     if (gt.status !== 0) {
       problems.push(`${app}: gt generate failed\n${gt.stdout}${gt.stderr}`);
