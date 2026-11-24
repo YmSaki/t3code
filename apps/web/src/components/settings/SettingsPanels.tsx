@@ -37,7 +37,6 @@ import { resolvePastedPath } from "@t3tools/shared/path";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
-import { setBrowserTelemetryOptIn } from "../../lib/runtime";
 import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
@@ -1226,7 +1225,6 @@ export function GeneralSettingsPanel() {
               <SettingResetButton
                 ariaLabel={gt("Reset telemetry preference to default")}
                 onClick={() => {
-                  setBrowserTelemetryOptIn(DEFAULT_UNIFIED_SETTINGS.telemetryEnabled);
                   updateSettings({ telemetryEnabled: DEFAULT_UNIFIED_SETTINGS.telemetryEnabled });
                 }}
               />
@@ -1237,7 +1235,6 @@ export function GeneralSettingsPanel() {
               checked={settings.telemetryEnabled}
               onCheckedChange={(checked) => {
                 const next = Boolean(checked);
-                setBrowserTelemetryOptIn(next);
                 updateSettings({ telemetryEnabled: next });
               }}
               aria-label={gt("Share anonymous usage telemetry")}
