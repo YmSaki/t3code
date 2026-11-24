@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  ComposerContextId,
   type ModelSelection,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2ThreadShell,
@@ -151,6 +152,73 @@ it.effect("launches the target model with the raw transcript in the source works
     assert.include(text, "- Source model: codex / gpt-5.4");
     assert.notInclude(text, "private chain of thought");
   }),
+);
+
+it.effect(
+  "preserves structured context and marks user and assistant attachments in the transcript",
+  () =>
+    Effect.gen(function* () {
+      const context = {
+        version: 1 as const,
+        records: [
+          {
+            version: 1 as const,
+            contextId: ComposerContextId.make("context-login"),
+            kind: "custom-diagnostic",
+            label: "Login failure",
+            payload: { command: "vp test run", output: "認証 failed\nline 2", exitCode: 1 },
+          },
+        ],
+      };
+      const { result, launches } = yield* run({
+        shell,
+        items: [
+          {
+            type: "user_message",
+            text: "Inspect this failure",
+            context,
+            attachments: [
+              {
+                type: "image",
+                id: "login-image",
+                name: "login.png",
+                mimeType: "image/png",
+                sizeBytes: 42,
+              },
+              {
+                type: "file",
+                id: "login-log",
+                name: "login.log",
+                mimeType: "text/plain",
+                sizeBytes: 84,
+              },
+            ],
+          },
+          {
+            type: "assistant_message",
+            text: "See the report",
+            attachments: [
+              {
+                type: "file",
+                id: "report",
+                name: "report.txt",
+                mimeType: "text/plain",
+                sizeBytes: 21,
+              },
+            ],
+          },
+        ],
+      });
+
+      assert.strictEqual(result._tag, "Success");
+      assert.strictEqual(launches.length, 1);
+      const text = launches[0]!.initialMessage!.text;
+      assert.include(text, "Inspect this failure");
+      assert.include(text, JSON.stringify(context, null, 2));
+      assert.include(text, "[Attachment: login.png (image/png, 42 bytes, id: login-image)]");
+      assert.include(text, "[Attachment: login.log (text/plain, 84 bytes, id: login-log)]");
+      assert.include(text, "[Attachment: report.txt (text/plain, 21 bytes, id: report)]");
+    }),
 );
 
 it.effect("fails with a typed error and launches nothing when the source thread is missing", () =>

@@ -40,9 +40,20 @@ export class ThreadHandoffService extends Context.Service<
 function handoffEntry(item: OrchestrationV2TurnItem): ReadonlyArray<ThreadHandoffEntry> {
   switch (item.type) {
     case "user_message":
-      return [{ kind: "user", text: item.text }];
-    case "assistant_message":
-      return [{ kind: "assistant", text: item.text }];
+    case "assistant_message": {
+      const context = item.type === "user_message" ? item.context : undefined;
+      const text = [
+        item.text,
+        ...(context === undefined
+          ? []
+          : [`[Message context]\n${JSON.stringify(context, null, 2)}`]),
+        ...(item.attachments ?? []).map(
+          (attachment) =>
+            `[Attachment: ${attachment.name} (${attachment.mimeType}, ${attachment.sizeBytes} bytes, id: ${attachment.id})]`,
+        ),
+      ].join("\n\n");
+      return [{ kind: item.type === "user_message" ? "user" : "assistant", text }];
+    }
     case "proposed_plan":
       return [{ kind: "assistant", text: `Proposed plan:\n${item.markdown}` }];
     case "command_execution":
