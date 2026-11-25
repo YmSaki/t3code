@@ -60,8 +60,11 @@ const withProjectLock = <A, E, R>(
 
 export interface RepoMonitorObservation {
   readonly snapshot: RepoMonitorSnapshot;
-  /** Accounts this environment acts as on the forge, so its own pushes and comments never retrigger it. */
-  readonly selfAccountLogins: ReadonlyArray<string>;
+  /**
+   * Accounts this environment acts as on the forge, so its own pushes and comments never retrigger it.
+   * null until the forge has named them once; the guard then skips every authored event.
+   */
+  readonly selfAccountLogins: ReadonlyArray<string> | null;
 }
 
 /** Reads a project's repository as the monitor sees it. */
@@ -72,7 +75,9 @@ export class RepoMonitorSnapshotSource extends Context.Service<
       projectId: ProjectId,
     ) => Effect.Effect<RepoMonitorObservation, RepoMonitorError>;
     /** The forge accounts the last observation saw, for webhooks that carry no viewer. */
-    readonly lastSelfAccountLogins: (projectId: ProjectId) => Effect.Effect<ReadonlyArray<string>>;
+    readonly lastSelfAccountLogins: (
+      projectId: ProjectId,
+    ) => Effect.Effect<ReadonlyArray<string> | null>;
   }
 >()("t3/repoMonitor/RepoMonitorRuntimeWiring/RepoMonitorSnapshotSource") {}
 
@@ -97,15 +102,16 @@ export const makeSnapshotSource = (ports: RepoMonitorSnapshotPorts) => {
   const selfLogins = new Map<ProjectId, ReadonlyArray<string>>();
   return RepoMonitorSnapshotSource.of({
     lastSelfAccountLogins: Effect.fn("RepoMonitorSnapshotSource.lastSelfAccountLogins")(
-      (projectId: ProjectId) => Effect.sync(() => selfLogins.get(projectId) ?? []),
+      (projectId: ProjectId) => Effect.sync(() => selfLogins.get(projectId) ?? null),
     ),
     observe: Effect.fn("RepoMonitorSnapshotSource.observe")(function* (projectId) {
       const cwd = yield* ports.workspaceRoot(projectId);
       if (cwd === null) {
         return yield* new RepoMonitorError({ message: `Project ${projectId} was not found.` });
       }
-      // The cursor only ever adds what it has seen, so a forge that is down this poll loses
-      // nothing: its pull requests and issues show up as new once it answers again.
+      // The cursor only ever adds what it has seen, so a listing that fails this poll loses
+      // nothing: its entries show up as new once it answers again. Authored entries seen before
+      // any viewer is known are skipped by the guard, not deferred.
       const forgeDown = (what: string) => (error: RepoMonitorError) =>
         Effect.logWarning(`repo monitor could not list ${what}`, { projectId, error });
       const [branches, pullRequests, issues] = yield* Effect.all(
@@ -133,7 +139,7 @@ export const makeSnapshotSource = (ports: RepoMonitorSnapshotPorts) => {
           pullRequests: pullRequests.entries,
           issues,
         },
-        selfAccountLogins: pullRequests.viewers,
+        selfAccountLogins: selfLogins.get(projectId) ?? null,
       };
     }),
   });

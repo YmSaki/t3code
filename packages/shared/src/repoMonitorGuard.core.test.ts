@@ -84,6 +84,16 @@ describe("detectRepoMonitorAgentLoop", () => {
         managedAgentLogins: ["t3-worker-bot"],
       }),
     ).toEqual({ isLoop: false, reason: null });
+
+    expect(detectRepoMonitorAgentLoop({ authorLogin: "anyone", selfAccountLogins: null })).toEqual({
+      isLoop: true,
+      reason: "self_account_unknown",
+    });
+
+    expect(detectRepoMonitorAgentLoop({ authorLogin: null, selfAccountLogins: null })).toEqual({
+      isLoop: false,
+      reason: null,
+    });
   });
 });
 
@@ -183,6 +193,11 @@ describe("evaluateRepoMonitorGuard", () => {
         event: { ...baseEvent, authorLogin: "self-user" },
       }).outcome,
     ).toBe("skipped_loop_guard");
+
+    expect(evaluateRepoMonitorGuard({ ...baseGuardInput, selfAccountLogins: null })).toMatchObject({
+      allowed: false,
+      loopReason: "self_account_unknown",
+    });
 
     expect(
       evaluateRepoMonitorGuard({
