@@ -15,12 +15,13 @@ import { installCli, isForegroundProcStat, isForegroundPs, offerCliInstall } fro
 const VERSION = packageJson.version;
 
 /** A standalone runtime in a temp T3 home, started by the npm launcher from an npx cache. */
-const setup = Effect.gen(function* () {
+const setup = Effect.fn("cli.install.test.setup")(function* (platform: NodeJS.Platform) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-install-" });
   const runtimeDir = path.join(root, ".t3/runtime");
-  const executable = path.join(runtimeDir, "versions", VERSION, "t3");
+  const windows = platform === "win32";
+  const executable = path.join(runtimeDir, "versions", VERSION, windows ? "t3.exe" : "t3");
   yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
   yield* fs.writeFileString(executable, "");
   const npmPackage = path.join(root, ".npm/_npx/abc/node_modules/t3");
@@ -32,19 +33,26 @@ const setup = Effect.gen(function* () {
   const binDir = path.join(root, "bin");
   const provide = <A, E, R>(effect: Effect.Effect<A, E, R>, env: NodeJS.ProcessEnv = {}) =>
     effect.pipe(
-      Effect.provideService(HostProcess.Platform, "linux"),
+      Effect.provideService(HostProcess.Platform, platform),
       Effect.provideService(HostProcess.HomeDirectory, root),
       Effect.provideService(HostProcess.IsExecutable, true),
       Effect.provideService(HostProcess.ExecutablePath, executable),
       Effect.provideService(HostProcess.Environment, {
-        PATH: "/usr/bin",
+        PATH: "",
         SHELL: "/bin/zsh",
         T3CODE_INSTALL_BIN_DIR: binDir,
         T3CODE_NPM_LAUNCHER_PATH: path.join(npmPackage, "bin/t3.mjs"),
         ...env,
       }),
     );
-  return { root, npmPackage, runtimeDir, executable, link: path.join(binDir, "t3"), provide };
+  return {
+    root,
+    npmPackage,
+    runtimeDir,
+    executable,
+    link: path.join(binDir, windows ? "t3.cmd" : "t3"),
+    provide,
+  };
 });
 
 it.layer(NodeServices.layer)("t3 install", (it) => {
@@ -52,7 +60,7 @@ it.layer(NodeServices.layer)("t3 install", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const { root, runtimeDir, executable, link, provide } = yield* setup;
+      const { root, runtimeDir, executable, link, provide } = yield* setup("linux");
 
       const older = path.join(runtimeDir, "versions/0.0.1/t3");
       yield* fs.makeDirectory(path.dirname(link), { recursive: true });
@@ -172,7 +180,10 @@ it.layer(NodeServices.layer)("t3 install", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const { root, npmPackage, runtimeDir, executable, link, provide } = yield* setup;
+      const platform = yield* HostProcess.Platform;
+      const windows = platform === "win32";
+      const launcherName = windows ? "t3.cmd" : "t3";
+      const { root, npmPackage, runtimeDir, executable, link, provide } = yield* setup(platform);
       let asked = 0;
       const offer = (
         answer: boolean | undefined | Effect.Effect<boolean>,
@@ -211,7 +222,7 @@ it.layer(NodeServices.layer)("t3 install", (it) => {
       yield* offer(false, { args: ["status", "--json=true"] });
       const globalBin = path.join(root, "global-bin");
       yield* fs.makeDirectory(globalBin);
-      yield* fs.writeFileString(path.join(globalBin, "t3"), "");
+      yield* fs.writeFileString(path.join(globalBin, launcherName), "");
       yield* offer(false, { env: { PATH: globalBin } });
       assert.equal(asked, 0);
       assert.isFalse(yield* fs.exists(link));
@@ -221,9 +232,11 @@ it.layer(NodeServices.layer)("t3 install", (it) => {
       const pnpmBin = path.join(root, ".cache/pnpm/dlx/abc/node_modules/.bin");
       for (const bin of [npxBin, pnpmBin]) {
         yield* fs.makeDirectory(bin, { recursive: true });
-        yield* fs.writeFileString(path.join(bin, "t3"), "");
+        yield* fs.writeFileString(path.join(bin, launcherName), "");
       }
-      assert.isFalse(yield* offer(undefined, { env: { PATH: `${npxBin}:${pnpmBin}` } }));
+      assert.isFalse(
+        yield* offer(undefined, { env: { PATH: [npxBin, pnpmBin].join(windows ? ";" : ":") } }),
+      );
       assert.equal(asked, 1);
       assert.isFalse(yield* fs.exists(path.join(runtimeDir, "install-prompt-declined")));
       asked = 0;
@@ -238,7 +251,10 @@ it.layer(NodeServices.layer)("t3 install", (it) => {
       yield* fs.writeFileString(path.join(runtimeDir, "install-prompt-declined"), "0.0\n");
       yield* offer(true);
       assert.equal(asked, 2);
-      assert.equal(yield* fs.readFileString(link), posixLauncherScript(executable));
+      assert.equal(
+        yield* fs.readFileString(link),
+        windows ? `@echo off\r\n"${executable}" %*` : posixLauncherScript(executable),
+      );
 
       yield* fs.remove(path.join(runtimeDir, "install-prompt-declined"));
       yield* offer(true);
@@ -270,6 +286,15 @@ it.layer(NodeServices.layer)("t3 install", (it) => {
       assert.isTrue(yield* Fiber.join(unanswered));
       assert.isTrue(yield* fs.exists(declined));
       assert.isFalse(yield* fs.exists(link));
+
+      yield* fs.remove(declined);
+      const defaultInstallEnv = { T3CODE_INSTALL_BIN_DIR: "" };
+      const defaultInstall = yield* provide(installCli(), defaultInstallEnv);
+      assert.equal(defaultInstall.link, path.join(root, ".t3", "cli-bin", launcherName));
+      yield* fs.remove(path.join(runtimeDir, "launchers"));
+      asked = 0;
+      yield* offer(false, { env: defaultInstallEnv });
+      assert.equal(asked, 0);
     }),
   );
 

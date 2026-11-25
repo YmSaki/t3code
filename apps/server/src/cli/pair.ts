@@ -5,6 +5,7 @@ import {
   ORCHESTRATION_PROTOCOL_VERSION,
   PortSchema,
 } from "@t3tools/contracts";
+import { CLI_RELEASES_PAGE_URL } from "@t3tools/shared/cliRelease";
 import { resolveWorktreeT3Home } from "@t3tools/shared/devHome";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { formatHostForUrl, isWildcardHost } from "@t3tools/shared/hostClassification";
@@ -31,6 +32,7 @@ import { Command, Flag, GlobalFlag } from "effect/cli";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import { isExactServiceVersion } from "../cloud/serviceProtocol.ts";
 import * as ServerConfig from "../config.ts";
 import * as ManagedLimits from "../policy/managedLimits.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
@@ -91,9 +93,12 @@ export class IncompatibleServerProtocolError extends Schema.TaggedError<Incompat
   },
 ) {
   override get message(): string {
+    const releaseUrl = isExactServiceVersion(this.serverVersion)
+      ? `${CLI_RELEASES_PAGE_URL}/tag/v${this.serverVersion}`
+      : CLI_RELEASES_PAGE_URL;
     return [
       `The running T3 Code server (${this.serverVersion}) speaks orchestration protocol ${String(this.serverProtocolVersion)}, but this CLI speaks protocol ${String(ORCHESTRATION_PROTOCOL_VERSION)}.`,
-      `Pair with the matching CLI instead: \`${this.pairCommand}\`.`,
+      `Download and unpack the matching CLI from ${releaseUrl}. From the unpacked folder, run \`${this.pairCommand}\`.`,
     ].join("\n");
   }
 }
@@ -554,14 +559,11 @@ export const pairCommand = Command.make("pair", {
       const serverProtocolVersion = target.descriptor.orchestrationProtocolVersion ?? 1;
       if (serverProtocolVersion !== ORCHESTRATION_PROTOCOL_VERSION) {
         const platform = yield* HostProcess.Platform;
-        const baseDirArgs =
-          explicitBaseDir !== undefined && explicitBaseDir.trim().length > 0
-            ? ` --base-dir ${hostShellWord(platform, explicitBaseDir)}`
-            : "";
+        const executable = platform === "win32" ? ".\\t3.exe" : "./t3";
         return yield* new IncompatibleServerProtocolError({
           serverVersion: target.descriptor.serverVersion,
           serverProtocolVersion,
-          pairCommand: `npx t3@${target.descriptor.serverVersion} pair${baseDirArgs}`,
+          pairCommand: `${executable} pair --base-dir ${hostShellWord(platform, target.baseDir)}`,
         });
       }
 

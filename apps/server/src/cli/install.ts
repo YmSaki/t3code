@@ -327,12 +327,15 @@ export const offerCliInstall = Effect.fn("cli.install.offer")(function* <E, R, E
   // Runners put their own cache's node_modules/.bin on PATH, so skip those.
   const windows = platform === "win32";
   const names = windows ? ["t3.cmd", "t3.exe"] : ["t3"];
+  const launcherName = windows ? "t3.cmd" : "t3";
+  const baseDir = path.dirname(runtimeDir);
   const launchers = yield* fs
     .readFileString(path.join(runtimeDir, "launchers"))
     .pipe(Effect.orElseSucceed(() => ""));
   const candidates = [
     ...launchers.split(/\r?\n/).filter(Boolean),
-    path.join(path.dirname(runtimeDir), "bin", windows ? "t3.cmd" : "t3"),
+    path.join(baseDir, CLI_INSTALL_BIN_DIRNAME, launcherName),
+    path.join(baseDir, "bin", launcherName),
     ...(environment.PATH ?? environment.Path ?? "")
       .split(windows ? ";" : ":")
       .filter(

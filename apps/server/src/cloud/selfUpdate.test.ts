@@ -1,3 +1,5 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect FileSystem.symlink cannot select a directory junction on Windows.
+import * as NodeFSP from "node:fs/promises";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import type { ManagedPolicyDocument } from "@t3tools/contracts";
@@ -19,6 +21,7 @@ import * as ServerConfig from "../config.ts";
 import * as DesktopAppUpdate from "../desktopUpdate/DesktopAppUpdate.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as ProcessRunner from "../processRunner.ts";
+import { BOOT_SERVICE_PLIST_FILE } from "./bootService.ts";
 import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 import * as ServerSelfUpdate from "./selfUpdate.ts";
@@ -470,7 +473,8 @@ it.layer(NodeServices.layer)("pruning runtimes on start", (it) => {
       yield* fs.writeFileString(sentinel, `${version}\n`);
       yield* fs.utimes(sentinel, 0, 0);
     }
-    if (input.symlinkedHome) yield* fs.symlink(realHome, baseDir);
+    if (input.symlinkedHome)
+      yield* Effect.promise(() => NodeFSP.symlink(realHome, baseDir, "junction"));
     const userHome = path.join(tempDir, "user");
     if (input.servicePlistStarts !== undefined) {
       const agentsDir = path.join(userHome, "Library", "LaunchAgents");
@@ -478,10 +482,11 @@ it.layer(NodeServices.layer)("pruning runtimes on start", (it) => {
       const programHome = input.servicePlistThroughLink
         ? path.join(tempDir, "alias-home")
         : baseDir;
-      if (input.servicePlistThroughLink) yield* fs.symlink(realHome, programHome);
+      if (input.servicePlistThroughLink)
+        yield* Effect.promise(() => NodeFSP.symlink(realHome, programHome, "junction"));
       const program = path.join(programHome, "runtime", "versions", input.servicePlistStarts, "t3");
       yield* fs.writeFileString(
-        path.join(agentsDir, "com.t3tools.t3code.service.plist"),
+        path.join(agentsDir, BOOT_SERVICE_PLIST_FILE),
         `<plist><dict>\n<key>ProgramArguments</key>\n<array>\n<string>${program}</string>\n<string>__service-launcher</string>\n</array>\n</dict></plist>\n`,
       );
     }

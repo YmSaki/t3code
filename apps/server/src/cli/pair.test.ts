@@ -474,39 +474,49 @@ describe("t3 pair", () => {
 
   // regression: #15492 an older CLI minted into a V1 database the protocol 2
   // server never reads, so pairing must refuse before opening the database.
-  it.effect("rejects a server on another protocol before opening its database", () =>
-    withDescriptorServer(
-      (origin) =>
-        Effect.gen(function* () {
-          const baseDir = NodeFS.mkdtempSync(
-            NodePath.join(NodeOS.tmpdir(), "t3-pair-protocol-test-"),
-          );
-          yield* persistServerRuntimeState({
-            path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
-            state: yield* makePersistedServerRuntimeState({
-              config: { host: "127.0.0.1", devUrl: undefined },
-              port: Number(new URL(origin).port),
-            }),
-          });
-
-          const exit = yield* provideCliTestLayers(
-            runCli(["pair", "--base-dir", baseDir]).pipe(Effect.exit),
-          );
-
-          assert.deepEqual(NodeFS.readdirSync(NodePath.join(baseDir, "userdata")), [
-            "server-runtime.json",
-          ]);
-          assert.isTrue(Exit.isFailure(exit));
-          if (Exit.isFailure(exit)) {
-            assert.include(
-              String(Cause.squash(exit.cause)),
-              `t3@0.0.45 pair --base-dir ${baseDir}`,
+  it.effect.each(["linux", "win32"] as const)(
+    "rejects a server on another protocol before opening its database on %s",
+    (platform) =>
+      withDescriptorServer(
+        (origin) =>
+          Effect.gen(function* () {
+            const baseDir = NodeFS.mkdtempSync(
+              NodePath.join(NodeOS.tmpdir(), "t3 pair protocol test-"),
             );
-          }
-        }),
-      "127.0.0.1",
-      { ...testDescriptor, serverVersion: "0.0.45", orchestrationProtocolVersion: 1 },
-    ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+            yield* persistServerRuntimeState({
+              path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+              state: yield* makePersistedServerRuntimeState({
+                config: { host: "127.0.0.1", devUrl: undefined },
+                port: Number(new URL(origin).port),
+              }),
+            });
+
+            const exit = yield* provideCliTestLayers(
+              runCli(["pair", "--base-dir", baseDir]).pipe(
+                Effect.provideService(HostProcess.Platform, platform),
+                Effect.exit,
+              ),
+            );
+
+            assert.deepEqual(NodeFS.readdirSync(NodePath.join(baseDir, "userdata")), [
+              "server-runtime.json",
+            ]);
+            assert.isTrue(Exit.isFailure(exit));
+            if (Exit.isFailure(exit)) {
+              const message = String(Cause.squash(exit.cause));
+              assert.include(message, "https://github.com/YmSaki/t3code/releases/tag/v0.0.45");
+              assert.include(
+                message,
+                platform === "win32"
+                  ? `.\\t3.exe pair --base-dir "${baseDir}"`
+                  : `./t3 pair --base-dir '${baseDir}'`,
+              );
+              assert.notInclude(message, "npx");
+            }
+          }),
+        "127.0.0.1",
+        { ...testDescriptor, serverVersion: "0.0.45", orchestrationProtocolVersion: 1 },
+      ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   // Without the capability `tailscale serve` blocks on an enablement URL, so

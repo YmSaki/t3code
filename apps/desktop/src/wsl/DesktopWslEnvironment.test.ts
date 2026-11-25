@@ -206,7 +206,7 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
     const install = fixture.install(undefined, undefined, t3Home);
     expect(install.status, install.stderr).toBe(0);
     expect(parseWslRuntimeRoot(install.stdout)).toBe(`${t3Home}/wsl-runtime/${fixture.runtimeId}`);
-    expect(runShell(`test ! -e ${sh(`${fixture.work}/home/.t3`)}`).status).toBe(0);
+    expect(runShell(`test ! -e ${sh(`${fixture.work}/home/.t3codejp`)}`).status).toBe(0);
 
     const probe = runShell(
       [
@@ -400,7 +400,7 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
         `sh ${sh(`${fixture.work}/select.sh`)}`,
         `HOME=${sh(`${fixture.work}/home`)}`,
         "export HOME",
-        buildWslRuntimePruneScript("sha256-current", null),
+        `(\n${buildWslRuntimePruneScript("sha256-current", null)}\n)`,
         `test -d ${sh(fixture.runtimeRoot)}`,
       ].join("\n"),
     );
@@ -408,8 +408,7 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
     expect(selected.status, `${selected.stdout}\n${selected.stderr}`).toBe(0);
   });
 
-  // Runs the distro side on the local bash, so a Windows dev box using the wsl.exe runner skips it.
-  describe.skipIf(posixShellRunner?.file !== "bash")("prepareRuntime through wsl.exe", () => {
+  describe("prepareRuntime through wsl.exe", () => {
     // Emulates `wsl.exe [-d <distro>] [--cd <dir>] [--|--exec] <argv>` in a distro with automount off.
     const layerFakeWslExe = (home: string) =>
       Layer.effect(
@@ -444,11 +443,15 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
                   ]
                 : args;
             return local.spawn(
-              ChildProcess.make(file, rest, {
-                ...command.options,
-                env: { ...command.options.env, HOME: home },
-                extendEnv: true,
-              }),
+              ChildProcess.make(
+                posixShellRunner!.file,
+                [
+                  ...posixShellRunner!.args,
+                  "-c",
+                  `export HOME=${sh(home)}; exec ${[file, ...rest].map(sh).join(" ")}`,
+                ],
+                command.options,
+              ),
             );
           }),
         ),
@@ -477,14 +480,20 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
       const fixture = createFixture();
       return Effect.gen(function* () {
         const wsl = yield* DesktopWslEnvironment;
-        // The archive's Windows path; with no drives mounted, wslpath cannot map it into the distro.
-        const translated = yield* wsl.windowsToWslPath("Ubuntu", fixture.archivePath);
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const hostDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-wsl-archive-" });
+        const windowsPath = path.join(hostDir, "runtime.tar.gz");
+        const archive = runShell(`base64 < ${sh(fixture.archivePath)}`);
+        expect(archive.status, archive.stderr).toBe(0);
+        yield* fs.writeFile(windowsPath, Buffer.from(archive.stdout, "base64"));
+        const translated = yield* wsl.windowsToWslPath("Ubuntu", windowsPath);
         expect(translated._tag).toBe("None");
 
         const prepared = yield* wsl.prepareRuntime(
           "Ubuntu",
           {
-            windowsPath: fixture.archivePath,
+            windowsPath,
             runtimeId: fixture.runtimeId,
             sha256: fixture.archiveSha,
           },
@@ -495,7 +504,10 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
         const version = runShell(`${sh(fixture.serverEntry)} --version`);
         expect(version.status, version.stderr).toBe(0);
         expect(version.stdout).toBe("t3code wsl runtime test server 0.0.0\n");
-      }).pipe(Effect.provide(layerWslEnvironment(`${fixture.work}/home`)));
+      }).pipe(
+        Effect.provide(layerWslEnvironment(`${fixture.work}/home`)),
+        Effect.provide(NodeServices.layer),
+      );
     });
   });
 
@@ -505,7 +517,7 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
         "set -eu",
         "work=$(mktemp -d)",
         'home="$work/home"',
-        'runtime_parent="$home/.t3/wsl-runtime"',
+        'runtime_parent="$home/.t3codejp/wsl-runtime"',
         'mkdir -p "$runtime_parent"',
         'make_ready() { mkdir -p "$runtime_parent/$1"; printf ready > "$runtime_parent/$1/.t3code-wsl-runtime-ready"; }',
         "make_ready sha256-current",
@@ -522,7 +534,7 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
         holdInstallLock('"$runtime_parent/.sha256-locked.install.lock"'),
         `HOME="$home"`,
         "export HOME",
-        buildWslRuntimePruneScript("sha256-current", null),
+        `(\n${buildWslRuntimePruneScript("sha256-current", null)}\n)`,
         'test -d "$runtime_parent/sha256-current"',
         'test -d "$runtime_parent/sha256-previous"',
         'test -d "$runtime_parent/sha256-active"',
