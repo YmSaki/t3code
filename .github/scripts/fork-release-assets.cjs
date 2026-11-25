@@ -5,10 +5,15 @@ const {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   writeFileSync,
 } = require("node:fs");
+const { createRequire } = require("node:module");
 const { join } = require("node:path");
 
+const { parse: parseYaml } = createRequire(join(__dirname, "../../packages/shared/package.json"))(
+  "yaml",
+);
 const TARGETS = [
   {
     platform: "mac-arm64",
@@ -52,18 +57,50 @@ function artifactFiles(inputDir, artifact) {
   });
 }
 
-function checkManifestVersion(inputDir, artifact, file, expected) {
-  const text = readFileSync(join(inputDir, artifact, file), "utf8");
+function checkManifestVersion(text, label, expected) {
   const version = /^version:[ \t]*([^\r\n]+)/m
     .exec(text)?.[1]
     .trim()
     .replace(/^(['"])(.*)\1$/, "$2");
   if (version !== expected) {
-    throw new Error(artifact + "/" + file + " must declare version " + expected + ".");
+    throw new Error(label + " must declare version " + expected + ".");
   }
 }
 
-function desktopFiles(inputDir, target, version, channel) {
+async function digestFile(path, algorithm, encoding) {
+  const hash = createHash(algorithm);
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest(encoding);
+}
+
+async function checkLinuxAppImage(text, label, artifactDir, installers, appImage) {
+  let updateInfo;
+  try {
+    updateInfo = parseYaml(text);
+  } catch (error) {
+    throw new Error(label + " is not a valid Linux update manifest.", { cause: error });
+  }
+  const files = updateInfo?.files;
+  const appImages = Array.isArray(files) ? files.filter((file) => file?.url === appImage) : [];
+  if (appImages.length !== 1 || files.some((file) => !installers.includes(file?.url))) {
+    throw new Error(
+      label +
+        " must list its staged AppImage " +
+        appImage +
+        " exactly once and only refer to staged installers.",
+    );
+  }
+  const [entry] = appImages;
+  const path = join(artifactDir, appImage);
+  if (entry.size !== statSync(path).size) {
+    throw new Error(label + ": size does not match " + appImage + ".");
+  }
+  if (entry.sha512 !== (await digestFile(path, "sha512", "base64"))) {
+    throw new Error(label + ": SHA512 does not match " + appImage + ".");
+  }
+}
+
+async function desktopFiles(inputDir, target, version, channel) {
   const artifact = "desktop-" + target.platform;
   const names = artifactFiles(inputDir, artifact).filter((name) => name !== "builder-debug.yml");
   const arch = target.platform.split("-")[1];
@@ -93,7 +130,12 @@ function desktopFiles(inputDir, target, version, channel) {
   const manifest = (channel === "stable" ? "latest" : "nightly") + "-" + target.manifest + ".yml";
   if (!updaterFiles.includes(manifest))
     throw new Error("Missing manifest " + manifest + " in " + artifact + ".");
-  checkManifestVersion(inputDir, artifact, manifest, version);
+  const artifactDir = join(inputDir, artifact);
+  const manifestLabel = artifact + "/" + manifest;
+  const text = readFileSync(join(artifactDir, manifest), "utf8");
+  checkManifestVersion(text, manifestLabel, version);
+  const appImage = installers.find((name) => name.endsWith(".AppImage"));
+  if (appImage) await checkLinuxAppImage(text, manifestLabel, artifactDir, installers, appImage);
   const exe = installers.find((name) => name.endsWith(".exe"));
   if (exe && !updaterFiles.includes(exe + ".blockmap")) {
     throw new Error("Missing Windows blockmap for " + exe + " in " + artifact + ".");
@@ -110,9 +152,8 @@ function desktopFiles(inputDir, target, version, channel) {
 async function writeChecksums(outputDir, names) {
   const lines = [];
   for (const name of names.toSorted()) {
-    const hash = createHash("sha256");
-    for await (const chunk of createReadStream(join(outputDir, name))) hash.update(chunk);
-    lines.push(hash.digest("hex") + "  " + name);
+    const digest = await digestFile(join(outputDir, name), "sha256", "hex");
+    lines.push(digest + "  " + name);
   }
   writeFileSync(join(outputDir, "SHA256SUMS"), lines.join("\n") + "\n");
 }
@@ -142,7 +183,7 @@ async function stageForkReleaseAssets({
     files.set(name, join(inputDir, artifact, name));
   };
   for (const target of TARGETS) {
-    for (const name of desktopFiles(inputDir, target, version, channel)) {
+    for (const name of await desktopFiles(inputDir, target, version, channel)) {
       add("desktop-" + target.platform, name);
     }
     if (target.cliKey) {

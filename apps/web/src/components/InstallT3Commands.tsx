@@ -1,9 +1,4 @@
-import {
-  CLI_INSTALL_BIN_DIRNAME,
-  CLI_INSTALL_PS1_FILE,
-  CLI_INSTALL_SH_FILE,
-  cliReleaseAssetUrl,
-} from "@t3tools/shared/cliRelease";
+import { CLI_INSTALL_BIN_DIRNAME, cliInstallCommand } from "@t3tools/shared/cliRelease";
 import { DEFAULT_HOME_DIRECTORY } from "@t3tools/shared/productIdentity";
 import { T } from "gt-react";
 import { APP_VERSION } from "~/branding";
@@ -25,9 +20,7 @@ export function InstallT3Commands({
   return (
     <div className={cn("space-y-2", className)}>
       <p className="text-xs text-muted-foreground">macOS, Linux</p>
-      <CommandBlock
-        command={`curl -fsSL ${cliReleaseAssetUrl(APP_VERSION, CLI_INSTALL_SH_FILE)} | sh`}
-      />
+      <CommandBlock command={cliInstallCommand(APP_VERSION, "sh")} />
       <p className="text-xs text-muted-foreground">
         <T>Then</T>
       </p>
@@ -35,9 +28,7 @@ export function InstallT3Commands({
         command={`~/${DEFAULT_HOME_DIRECTORY}/${CLI_INSTALL_BIN_DIRNAME}/t3 ${action}`}
       />
       <p className="text-xs text-muted-foreground">Windows (PowerShell)</p>
-      <CommandBlock
-        command={`irm ${cliReleaseAssetUrl(APP_VERSION, CLI_INSTALL_PS1_FILE)} | iex`}
-      />
+      <CommandBlock command={cliInstallCommand(APP_VERSION, "powershell")} />
       <p className="text-xs text-muted-foreground">
         <T>Then</T>
       </p>

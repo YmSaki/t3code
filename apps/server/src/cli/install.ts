@@ -1,10 +1,5 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import {
-  CLI_INSTALL_BIN_DIRNAME,
-  CLI_INSTALL_PS1_FILE,
-  CLI_INSTALL_SH_FILE,
-  cliReleaseAssetUrl,
-} from "@t3tools/shared/cliRelease";
+import { CLI_INSTALL_BIN_DIRNAME, cliInstallCommand } from "@t3tools/shared/cliRelease";
 import { pathSetupCommand, resolveCommandPath } from "@t3tools/shared/shell";
 import * as Console from "effect/Console";
 import * as Duration from "effect/Duration";
@@ -59,11 +54,7 @@ export const installCli = Effect.fn("cli.install.install")(function* () {
   const runtime = yield* standaloneRuntime;
   const windows = platform === "win32";
   if (Option.isNone(runtime)) {
-    const url = cliReleaseAssetUrl(
-      packageJson.version,
-      windows ? CLI_INSTALL_PS1_FILE : CLI_INSTALL_SH_FILE,
-    );
-    const script = windows ? `irm ${url} | iex` : `curl -fsSL ${url} | sh`;
+    const script = cliInstallCommand(packageJson.version, windows ? "powershell" : "sh");
     return yield* new CliInstallError({
       reason: `Only the standalone t3 can install itself. Use \`${script}\`, or Settings in the desktop app.`,
     });

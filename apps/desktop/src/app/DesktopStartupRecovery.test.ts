@@ -212,10 +212,14 @@ it.effect.each([
   ).pipe(Effect.provide(DesktopState.layer)),
 );
 
-it.effect("installs the build the update action downloaded, not the one it offered", () =>
+it.effect.each([
+  { action: "update", expected: "0.1.5" },
+  { action: "reinstall", expected: "https://github.com/YmSaki/t3code/releases/tag/v0.1.2" },
+  { action: "releases", expected: "https://github.com/YmSaki/t3code/releases" },
+])("resolves the $action recovery action to its destination", ({ action, expected }) =>
   Effect.scoped(
     Effect.gen(function* () {
-      const installed = yield* Deferred.make<string>();
+      const target = yield* Deferred.make<string>();
       const shown = yield* Deferred.make<void>();
       let navigate: ((event: { preventDefault: () => void }, url: string) => void) | undefined;
       const recovery = {
@@ -230,12 +234,18 @@ it.effect("installs the build the update action downloaded, not the one it offer
           },
         },
       } as unknown as Electron.BrowserWindow;
-      const offered = updateState({ status: "available", availableVersion: "0.1.4" });
+      const offered = updateState(
+        action === "update"
+          ? { status: "available", availableVersion: "0.1.4" }
+          : { status: "up-to-date" },
+      );
       const state = yield* DesktopState.DesktopState;
       yield* listen.pipe(
         Effect.provide(
           Layer.mergeAll(
-            FileSystem.layerNoop({ readFileString: () => Effect.succeed("0.1.3") }),
+            FileSystem.layerNoop({
+              readFileString: () => Effect.succeed(action === "reinstall" ? "0.1.2" : "0.1.3"),
+            }),
             Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
               appVersion: "0.1.3",
               stateDir: "/task/state",
@@ -245,10 +255,9 @@ it.effect("installs the build the update action downloaded, not the one it offer
             Layer.succeed(ElectronApp.ElectronApp, {
               on: () => Effect.void,
             } as unknown as ElectronApp.ElectronApp["Service"]),
-            Layer.succeed(
-              ElectronShell.ElectronShell,
-              {} as ElectronShell.ElectronShell["Service"],
-            ),
+            Layer.succeed(ElectronShell.ElectronShell, {
+              openExternal: (url: string) => Deferred.succeed(target, url),
+            } as unknown as ElectronShell.ElectronShell["Service"]),
             Layer.succeed(ElectronTheme.ElectronTheme, {
               shouldUseDarkColors: Effect.succeed(false),
             } as ElectronTheme.ElectronTheme["Service"]),
@@ -266,7 +275,7 @@ it.effect("installs the build the update action downloaded, not the one it offer
                 completed: true,
                 state: updateState({ status: "downloaded", downloadedVersion: "0.1.5" }),
               }),
-              installPrepared: (version: string) => Deferred.succeed(installed, version),
+              installPrepared: (version: string) => Deferred.succeed(target, version),
             } as unknown as DesktopUpdates.DesktopUpdates["Service"]),
           ),
         ),
@@ -278,8 +287,8 @@ it.effect("installs the build the update action downloaded, not the one it offer
         output: "Failure details",
       });
       yield* Deferred.await(shown);
-      navigate!({ preventDefault: () => {} }, "https://startup-recovery.invalid/update");
-      expect(yield* Deferred.await(installed)).toBe("0.1.5");
+      navigate!({ preventDefault: () => {} }, `https://startup-recovery.invalid/${action}`);
+      expect(yield* Deferred.await(target)).toBe(expected);
     }),
   ).pipe(Effect.provide(DesktopState.layer)),
 );

@@ -30,6 +30,24 @@ const cli = [
   ["win-x64", "win32-x64.zip"],
 ];
 
+function linuxManifest(version, installers) {
+  const sha512 = (name) => createHash("sha512").update(name).digest("base64");
+  return [
+    "version: " + version,
+    "files:",
+    ...installers.flatMap((name) => [
+      "  - url: " + name,
+      "    sha512: " + sha512(name),
+      "    size: " + Buffer.byteLength(name),
+      ...(name.endsWith(".AppImage") ? ["    blockMapSize: 10"] : []),
+    ]),
+    "path: " + installers[0],
+    "sha512: " + sha512(installers[0]),
+    "releaseDate: '2026-11-25T00:00:00.000Z'",
+    "",
+  ].join("\n");
+}
+
 function fixture(t, channel = "stable") {
   const root = mkdtempSync(join(tmpdir(), "t3codejp-release-assets-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -58,6 +76,7 @@ function fixture(t, channel = "stable") {
   for (const [target, extensions, manifest] of desktop) {
     const artifact = "desktop-" + target;
     const arch = target.split("-")[1];
+    const installers = [];
     for (const extension of extensions) {
       const artifactArch =
         arch === "x64" ? ({ AppImage: "x86_64", deb: "amd64" }[extension] ?? arch) : arch;
@@ -68,11 +87,15 @@ function fixture(t, channel = "stable") {
             : "T3CodeJP"
           : "T3CodeJP-" + options.version;
       const name = basename + "-" + artifactArch + "." + extension;
+      installers.push(name);
       put(artifact, name);
       if (extension === "exe" && channel !== "preview") put(artifact, name + ".blockmap");
     }
     if (channel !== "preview") {
-      put(artifact, prefix + "-" + manifest + ".yml", "version: " + options.version + "\n");
+      const contents = target.startsWith("linux-")
+        ? linuxManifest(options.version, installers.toReversed())
+        : "version: " + options.version + "\n";
+      put(artifact, prefix + "-" + manifest + ".yml", contents);
     }
     put(artifact, "builder-debug.yml");
   }
@@ -129,7 +152,7 @@ test("refuses to stage a release when a source installer is missing", async (t) 
   assert.equal(existsSync(options.outputDir), false);
 });
 
-test("rejects missing Windows differential assets and manifests from an older build", async (t) => {
+test("rejects missing Windows differential assets and incomplete or mismatched updater manifests", async (t) => {
   const { options, put } = fixture(t);
   const artifact = "desktop-win-arm64";
   const blockmap = "T3CodeJP-1.0.0-arm64.exe.blockmap";
@@ -138,6 +161,35 @@ test("rejects missing Windows differential assets and manifests from an older bu
   put(artifact, blockmap);
   put(artifact, "latest-win-arm64.yml", "version: 0.1.9\n");
   await assert.rejects(stageForkReleaseAssets(options), /version.*1\.0\.0/);
+  put(artifact, "latest-win-arm64.yml", "version: " + options.version + "\n");
+
+  for (const [linuxArtifact, manifest, image, otherImage] of [
+    [
+      "desktop-linux-x64",
+      "latest-linux.yml",
+      "T3CodeJP-x86_64.AppImage",
+      "T3CodeJP-arm64.AppImage",
+    ],
+    [
+      "desktop-linux-arm64",
+      "latest-linux-arm64.yml",
+      "T3CodeJP-arm64.AppImage",
+      "T3CodeJP-x86_64.AppImage",
+    ],
+  ]) {
+    const good = readFileSync(join(options.inputDir, linuxArtifact, manifest), "utf8");
+    put(linuxArtifact, manifest, "version: " + options.version + "\n");
+    await assert.rejects(stageForkReleaseAssets(options), /must list its staged AppImage/);
+    put(linuxArtifact, manifest, good.replace(image, otherImage));
+    await assert.rejects(stageForkReleaseAssets(options), /must list its staged AppImage/);
+    put(linuxArtifact, manifest, good);
+    put(linuxArtifact, image, image + "extra bytes");
+    await assert.rejects(stageForkReleaseAssets(options), /size does not match/);
+    put(linuxArtifact, image, "x".repeat(Buffer.byteLength(image)));
+    await assert.rejects(stageForkReleaseAssets(options), /SHA512 does not match/);
+    put(linuxArtifact, image);
+  }
+  assert.equal(existsSync(options.outputDir), false);
 });
 
 test("excludes updater metadata from Preview and refuses a leaked manifest or blockmap", async (t) => {

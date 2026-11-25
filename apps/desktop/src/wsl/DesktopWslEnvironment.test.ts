@@ -473,7 +473,7 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
             ),
           ),
         ),
-        Layer.provide(NodeServices.layer),
+        Layer.provideMerge(NodeServices.layer),
       );
 
     it.live("installs the runtime when wslpath cannot translate the archive's Windows path", () => {
@@ -504,10 +504,7 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
         const version = runShell(`${sh(fixture.serverEntry)} --version`);
         expect(version.status, version.stderr).toBe(0);
         expect(version.stdout).toBe("t3code wsl runtime test server 0.0.0\n");
-      }).pipe(
-        Effect.provide(layerWslEnvironment(`${fixture.work}/home`)),
-        Effect.provide(NodeServices.layer),
-      );
+      }).pipe(Effect.provide(layerWslEnvironment(`${fixture.work}/home`)));
     });
   });
 

@@ -56,6 +56,26 @@ const setup = Effect.fn("cli.install.test.setup")(function* (platform: NodeJS.Pl
 });
 
 it.layer(NodeServices.layer)("t3 install", (it) => {
+  it.effect.each(["linux", "win32"] as const)(
+    "pins installer recovery to this build on %s",
+    (platform) =>
+      Effect.gen(function* () {
+        const { provide } = yield* setup(platform);
+        const error = yield* provide(
+          installCli().pipe(Effect.provideService(HostProcess.IsExecutable, false)),
+        ).pipe(Effect.flip);
+        const release = `https://github.com/YmSaki/t3code/releases/download/v${VERSION}`;
+        if (platform === "win32") {
+          assert.include(error.message, `$env:T3CODE_VERSION = '${VERSION}'`);
+          assert.include(error.message, `irm '${release}/install.ps1' | iex`);
+          assert.include(error.message, "finally { $env:T3CODE_VERSION = $previousT3CodeVersion }");
+        } else {
+          assert.include(error.message, `| T3CODE_VERSION='${VERSION}' sh`);
+          assert.include(error.message, `curl -fsSL '${release}/install.sh'`);
+        }
+      }),
+  );
+
   it.effect("installs the running runtime, records it, and never replaces another t3", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

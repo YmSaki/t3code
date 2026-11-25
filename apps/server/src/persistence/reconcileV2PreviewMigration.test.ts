@@ -10,11 +10,11 @@ import PullRequestFilesViewed from "./Migrations/053_PullRequestFilesViewed.ts";
 import RemoveRedundantProjectionIndexes from "./Migrations/056_RemoveRedundantProjectionIndexes.ts";
 import OrchestrationV2 from "./Migrations/055_OrchestrationV2.ts";
 
-const expectedPreview53Upgrade = [
+const expectedPreview53Upgrade: Array<readonly [id: number, name: string]> = [
   [53, "PullRequestFilesViewed"],
   [54, "ProjectionThreadsAutoSettleDisabledAt"],
   ...migrationManifest.filter(([id]) => id > 55),
-] as const;
+];
 
 const seedPreview = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
