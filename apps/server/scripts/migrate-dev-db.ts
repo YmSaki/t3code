@@ -213,6 +213,10 @@ const CLEARED_TABLES: ReadonlyArray<string> = [
   "peer_environment_links",
   "web_push_subscriptions",
   "web_push_vapid_keys",
+  "repo_monitor_rules",
+  "repo_monitor_cursors",
+  "repo_monitor_events",
+  "ical_feeds",
 ];
 
 const PROVIDER_SESSIONS_TABLE = "orchestration_v2_projection_provider_sessions";
@@ -509,6 +513,7 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
   const stateDir = path.join(baseDir, "userdata");
   const databasePath = path.join(stateDir, "statev2.sqlite");
   const snapshotPath = `${databasePath}.migrate-dev-db-tmp`;
+  const compactPath = `${databasePath}.migrate-dev-db-compact`;
 
   if (!(yield* fs.exists(sourcePath))) {
     return yield* new MigrateDevDbSourceMissingError({ sourcePath });
@@ -520,11 +525,11 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
   if (canonicalBaseDir === canonicalSharedHome) {
     return yield* new MigrateDevDbSharedHomeError();
   }
-  // Both destination and snapshot are deleted below; reject sources resolving to either.
+  // Reject sources resolving to any path this command rewrites.
   const canonicalSourcePath = yield* fs
     .realPath(sourcePath)
     .pipe(Effect.orElseSucceed(() => sourcePath));
-  for (const destination of [databasePath, snapshotPath]) {
+  for (const destination of [databasePath, snapshotPath, compactPath]) {
     const canonicalDestination = yield* fs
       .realPath(destination)
       .pipe(Effect.orElseSucceed(() => destination));
@@ -545,7 +550,8 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
       );
 
   yield* removeDatabaseFiles(snapshotPath);
-  const { executedMigrations, pruned } = yield* Effect.gen(function* () {
+  yield* removeDatabaseFiles(compactPath);
+  const { executedMigrations, pruned, size } = yield* Effect.gen(function* () {
     yield* Console.log(`Copying visible threads from ${sourcePath} (read-only)...`);
     yield* copySourceSlice(sourcePath).pipe(
       Effect.provide(NodeSqliteClient.layer({ filename: snapshotPath })),
@@ -584,30 +590,35 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
     );
 
     yield* Console.log(`Compacting into ${databasePath}...`);
-    // A server may have started during pruning; re-check before replacing its database.
-    yield* ensureNotInUse(databasePath);
-    yield* removeDatabaseFiles(databasePath);
     yield* Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* sql`VACUUM INTO ${databasePath}`;
+      yield* sql`VACUUM INTO ${compactPath}`;
     }).pipe(
       Effect.provide(NodeSqliteClient.layer({ filename: snapshotPath })),
       wrapPhase("compact", databasePath),
     );
-    return { executedMigrations: executed, pruned: result };
-  }).pipe(Effect.ensuring(removeDatabaseFiles(snapshotPath)));
-  yield* fs.chmod(databasePath, 0o600);
-
-  yield* Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    // VACUUM INTO loses WAL mode; restore the server boot setting.
-    yield* sql.unsafe("PRAGMA journal_mode = WAL").unprepared;
+    const size = yield* Effect.gen(function* () {
+      yield* fs.chmod(compactPath, 0o600);
+      yield* Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // VACUUM INTO loses WAL mode; restore it before activating the finished database.
+        yield* sql.unsafe("PRAGMA journal_mode = WAL").unprepared;
+      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: compactPath })));
+      return (yield* fs.stat(compactPath)).size;
+    }).pipe(wrapPhase("compact", databasePath));
+    // A server may have started during pruning; re-check before replacing its database.
+    yield* ensureNotInUse(databasePath);
+    yield* Effect.gen(function* () {
+      for (const suffix of ["-wal", "-shm"]) {
+        yield* fs.remove(`${databasePath}${suffix}`, { force: true });
+      }
+      yield* fs.rename(compactPath, databasePath);
+    }).pipe(wrapPhase("compact", databasePath));
+    return { executedMigrations: executed, pruned: result, size };
   }).pipe(
-    Effect.provide(NodeSqliteClient.layer({ filename: databasePath })),
-    wrapPhase("compact", databasePath),
+    Effect.ensuring(removeDatabaseFiles(snapshotPath)),
+    Effect.ensuring(removeDatabaseFiles(compactPath)),
   );
-
-  const size = (yield* fs.stat(databasePath)).size;
   return {
     databasePath,
     sizeBytes: Number(size),
