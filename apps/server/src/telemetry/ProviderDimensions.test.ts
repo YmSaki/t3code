@@ -15,7 +15,11 @@ const provider = (
   }) as unknown as ServerProvider;
 
 const providers = [
-  provider("work-codex", "codex", [{ slug: "gpt-5.5", isCustom: false }]),
+  // Codex lists whatever its configured endpoint serves, all as non-custom.
+  provider("work-codex", "codex", [
+    { slug: "gpt-5.5", isCustom: false },
+    { slug: "acme-private-codex", isCustom: false },
+  ]),
   provider("claudeAgent", "claudeAgent", [
     { slug: "claude-opus-5-5", isCustom: false },
     { slug: "my-private-finetune", isCustom: true },
@@ -43,7 +47,12 @@ it("omits custom, user-configured, and unknown models and instance names", () =>
       tool: "t3_thread_send",
       providers,
       caller: thread("claudeAgent", "my-private-finetune"),
-      targets: [thread("opencode", "ollama/acme-internal"), thread("removed-instance", "gpt-5.5")],
+      targets: [
+        thread("opencode", "ollama/acme-internal"),
+        thread("removed-instance", "gpt-5.5"),
+        thread("work-codex", "acme-private-codex"),
+        thread("work-codex", "gpt-5.5"),
+      ],
       outcome: { outcome: "ok" },
     }).map(({ callerProvider, callerModel, targetProvider, targetModel }) => ({
       callerProvider,
@@ -64,7 +73,28 @@ it("omits custom, user-configured, and unknown models and instance names", () =>
       targetProvider: "unknown",
       targetModel: undefined,
     },
+    {
+      callerProvider: "claudeAgent",
+      callerModel: undefined,
+      targetProvider: "codex",
+      targetModel: undefined,
+    },
+    {
+      callerProvider: "claudeAgent",
+      callerModel: undefined,
+      targetProvider: "codex",
+      targetModel: "gpt-5.5",
+    },
   ]);
+  const [privateCaller] = agentToolProperties({
+    tool: "delegate_task",
+    providers,
+    caller: thread("work-codex", "acme-private-codex"),
+    targets: [],
+    outcome: { outcome: "ok" },
+  });
+  expect(privateCaller?.callerProvider).toBe("codex");
+  expect(privateCaller?.callerModel).toBeUndefined();
 });
 
 it("drops input strings outside the schema's literals, since rejected calls are recorded too", () => {
