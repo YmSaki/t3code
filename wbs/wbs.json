@@ -3291,12 +3291,16 @@
                   "hours": 4,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[PR #78 レビュー待ち] native/resource-monitor v4 固定分類化。",
+                  "note": "[完了] PR #78 マージ済み。native/resource-monitor v4 固定分類化 (#34)。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#34",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
                   }
                 },
                 {
@@ -3321,12 +3325,16 @@
                   "hours": 1,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[PR #45 レビュー待ち] CLEARED_TABLES へ追加。",
+                  "note": "[完了] PR #45 マージ済み。migrate-dev-db Web Push 除外 (#43)。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#43",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
                   }
                 },
                 {
@@ -3592,6 +3600,21 @@
                   "_req": "#66",
                   "plan": {
                     "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.4.4",
+                  "name": "Windows Codex起動エラー日本語stderr文字化け修正 (#85)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] makeStderrTail で UTF-8 優先＋Windows CP932 フォールバック。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#85",
+                  "plan": {
+                    "start": "2026-11-26",
                     "end": "2026-12-05"
                   }
                 }
