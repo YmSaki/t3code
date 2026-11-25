@@ -3743,6 +3743,7 @@ export const layerWsRpc = (
                 })),
               ),
         [WS_METHODS.webPushGetVapidPublicKey]: (_input) => webPushService.getVapidPublicKey,
+        [WS_METHODS.webPushListSubscriptions]: (_input) => webPushService.listSubscriptions,
         [WS_METHODS.webPushSubscribe]: (input) => webPushService.subscribe(input),
         [WS_METHODS.webPushUnsubscribe]: (input) =>
           webPushService.unsubscribe(input).pipe(Effect.map((removed) => ({ removed }))),

@@ -479,6 +479,7 @@ import {
   WebPushSubscription,
   WebPushSubscriptionDeleteInput,
   WebPushSubscriptionInput,
+  WebPushSubscriptionSummary,
   WebPushVapidPublicKeyResult,
 } from "./selfHost.ts";
 import {
@@ -820,6 +821,7 @@ export const WS_METHODS = {
   peerHealthList: "peerHealth.list",
   peerHealthProbe: "peerHealth.probe",
   webPushGetVapidPublicKey: "webPush.getVapidPublicKey",
+  webPushListSubscriptions: "webPush.listSubscriptions",
   webPushSubscribe: "webPush.subscribe",
   webPushUnsubscribe: "webPush.unsubscribe",
 
@@ -2547,6 +2549,12 @@ const WsWebPushSubscribeRpc = Rpc.make(WS_METHODS.webPushSubscribe, {
   error: Schema.Union([WebPushError, EnvironmentAuthorizationError]),
 });
 
+const WsWebPushListSubscriptionsRpc = Rpc.make(WS_METHODS.webPushListSubscriptions, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(WebPushSubscriptionSummary),
+  error: Schema.Union([WebPushError, EnvironmentAuthorizationError]),
+});
+
 const WsWebPushUnsubscribeRpc = Rpc.make(WS_METHODS.webPushUnsubscribe, {
   payload: WebPushSubscriptionDeleteInput,
   success: Schema.Struct({ removed: Schema.Boolean }),
@@ -3398,6 +3406,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPeerHealthListRpc,
   WsPeerHealthProbeRpc,
   WsWebPushGetVapidPublicKeyRpc,
+  WsWebPushListSubscriptionsRpc,
   WsWebPushSubscribeRpc,
   WsWebPushUnsubscribeRpc,
   WsMetaProjectsListRpc,

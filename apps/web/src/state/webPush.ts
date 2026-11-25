@@ -86,14 +86,6 @@ async function registerWebPushServiceWorker(swUrl = "/sw.js"): Promise<ServiceWo
   return navigator.serviceWorker.ready;
 }
 
-async function getBrowserPushSubscription(): Promise<PushSubscription | null> {
-  const support = getWebPushSupportStatus();
-  if (!support.supported) return null;
-  const existingRegistration = await navigator.serviceWorker.getRegistration("/");
-  if (!existingRegistration) return null;
-  return existingRegistration.pushManager.getSubscription();
-}
-
 export async function subscribeBrowserPush(
   vapidPublicKey: string,
 ): Promise<BrowserPushSubscriptionPayload> {
@@ -126,14 +118,6 @@ export async function subscribeBrowserPush(
     endpoint: subscription.endpoint,
     keys: { p256dh, auth },
   };
-}
-
-export async function unsubscribeBrowserPush(): Promise<string | null> {
-  const existing = await getBrowserPushSubscription();
-  if (!existing) return null;
-  const endpoint = existing.endpoint;
-  await existing.unsubscribe();
-  return endpoint;
 }
 
 export async function sendLocalTestPushNotification(

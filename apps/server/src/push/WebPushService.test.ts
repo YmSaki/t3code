@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest";
-import { WebPushSubscriptionId } from "@t3tools/contracts";
+import { WebPushSubscriptionId, type WebPushSubscriptionKeys } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -18,7 +18,11 @@ sqliteLayer("WebPushService", (it) => {
     () =>
       Effect.gen(function* () {
         yield* migrate111;
-        const deliveries: Array<{ readonly endpoint: string; readonly title: string }> = [];
+        const deliveries: Array<{
+          readonly endpoint: string;
+          readonly keys: WebPushSubscriptionKeys;
+          readonly title: string;
+        }> = [];
 
         const serviceLayer = WebPushService.layerWithOptions({
           vapidSubject: "mailto:hub@example.com",
@@ -26,7 +30,11 @@ sqliteLayer("WebPushService", (it) => {
             if (subscription.endpoint.includes("gone")) {
               return Effect.succeed({ status: "gone", statusCode: 410 });
             }
-            deliveries.push({ endpoint: subscription.endpoint, title: payload.title });
+            deliveries.push({
+              endpoint: subscription.endpoint,
+              keys: subscription.keys,
+              title: payload.title,
+            });
             return Effect.succeed({ status: "delivered", statusCode: 201 });
           },
         }).pipe(Layer.provideMerge(WebPushStore.layer));
@@ -37,20 +45,26 @@ sqliteLayer("WebPushService", (it) => {
         expect(vapid.subject).toBe("mailto:hub@example.com");
         expect(vapid.publicKey.length).toBeGreaterThan(80);
 
-        yield* service.subscribe({
+        const active = {
           id: WebPushSubscriptionId.make("sub-active"),
           endpoint: "https://push.example.com/active",
-          keys: { p256dh: "p256-a", auth: "auth-a" },
           deviceLabel: "Active Phone",
           enabled: true,
-        });
-        yield* service.subscribe({
+        };
+        const gone = {
           id: WebPushSubscriptionId.make("sub-gone"),
           endpoint: "https://push.example.com/gone",
-          keys: { p256dh: "p256-g", auth: "auth-g" },
           deviceLabel: "Stale Browser",
           enabled: true,
+        };
+        const activeKeys = { p256dh: "p256-a", auth: "auth-a" };
+        yield* service.subscribe({ ...active, keys: activeKeys });
+        yield* service.subscribe({
+          ...gone,
+          keys: { p256dh: "p256-g", auth: "auth-g" },
         });
+
+        expect(yield* service.listSubscriptions).toStrictEqual([active, gone]);
 
         const firstDispatch = yield* service.notifyEvent({
           kind: "approval_requested",
@@ -70,6 +84,7 @@ sqliteLayer("WebPushService", (it) => {
           WebPushSubscriptionId.make("sub-gone"),
         ]);
         expect(deliveries).toHaveLength(1);
+        expect(deliveries[0]?.keys).toEqual(activeKeys);
         expect(deliveries[0]?.title).toContain("[cl]");
 
         const remaining = yield* service.listSubscriptions;

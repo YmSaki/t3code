@@ -18,7 +18,6 @@ import {
   getWebPushSupportStatus,
   sendLocalTestPushNotification,
   subscribeBrowserPush,
-  unsubscribeBrowserPush,
   webPushEnvironment,
 } from "~/state/webPush";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
@@ -41,20 +40,24 @@ export function WebPushSettingsSection({
     webPushEnvironment.vapidPublicKey({ environmentId, input: {} }),
     resolve,
   );
-  const subscriptions = useAtomValue(webPushEnvironment.subscriptionsAtom(environmentId));
   const canManage = useAtomValue(
     webPushEnvironment.subscribe.permissionAtom(environmentId, {
       endpoint: "https://example.invalid",
       keys: { p256dh: "k", auth: "a" },
     }),
   );
+  const subscriptionsQuery = useEnvironmentQuery(
+    canManage ? webPushEnvironment.subscriptions({ environmentId, input: {} }) : null,
+    resolve,
+  );
+  const subscriptions = subscriptionsQuery.data ?? [];
   const subscribeRpc = useAtomCommand(webPushEnvironment.subscribe, { reportFailure: false });
   const unsubscribeRpc = useAtomCommand(webPushEnvironment.unsubscribe, { reportFailure: false });
 
   const [iosStatus] = useState(() => detectIosSafariPwaState());
   const [supportStatus, setSupportStatus] = useState(() => getWebPushSupportStatus());
   const [deviceLabel, setDeviceLabel] = useState("");
-  const [subscribedEndpoint, setSubscribedEndpoint] = useState<string | null>(null);
+  const [subscribedEndpoint, setSubscribedEndpoint] = useState<string | null>();
   const [busy, setBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -70,7 +73,7 @@ export function WebPushSettingsSection({
           setSubscribedEndpoint(existing?.endpoint ?? null);
         }
       } catch {
-        // Ignore service worker lookup errors during mount hydration.
+        if (!cancelled) setSubscribedEndpoint(null);
       }
     })();
     return () => {
@@ -78,35 +81,29 @@ export function WebPushSettingsSection({
     };
   }, [supportStatus.supported]);
 
-  const isSubscribed = subscriptions.length > 0 || subscribedEndpoint !== null;
+  const isSubscribed = subscriptions.some(
+    (sub) => sub.endpoint === subscribedEndpoint && sub.enabled,
+  );
+  const error = statusError ?? subscriptionsQuery.error;
 
   const handleSubscribeToggle = async (nextChecked: boolean) => {
     setStatusError(null);
     if (!nextChecked) {
+      if (!subscribedEndpoint) return;
       setBusy(true);
-      const browserResult = await settlePromise(() => unsubscribeBrowserPush());
-      const endpoint =
-        browserResult._tag === "Success"
-          ? (browserResult.value ?? subscribedEndpoint)
-          : subscribedEndpoint;
-      if (endpoint) {
-        const rpcResult = await unsubscribeRpc({
-          environmentId,
-          input: { endpoint },
-        });
-        if (rpcResult._tag === "Failure" && !isAtomCommandInterrupted(rpcResult)) {
-          const error = squashAtomCommandFailure(rpcResult);
-          setStatusError(
-            error instanceof Error
-              ? (thrownErrorMessage(error, m) ?? error.message)
-              : m(msg("Could not unsubscribe from Web Push.")),
-          );
-          setBusy(false);
-          return;
-        }
+      // The browser subscription can also be registered with other environments.
+      const rpcResult = await unsubscribeRpc({
+        environmentId,
+        input: { endpoint: subscribedEndpoint },
+      });
+      if (rpcResult._tag === "Failure" && !isAtomCommandInterrupted(rpcResult)) {
+        const error = squashAtomCommandFailure(rpcResult);
+        setStatusError(
+          error instanceof Error
+            ? (thrownErrorMessage(error, m) ?? error.message)
+            : m(msg("Could not unsubscribe from Web Push.")),
+        );
       }
-      setSubscribedEndpoint(null);
-      setSupportStatus(getWebPushSupportStatus());
       setBusy(false);
       return;
     }
@@ -143,13 +140,15 @@ export function WebPushSettingsSection({
     setSupportStatus(getWebPushSupportStatus());
     setBusy(false);
 
-    if (rpcResult._tag === "Failure" && !isAtomCommandInterrupted(rpcResult)) {
-      const error = squashAtomCommandFailure(rpcResult);
-      setStatusError(
-        error instanceof Error
-          ? (thrownErrorMessage(error, m) ?? error.message)
-          : m(msg("Could not register Web Push subscription on the server.")),
-      );
+    if (rpcResult._tag === "Failure") {
+      if (!isAtomCommandInterrupted(rpcResult)) {
+        const error = squashAtomCommandFailure(rpcResult);
+        setStatusError(
+          error instanceof Error
+            ? (thrownErrorMessage(error, m) ?? error.message)
+            : m(msg("Could not register Web Push subscription on the server.")),
+        );
+      }
       return;
     }
 
@@ -212,10 +211,10 @@ export function WebPushSettingsSection({
         </Alert>
       ) : null}
 
-      {statusError !== null ? (
+      {error !== null ? (
         <Alert variant="error">
           <AlertTitle>{gt("Web Push error")}</AlertTitle>
-          <AlertDescription>{statusError}</AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -227,7 +226,15 @@ export function WebPushSettingsSection({
         control={
           <Switch
             checked={isSubscribed}
-            disabled={busy || !canManage || !supportStatus.supported || vapidQuery.data === null}
+            disabled={
+              busy ||
+              !canManage ||
+              !supportStatus.supported ||
+              subscribedEndpoint === undefined ||
+              vapidQuery.data === null ||
+              !subscriptionsQuery.isSuccess ||
+              subscriptionsQuery.isPending
+            }
             onCheckedChange={(checked) => {
               void handleSubscribeToggle(checked);
             }}

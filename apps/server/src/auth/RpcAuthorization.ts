@@ -243,6 +243,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscribeAuthAccess]: AuthAccessReadScope,
   [WS_METHODS.peerHealthList]: AuthOrchestrationReadScope,
   [WS_METHODS.webPushGetVapidPublicKey]: AuthOrchestrationReadScope,
+  [WS_METHODS.webPushListSubscriptions]: AuthSettingsWriteScope,
   [WS_METHODS.metaProjectsList]: AuthOrchestrationReadScope,
   [WS_METHODS.metaProjectsGetTree]: AuthOrchestrationReadScope,
   [WS_METHODS.metaProjectsGetContext]: AuthOrchestrationReadScope,

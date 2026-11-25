@@ -262,6 +262,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.peerHealthList]: "peerLinks",
   [WS_METHODS.peerHealthProbe]: "peerLinks",
   [WS_METHODS.webPushGetVapidPublicKey]: "webPush",
+  [WS_METHODS.webPushListSubscriptions]: "webPush",
   [WS_METHODS.webPushSubscribe]: "webPush",
   [WS_METHODS.webPushUnsubscribe]: "webPush",
   [WS_METHODS.metaProjectsList]: "metaProjects",

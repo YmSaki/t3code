@@ -1,35 +1,9 @@
-import {
-  type EnvironmentId,
-  WS_METHODS,
-  type WebPushSubscription,
-  type WebPushSubscriptionDeleteInput,
-} from "@t3tools/contracts";
+import { WS_METHODS } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { createEnvironmentRpcCommand, createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
-
-export function upsertWebPushSubscriptionList(
-  current: ReadonlyArray<WebPushSubscription>,
-  next: WebPushSubscription,
-): ReadonlyArray<WebPushSubscription> {
-  const filtered = current.filter(
-    (entry) => entry.id !== next.id && entry.endpoint !== next.endpoint,
-  );
-  return [next, ...filtered];
-}
-
-export function removeWebPushSubscriptionFromList(
-  current: ReadonlyArray<WebPushSubscription>,
-  target: WebPushSubscriptionDeleteInput,
-): ReadonlyArray<WebPushSubscription> {
-  return current.filter((entry) => {
-    if (target.id !== undefined && entry.id === target.id) return false;
-    if (target.endpoint !== undefined && entry.endpoint === target.endpoint) return false;
-    return true;
-  });
-}
 
 export function createWebPushEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
@@ -40,38 +14,33 @@ export function createWebPushEnvironmentAtoms<R, E>(
     staleTimeMs: 60_000,
   });
 
-  const subscriptionsAtom = Atom.family((environmentId: EnvironmentId) =>
-    Atom.make<ReadonlyArray<WebPushSubscription>>([]).pipe(
-      Atom.withLabel(`environment-data:web-push:subscriptions:${environmentId}`),
-    ),
-  );
+  const subscriptions = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "environment-data:web-push:subscriptions",
+    tag: WS_METHODS.webPushListSubscriptions,
+    staleTimeMs: 0,
+  });
 
   const subscribe = createEnvironmentRpcCommand(runtime, {
     label: "environment-data:web-push:subscribe",
     tag: WS_METHODS.webPushSubscribe,
-    onSuccess: ({ environmentId }, registry, subscription) =>
+    onSuccess: ({ environmentId }, registry) =>
       Effect.sync(() => {
-        registry.update(subscriptionsAtom(environmentId), (current) =>
-          upsertWebPushSubscriptionList(current, subscription),
-        );
+        registry.refresh(subscriptions({ environmentId, input: {} }));
       }),
   });
 
   const unsubscribe = createEnvironmentRpcCommand(runtime, {
     label: "environment-data:web-push:unsubscribe",
     tag: WS_METHODS.webPushUnsubscribe,
-    onSuccess: ({ environmentId, input }, registry, result) =>
+    onSuccess: ({ environmentId }, registry) =>
       Effect.sync(() => {
-        if (!result.removed) return;
-        registry.update(subscriptionsAtom(environmentId), (current) =>
-          removeWebPushSubscriptionFromList(current, input),
-        );
+        registry.refresh(subscriptions({ environmentId, input: {} }));
       }),
   });
 
   return {
     vapidPublicKey,
-    subscriptionsAtom,
+    subscriptions,
     subscribe,
     unsubscribe,
   };
