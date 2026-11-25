@@ -177,9 +177,34 @@ describe("Codex App Server stderr decoding", () => {
 
   it.effect("keeps long UTF-8 lines valid after trimming the pending buffer on Windows", () =>
     Effect.gen(function* () {
-      const tail = yield* readTail([utf8("あ".repeat(11_000)), utf8("\n")], "win32");
-      assert.isTrue(tail.endsWith("あ\n"));
-      assert.isFalse(tail.includes("\uFFFD"));
+      const bytes = utf8(`${"あ".repeat(11_002)}\n`);
+      const singleChunk = yield* readTail([bytes], "win32");
+      const splitMidChar = yield* readTail(
+        [bytes.subarray(0, 33_004), bytes.subarray(33_004)],
+        "win32",
+      );
+      assert.equal(splitMidChar, singleChunk);
+      assert.isTrue(splitMidChar.endsWith("あああああ\n"));
+      assert.isFalse(splitMidChar.includes("\uFFFD"));
+    }),
+  );
+
+  it.effect("keeps long CP932 lines invariant across chunk boundaries when ASCII follows", () =>
+    Effect.gen(function* () {
+      const prefix = Uint8Array.from([0x82, 0xa0]);
+      const mid = new Uint8Array(32_768).fill(0x61);
+      const suffix = Uint8Array.from([0xc2, 0xa9, 0x0a]);
+      const combined = new Uint8Array(prefix.length + mid.length + suffix.length);
+      combined.set(prefix, 0);
+      combined.set(mid, prefix.length);
+      combined.set(suffix, prefix.length + mid.length);
+      const singleChunk = yield* readTail([combined], "win32");
+      const splitBeforeLf = yield* readTail(
+        [combined.subarray(0, combined.length - 1), combined.subarray(combined.length - 1)],
+        "win32",
+      );
+      assert.equal(splitBeforeLf, singleChunk);
+      assert.isTrue(splitBeforeLf.endsWith("aaaﾂｩ\n"));
     }),
   );
 

@@ -91,71 +91,73 @@ export const stderrExcerpt = (tail: string): string | undefined => {
     : `${excerpt.slice(0, STDERR_EXCERPT_MAX_CHARS - 1)}…`;
 };
 
-// Japanese Windows tools write stderr in the ANSI code page (CP932), not UTF-8.
-const decodeStderrLine = (bytes: Uint8Array, platform: NodeJS.Platform): string => {
-  try {
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-  } catch {
-    return new TextDecoder(platform === "win32" ? "shift_jis" : "utf-8", {
-      ignoreBOM: true,
-    }).decode(bytes);
-  }
-};
+interface StderrLineState {
+  readonly utf8Decoder: TextDecoder;
+  readonly fallbackDecoder: TextDecoder;
+  utf8Valid: boolean;
+  utf8Tail: string;
+  fallbackTail: string;
+}
 
-const STDERR_PENDING_MAX_BYTES = STDERR_TAIL_MAX_CHARS * 4;
+const makeStderrLineState = (platform: NodeJS.Platform): StderrLineState => ({
+  utf8Decoder: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }),
+  fallbackDecoder: new TextDecoder(platform === "win32" ? "shift_jis" : "utf-8", {
+    ignoreBOM: true,
+  }),
+  utf8Valid: true,
+  utf8Tail: "",
+  fallbackTail: "",
+});
 
-const isCp932LeadByte = (byte: number): boolean =>
-  (byte >= 0x81 && byte <= 0x9f) || (byte >= 0xe0 && byte <= 0xfc);
-
-const trimPendingLineTail = (
-  bytes: Uint8Array<ArrayBuffer>,
-  start: number,
-  platform: NodeJS.Platform,
-): Uint8Array<ArrayBuffer> => {
-  const minStart = bytes.length - STDERR_PENDING_MAX_BYTES;
-  if (minStart <= start) {
-    return bytes.slice(start);
-  }
-  const utf8Decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
-  for (let offset = 0; offset < 4 && minStart + offset < bytes.length; offset++) {
+const feedStderrLine = (line: StderrLineState, segment: Uint8Array, stream: boolean): void => {
+  if (line.utf8Valid) {
     try {
-      utf8Decoder.decode(bytes.subarray(minStart + offset));
-      return bytes.slice(minStart + offset);
+      const decoded = line.utf8Decoder.decode(segment, { stream });
+      if (decoded.length > 0) {
+        line.utf8Tail = appendStderrTail(line.utf8Tail, decoded);
+      }
     } catch {
-      // Try next byte boundary in case minStart landed inside a multi-byte UTF-8 sequence.
+      line.utf8Valid = false;
     }
   }
-  if (platform === "win32") {
-    // Walk CP932 character boundaries from line start so 2-byte characters stay aligned.
-    let cursor = start;
-    while (cursor < minStart && cursor < bytes.length) {
-      cursor += isCp932LeadByte(bytes[cursor]!) ? 2 : 1;
-    }
-    return bytes.slice(Math.min(cursor, bytes.length));
+  const fallbackDecoded = line.fallbackDecoder.decode(segment, { stream });
+  if (fallbackDecoded.length > 0) {
+    line.fallbackTail = appendStderrTail(line.fallbackTail, fallbackDecoded);
   }
-  return bytes.slice(minStart);
 };
 
 export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
   stderr: ChildProcessSpawner.ChildProcessHandle["stderr"],
 ) {
   const platform = yield* HostProcess.Platform;
-  // Decode whole lines so multi-byte characters split across chunks stay intact.
-  const tail = yield* Ref.make({ text: "", pending: new Uint8Array(0) });
+  // Stream each line through dual decoders so output is independent of chunk boundaries.
+  const tail = yield* Ref.make({ text: "", line: makeStderrLineState(platform) });
   const drain = yield* stderr.pipe(
     Stream.runForEach((chunk) =>
-      Ref.update(tail, ({ text, pending }) => {
-        const bytes = new Uint8Array(pending.length + chunk.length);
-        bytes.set(pending);
-        bytes.set(chunk, pending.length);
+      Ref.update(tail, ({ text, line }) => {
         let start = 0;
-        for (let end = bytes.indexOf(0x0a); end !== -1; end = bytes.indexOf(0x0a, start)) {
-          text = appendStderrTail(text, decodeStderrLine(bytes.subarray(start, end + 1), platform));
+        let currentLine = line;
+        for (let end = chunk.indexOf(0x0a); end !== -1; end = chunk.indexOf(0x0a, start)) {
+          feedStderrLine(currentLine, chunk.subarray(start, end + 1), false);
+          text = appendStderrTail(
+            text,
+            currentLine.utf8Valid ? currentLine.utf8Tail : currentLine.fallbackTail,
+          );
+          currentLine = makeStderrLineState(platform);
           start = end + 1;
         }
+        if (start < chunk.length) {
+          feedStderrLine(currentLine, chunk.subarray(start), true);
+        }
+        return { text, line: currentLine };
+      }),
+    ),
+    Effect.andThen(
+      Ref.update(tail, ({ text, line }) => {
+        feedStderrLine(line, new Uint8Array(0), false);
         return {
-          text,
-          pending: trimPendingLineTail(bytes, start, platform),
+          text: appendStderrTail(text, line.utf8Valid ? line.utf8Tail : line.fallbackTail),
+          line: makeStderrLineState(platform),
         };
       }),
     ),
@@ -164,8 +166,8 @@ export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
   );
   return {
     read: Ref.get(tail).pipe(
-      Effect.map(({ text, pending }) =>
-        appendStderrTail(text, decodeStderrLine(pending, platform)),
+      Effect.map(({ text, line }) =>
+        appendStderrTail(text, line.utf8Valid ? line.utf8Tail : line.fallbackTail),
       ),
     ),
     awaitDrained: Fiber.join(drain).pipe(Effect.timeout("250 millis"), Effect.ignore),
