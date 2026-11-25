@@ -5,7 +5,9 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Cause from "effect/Cause";
 import * as Layer from "effect/Layer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as PlatformError from "effect/PlatformError";
+import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/process";
@@ -13,6 +15,8 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 
 import * as ProcessRunner from "./processRunner.ts";
+
+const encodeProcessRunError = Schema.encodeUnknownSync(ProcessRunner.ProcessRunError);
 
 type ChildProcessCommand = {
   readonly command: string;
@@ -142,6 +146,65 @@ describe("runProcess", () => {
       }
       expect(error).toMatchObject({ command: "jj", argumentCount: 1, cwd: "/repo" });
       expect(error.cause).toBe(defect);
+    }),
+  );
+
+  it.effect("keeps arguments out of serialized spawn failures from the real spawner", () =>
+    Effect.gen(function* () {
+      const secret = "secret-spawn-arg";
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const error = yield* runWith(spawner)({
+        command: "t3-missing-command-for-spawn-test",
+        args: ["--token", secret],
+      }).pipe(Effect.flip);
+
+      expect(error._tag).toBe("ProcessSpawnError");
+      if (error._tag !== "ProcessSpawnError") {
+        return expect.fail("Expected ProcessSpawnError");
+      }
+      expect(PlatformError.isPlatformError(error.cause)).toBe(true);
+      if (!PlatformError.isPlatformError(error.cause)) return;
+      expect(error.cause.reason).toMatchObject({ _tag: "NotFound", method: "spawn" });
+      expect(error.resolvedCommand).toBe("t3-missing-command-for-spawn-test");
+      expect(JSON.stringify(encodeProcessRunError(error))).not.toContain(secret);
+      expect(Cause.pretty(Cause.fail(error))).not.toContain(secret);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("names only the shim executable when a Windows command line fails to spawn", () =>
+    Effect.gen(function* () {
+      const secret = "secret-shim-arg";
+      const spawner = makeSpawner((command) =>
+        Effect.fail(
+          PlatformError.systemError({
+            _tag: "PermissionDenied",
+            module: "ChildProcess",
+            method: "spawn",
+            pathOrDescriptor: command.command,
+            cause: Object.assign(new Error("spawn EACCES"), { spawnargs: [command.command] }),
+          }),
+        ),
+      );
+
+      const error = yield* runWith(spawner)({ command: "az", args: ["login", secret] }).pipe(
+        Effect.provideService(HostProcess.Platform, "win32"),
+        Effect.provideService(HostProcess.Environment, { PATHEXT: ".CMD" }),
+        Effect.provideService(
+          SpawnExecutableResolution,
+          () => "C:\\Users\\tester\\AppData\\Roaming\\npm\\az.cmd",
+        ),
+        Effect.flip,
+      );
+
+      if (error._tag !== "ProcessSpawnError") {
+        return expect.fail("Expected ProcessSpawnError");
+      }
+      expect(error).toMatchObject({ resolvedCommand: "az.cmd", shell: true });
+      expect(error.cause).toMatchObject({
+        reason: { _tag: "PermissionDenied", pathOrDescriptor: "az.cmd" },
+      });
+      expect(JSON.stringify(encodeProcessRunError(error))).not.toContain(secret);
+      expect(Cause.pretty(Cause.fail(error))).not.toContain(secret);
     }),
   );
 

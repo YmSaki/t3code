@@ -67,6 +67,8 @@ function escapeWindowsShellArg(arg: string): string {
 
 export interface ResolvedSpawnCommand {
   readonly command: string;
+  /** The executable alone; with `shell: true`, `command` is the whole escaped command line. */
+  readonly executable: string;
   readonly args: ReadonlyArray<string>;
   readonly shell: boolean;
 }
@@ -1075,7 +1077,7 @@ export const resolveSpawnCommand = Effect.fnUntraced(function* (
   const platform = yield* HostProcess.Platform;
   const isMacosGit = platform === "darwin" && command === "git";
   if (platform !== "win32" && !isMacosGit) {
-    return { command, args: [...args], shell: false };
+    return { command, executable: command, args: [...args], shell: false };
   }
 
   const hostEnvironment = yield* HostProcess.Environment;
@@ -1087,11 +1089,8 @@ export const resolveSpawnCommand = Effect.fnUntraced(function* (
         : options.env;
   const resolveExecutable = yield* SpawnExecutableResolution;
   if (isMacosGit) {
-    return {
-      command: yield* resolveMacosGit(env, resolveExecutable),
-      args: [...args],
-      shell: false,
-    };
+    const git = yield* resolveMacosGit(env, resolveExecutable);
+    return { command: git, executable: git, args: [...args], shell: false };
   }
   // The scan is synchronous and runs before every child process, so it shares
   // the PATH scan cache above. Explicit paths stay uncached for the same reason,
@@ -1123,16 +1122,17 @@ export const resolveSpawnCommand = Effect.fnUntraced(function* (
   const resolvedCommand = resolvedExecutable ?? command;
   const extension = NodePath.win32.extname(resolvedCommand).toLowerCase();
   if (extension !== ".cmd" && extension !== ".bat") {
-    return { command: resolvedCommand, args: [...args], shell: false };
+    return { command: resolvedCommand, executable: resolvedCommand, args: [...args], shell: false };
   }
   const shimExecutable = options.bypassNpmShim ? npmShimExecutable(resolvedCommand) : undefined;
   if (shimExecutable !== undefined) {
-    return { command: shimExecutable, args: [...args], shell: false };
+    return { command: shimExecutable, executable: shimExecutable, args: [...args], shell: false };
   }
 
   // Build the escaped command line without separate args to avoid Node DEP0190 with shell:true.
   return {
     command: [resolvedCommand, ...args].map(escapeWindowsShellArg).join(" "),
+    executable: resolvedCommand,
     args: [],
     shell: true,
   };
