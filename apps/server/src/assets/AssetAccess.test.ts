@@ -784,13 +784,20 @@ describe("AssetAccess", () => {
       yield* fs.makeDirectory(config.secretsDir, { recursive: true });
       yield* fs.writeFile(stateFile, new Uint8Array(32).fill(7));
       yield* fs.writeFileString(config.dbPath, "SQLite format 3");
+      const heapSnapshot = path.join(config.heapSnapshotsDir, "server-1.heapsnapshot");
+      yield* fs.makeDirectory(config.heapSnapshotsDir, { recursive: true });
+      yield* fs.writeFileString(heapSnapshot, "{}");
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-media-state-" });
       const alias = path.join(root, "alias");
       yield* fs.symlink(stateFile, alias);
+      const heapAlias = path.join(root, "heap-alias");
+      yield* fs.symlink(heapSnapshot, heapAlias);
       const threadId = ThreadId.make("thread-1");
       for (const resource of [
         { _tag: "media-file", threadId, path: stateFile, disposition: "attachment" },
         { _tag: "media-file", threadId, path: alias, disposition: "attachment" },
+        { _tag: "media-file", threadId, path: heapSnapshot, disposition: "attachment" },
+        { _tag: "media-file", threadId, path: heapAlias, disposition: "attachment" },
         {
           _tag: "media-file",
           threadId,

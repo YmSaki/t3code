@@ -710,7 +710,7 @@ Current high-value span and metric boundaries include:
 ## Heap Snapshots
 
 To see what a long-running server holds in memory, send it `SIGUSR2`. The server writes a V8 heap
-snapshot to its logs dir and logs the path. This works for desktop, `npx t3`, and service installs
+snapshot to its state dir and logs the path. This works for desktop, `npx t3`, and service installs
 on macOS and Linux. Windows has no `SIGUSR2`.
 
 Send the signal to the server pid in `server-runtime.json`, which sits in the server's state dir
@@ -730,8 +730,12 @@ If `ps` shows the T3 Code server, send the signal:
 kill -USR2 "$pid"
 ```
 
-The file is `<logsDir>/server-<pid>-<timestamp>.heapsnapshot`, next to `server.trace.ndjson`. To
-open it, use the Memory tab in Chrome DevTools and select Load.
+The file is `<stateDir>/diagnostics/heap/server-<pid>-<timestamp>.heapsnapshot`. The directory is
+owner-only, the server keeps only the latest two snapshots there, and clients cannot read or link
+files in it. To open one, use the Memory tab in Chrome DevTools and select Load.
+
+Older servers wrote snapshots to the logs dir. Check `<logsDir>` for leftover `*.heapsnapshot`
+files and delete them.
 
 Before you take one:
 
@@ -742,4 +746,4 @@ Before you take one:
 - The write needs about as much free memory as the heap uses. On a machine that is already
   swapping, it can make the problem worse or crash the server.
 - The file contains everything in server memory, including tokens, secrets, and thread content. Do
-  not share it publicly. Delete it when you are done, because storage cleanup does not remove it.
+  not share it publicly. Delete it when you are done.

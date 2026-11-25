@@ -377,11 +377,22 @@ it.layer(layerTest, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         const cwd = yield* makeTempDir;
         yield* writeTextFile(config.secretsDir, "example.bin", "example\n");
         yield* writeTextFile(config.stateDir, "statev2.sqlite", "example\n");
-
-        for (const input of [
+        yield* writeTextFile(config.heapSnapshotsDir, "server-1.heapsnapshot", "{}\n");
+        expect(config.heapSnapshotsDir).toBe(path.join(config.stateDir, "diagnostics", "heap"));
+        const heapSnapshot = path.join(config.heapSnapshotsDir, "server-1.heapsnapshot");
+        const inputs = [
           { cwd, relativePath: path.join(config.secretsDir, "example.bin") },
           { cwd: config.stateDir, relativePath: "statev2.sqlite" },
-        ]) {
+          { cwd: config.heapSnapshotsDir, relativePath: "server-1.heapsnapshot" },
+          { cwd: config.baseDir, relativePath: path.relative(config.baseDir, heapSnapshot) },
+        ];
+        if (symlinksSupported) {
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.symlink(heapSnapshot, path.join(config.baseDir, "heap.json"));
+          inputs.push({ cwd: config.baseDir, relativePath: "heap.json" });
+        }
+
+        for (const input of inputs) {
           const error = yield* workspaceFileSystem.readFile(input).pipe(Effect.flip);
           expect(error).toBeInstanceOf(WorkspacePaths.WorkspacePathOutsideRootError);
         }
