@@ -174,6 +174,21 @@ describe("Codex App Server stderr decoding", () => {
         assert.equal(tail, "Error: /home/ユーザー/設定.toml が見つかりません\n");
       }),
   );
+
+  it.effect("keeps long UTF-8 lines valid after trimming the pending buffer on Windows", () =>
+    Effect.gen(function* () {
+      const tail = yield* readTail([utf8("あ".repeat(11_000)), utf8("\n")], "win32");
+      assert.isTrue(tail.endsWith("あ\n"));
+      assert.isFalse(tail.includes("\uFFFD"));
+    }),
+  );
+
+  it.effect("retains interior U+FEFF characters across lines", () =>
+    Effect.gen(function* () {
+      const tail = yield* readTail([utf8("x\n\uFEFFy")], "linux");
+      assert.equal(tail, "x\n\uFEFFy");
+    }),
+  );
 });
 
 describe("Codex App Server stderr excerpt", () => {

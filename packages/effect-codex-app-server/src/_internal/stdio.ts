@@ -94,13 +94,31 @@ export const stderrExcerpt = (tail: string): string | undefined => {
 // Japanese Windows tools write stderr in the ANSI code page (CP932), not UTF-8.
 const decodeStderrLine = (bytes: Uint8Array, platform: NodeJS.Platform): string => {
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch {
-    return new TextDecoder(platform === "win32" ? "shift_jis" : "utf-8").decode(bytes);
+    return new TextDecoder(platform === "win32" ? "shift_jis" : "utf-8", {
+      ignoreBOM: true,
+    }).decode(bytes);
   }
 };
 
 const STDERR_PENDING_MAX_BYTES = STDERR_TAIL_MAX_CHARS * 4;
+
+const trimPendingLineTail = (
+  bytes: Uint8Array<ArrayBuffer>,
+  start: number,
+): Uint8Array<ArrayBuffer> => {
+  const minStart = bytes.length - STDERR_PENDING_MAX_BYTES;
+  if (minStart <= start) {
+    return bytes.slice(start);
+  }
+  let trimStart = minStart;
+  // Avoid landing in the middle of a multi-byte UTF-8 sequence, which would force CP932 fallback.
+  for (let i = 0; i < 3 && trimStart < bytes.length && (bytes[trimStart]! & 0xc0) === 0x80; i++) {
+    trimStart += 1;
+  }
+  return bytes.slice(trimStart);
+};
 
 export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
   stderr: ChildProcessSpawner.ChildProcessHandle["stderr"],
@@ -121,7 +139,7 @@ export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
         }
         return {
           text,
-          pending: bytes.slice(Math.max(start, bytes.length - STDERR_PENDING_MAX_BYTES)),
+          pending: trimPendingLineTail(bytes, start),
         };
       }),
     ),
