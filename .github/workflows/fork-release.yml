@@ -53,11 +53,19 @@ jobs:
       make_latest: ${{ steps.plan.outputs.make_latest }}
       has_update_feed: ${{ steps.plan.outputs.has_update_feed }}
     steps:
+      # actions/checkout's credential cleanup enumerates orphaned submodules in .repos.
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          persist-credentials: false
-          sparse-checkout: .github/scripts
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --cone .github/scripts
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
 
       - name: Resolve fork release metadata
         id: plan
@@ -126,14 +134,17 @@ jobs:
       VITE_RELAY_OTLP_TRACES_TOKEN: ""
     steps:
       - name: Checkout planned source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ needs.preflight.outputs.ref }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ needs.preflight.outputs.ref }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
 
       - uses: ./.github/actions/setup-ci-deps
         with:
@@ -199,14 +210,17 @@ jobs:
             shard: "8/8"
     steps:
       - name: Checkout planned source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ needs.preflight.outputs.ref }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ needs.preflight.outputs.ref }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
 
       - uses: ./.github/actions/setup-ci-deps
 
@@ -350,14 +364,17 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout planned source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ needs.preflight.outputs.ref }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ needs.preflight.outputs.ref }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
 
       - uses: ./.github/actions/setup-ci-deps
         with:
