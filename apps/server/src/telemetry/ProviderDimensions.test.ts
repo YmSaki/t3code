@@ -86,6 +86,15 @@ it("omits custom, user-configured, and unknown models and instance names", () =>
       targetModel: "gpt-5.5",
     },
   ]);
+  const [privateCaller] = agentToolProperties({
+    tool: "delegate_task",
+    providers,
+    caller: thread("work-codex", "acme-private-codex"),
+    targets: [],
+    outcome: { outcome: "ok" },
+  });
+  expect(privateCaller?.callerProvider).toBe("codex");
+  expect(privateCaller?.callerModel).toBeUndefined();
 });
 
 it("drops input strings outside the schema's literals, since rejected calls are recorded too", () => {
