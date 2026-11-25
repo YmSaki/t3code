@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -123,6 +124,55 @@ describe("Codex App Server child process termination", () => {
       assert.isUndefined(error.stderr);
       assert.equal(error.message, "Codex App Server process exited with code 1");
     }),
+  );
+});
+
+describe("Codex App Server stderr decoding", () => {
+  // "指定されたパスが見つかりません。" in CP932, as cmd.exe prints it on Japanese Windows.
+  const cp932PathNotFound = Uint8Array.from([
+    142, 119, 146, 232, 130, 179, 130, 234, 130, 189, 131, 112, 131, 88, 130, 170, 140, 169, 130,
+    194, 130, 169, 130, 232, 130, 220, 130, 185, 130, 241, 129, 66,
+  ]);
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+  const readTail = (chunks: ReadonlyArray<Uint8Array>, platform: NodeJS.Platform) =>
+    Effect.gen(function* () {
+      const tail = yield* makeStderrTail(Stream.fromIterable(chunks));
+      yield* tail.awaitDrained;
+      return yield* tail.read;
+    }).pipe(Effect.provideService(HostProcess.Platform, platform));
+
+  it.effect("decodes CP932 stderr on Windows", () =>
+    Effect.gen(function* () {
+      const crlf = Uint8Array.from([13, 10]);
+      const tail = yield* readTail(
+        [cp932PathNotFound.subarray(0, 5), cp932PathNotFound.subarray(5), crlf],
+        "win32",
+      );
+      assert.equal(tail, "指定されたパスが見つかりません。\r\n");
+    }),
+  );
+
+  it.effect("decodes UTF-8 and CP932 lines independently on Windows", () =>
+    Effect.gen(function* () {
+      const tail = yield* readTail(
+        [utf8("Error: C:\\ユーザー\\設定.toml\n"), cp932PathNotFound],
+        "win32",
+      );
+      assert.equal(tail, "Error: C:\\ユーザー\\設定.toml\n指定されたパスが見つかりません。");
+    }),
+  );
+
+  it.effect.each(["win32", "linux"] as const)(
+    "keeps UTF-8 characters split across chunks on %s",
+    (platform) =>
+      Effect.gen(function* () {
+        const bytes = utf8("Error: /home/ユーザー/設定.toml が見つかりません\n");
+        const tail = yield* readTail(
+          Array.from({ length: bytes.length }, (_, index) => bytes.subarray(index, index + 1)),
+          platform,
+        );
+        assert.equal(tail, "Error: /home/ユーザー/設定.toml が見つかりません\n");
+      }),
   );
 });
 

@@ -1,5 +1,6 @@
 import * as NodeUtil from "node:util";
 
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Fiber from "effect/Fiber";
 import * as Effect from "effect/Effect";
@@ -90,18 +91,49 @@ export const stderrExcerpt = (tail: string): string | undefined => {
     : `${excerpt.slice(0, STDERR_EXCERPT_MAX_CHARS - 1)}…`;
 };
 
+// Japanese Windows tools write stderr in the ANSI code page (CP932), not UTF-8.
+const decodeStderrLine = (bytes: Uint8Array, platform: NodeJS.Platform): string => {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder(platform === "win32" ? "shift_jis" : "utf-8").decode(bytes);
+  }
+};
+
+const STDERR_PENDING_MAX_BYTES = STDERR_TAIL_MAX_CHARS * 4;
+
 export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
   stderr: ChildProcessSpawner.ChildProcessHandle["stderr"],
 ) {
-  const tail = yield* Ref.make("");
+  const platform = yield* HostProcess.Platform;
+  // Decode whole lines so multi-byte characters split across chunks stay intact.
+  const tail = yield* Ref.make({ text: "", pending: new Uint8Array(0) });
   const drain = yield* stderr.pipe(
-    Stream.decodeText(),
-    Stream.runForEach((chunk) => Ref.update(tail, (current) => appendStderrTail(current, chunk))),
+    Stream.runForEach((chunk) =>
+      Ref.update(tail, ({ text, pending }) => {
+        const bytes = new Uint8Array(pending.length + chunk.length);
+        bytes.set(pending);
+        bytes.set(chunk, pending.length);
+        let start = 0;
+        for (let end = bytes.indexOf(0x0a); end !== -1; end = bytes.indexOf(0x0a, start)) {
+          text = appendStderrTail(text, decodeStderrLine(bytes.subarray(start, end + 1), platform));
+          start = end + 1;
+        }
+        return {
+          text,
+          pending: bytes.slice(Math.max(start, bytes.length - STDERR_PENDING_MAX_BYTES)),
+        };
+      }),
+    ),
     Effect.ignore,
     Effect.forkScoped,
   );
   return {
-    read: Ref.get(tail),
+    read: Ref.get(tail).pipe(
+      Effect.map(({ text, pending }) =>
+        appendStderrTail(text, decodeStderrLine(pending, platform)),
+      ),
+    ),
     awaitDrained: Fiber.join(drain).pipe(Effect.timeout("250 millis"), Effect.ignore),
   };
 });
