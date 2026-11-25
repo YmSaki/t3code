@@ -19,11 +19,10 @@ import {
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 
 import * as WebPushStore from "./WebPushStore.ts";
-import { makeHttpTransport } from "./WebPushTransport.ts";
+import { nodeHttpTransport } from "./WebPushTransport.ts";
 
 const MAX_HISTORY_RECORDS = 256;
 
@@ -124,8 +123,7 @@ export const make = Effect.fn("WebPushService.make")(function* (
   options: WebPushServiceOptions = {},
 ) {
   const store = yield* WebPushStore.WebPushStore;
-  const transport =
-    options.transport ?? (yield* makeHttpTransport().pipe(Effect.provide(FetchHttpClient.layer)));
+  const transport = options.transport ?? nodeHttpTransport;
   let currentPreferences: WebPushPreferences =
     options.initialPreferences ?? DEFAULT_WEB_PUSH_PREFERENCES;
   const history: PushNotificationHistoryRecord[] = [];

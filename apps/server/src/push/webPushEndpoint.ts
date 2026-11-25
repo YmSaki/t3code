@@ -26,5 +26,5 @@ export const parseWebPushEndpoint = Effect.fn("WebPushEndpoint.parse")(function*
       message: "Web Push subscription endpoint must use a public address.",
     });
   }
-  return url;
+  return { url, host };
 });

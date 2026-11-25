@@ -1,6 +1,8 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- ECDH, HKDF-style HMAC and AES-GCM for RFC 8291, ES256 for RFC 8292
 import * as NodeCrypto from "node:crypto";
+import type * as NodeNet from "node:net";
 
+import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import { WebPushError } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -9,6 +11,8 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Schema from "effect/Schema";
 
+import { resolvePublicLookup } from "../utils/publicAddresses.ts";
+import { parseWebPushEndpoint } from "./webPushEndpoint.ts";
 import type { WebPushDeliveryOutcome, WebPushDeliveryTransport } from "./WebPushService.ts";
 
 /** Push services keep an undeliverable message this long before dropping it. */
@@ -98,82 +102,130 @@ const freshSeed = (): WebPushEncryptionSeed => {
   return { salt: NodeCrypto.randomBytes(16), ephemeralPrivateKey };
 };
 
-const outcomeForStatus = (status: number, body: string): WebPushDeliveryOutcome => {
+const outcomeForStatus = (status: number): WebPushDeliveryOutcome => {
   if (status >= 200 && status < 300) return { status: "delivered", statusCode: status };
   if (status === 404 || status === 410) return { status: "gone", statusCode: status };
   return {
     status: "failed",
     statusCode: status,
-    errorMessage: `Push service answered ${status}${body.length > 0 ? `: ${body.slice(0, 200)}` : ""}`,
+    errorMessage: `Push service answered ${status}`,
   };
 };
 
-/** Sends over the given `HttpClient`; `WebPushService` supplies a fetch-backed one by default. */
+const responseStatus = Effect.fn("WebPushTransport.responseStatus")(function* (
+  request: HttpClientRequest.HttpClientRequest,
+) {
+  const http = yield* HttpClient.HttpClient;
+  const response = yield* HttpClient.withScope(http).execute(request);
+  return response.status;
+}, Effect.scoped);
+
+export const postWithCheckedLookup = Effect.fn("WebPushTransport.postWithCheckedLookup")(function* (
+  request: HttpClientRequest.HttpClientRequest,
+  lookup: NodeNet.LookupFunction,
+) {
+  return yield* responseStatus(request).pipe(
+    Effect.provide(
+      NodeHttpClient.layerNodeHttpOptions({ lookup, autoSelectFamily: true, keepAlive: false }),
+    ),
+  );
+});
+
+const deliveryTransport = (
+  post: typeof postWithCheckedLookup,
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+): WebPushDeliveryTransport =>
+  Effect.fn("WebPushTransport.send")(
+    function* ({ subscription, payload, vapid }) {
+      const { url, host } = yield* parseWebPushEndpoint(subscription.endpoint);
+      const lookup = yield* Effect.tryPromise({
+        try: () => resolvePublicLookup(host),
+        catch: (cause) =>
+          new WebPushError({
+            reason: "delivery_failed",
+            message: "Push endpoint did not resolve to a public address.",
+            cause,
+          }),
+      });
+      if (!lookup) {
+        return yield* new WebPushError({
+          reason: "delivery_failed",
+          message: "Push endpoint did not resolve to a public address.",
+        });
+      }
+      const nowSeconds = Math.floor(DateTime.toEpochMillis(yield* DateTime.now) / 1000);
+      const plaintext = yield* encodePayloadJson(payload).pipe(
+        Effect.mapError(
+          (cause) =>
+            new WebPushError({ reason: "delivery_failed", message: "Unencodable payload.", cause }),
+        ),
+      );
+      // Bad stored keys throw inside node:crypto; one broken subscription must not stop the rest.
+      const request = yield* Effect.try({
+        try: () => {
+          const jwt = signVapidJwt({
+            audience: url.origin,
+            subject: vapid.subject,
+            expiresAtSeconds: nowSeconds + VAPID_JWT_LIFETIME_SECONDS,
+            privateKeyPkcs8Pem: vapid.privateKeyPkcs8Pem,
+          });
+          const body = encryptWebPushPayload({
+            plaintext: Buffer.from(plaintext),
+            receiverPublicKey: Buffer.from(subscription.keys.p256dh, "base64url"),
+            authSecret: Buffer.from(subscription.keys.auth, "base64url"),
+            seed: freshSeed(),
+          });
+          return HttpClientRequest.post(url.toString()).pipe(
+            HttpClientRequest.setHeaders({
+              Authorization: `vapid t=${jwt}, k=${vapid.publicKey}`,
+              TTL: String(ttlSeconds),
+              Urgency: payload.priority === "high" ? "high" : "normal",
+              "Content-Encoding": "aes128gcm",
+            }),
+            HttpClientRequest.bodyUint8Array(body, "application/octet-stream"),
+          );
+        },
+        catch: (cause) =>
+          new WebPushError({
+            reason: "invalid_subscription",
+            message: "Could not sign or encrypt the push payload.",
+            cause,
+          }),
+      });
+
+      return yield* post(request, lookup).pipe(
+        Effect.map(outcomeForStatus),
+        Effect.mapError(
+          (cause) =>
+            new WebPushError({
+              reason: "delivery_failed",
+              message: "Push service did not answer.",
+              cause,
+            }),
+        ),
+      );
+    },
+    Effect.timeout(REQUEST_TIMEOUT),
+    Effect.catchTags({
+      TimeoutError: (cause) =>
+        Effect.fail(
+          new WebPushError({
+            reason: "delivery_failed",
+            message: "Push delivery timed out.",
+            cause,
+          }),
+        ),
+    }),
+  );
+
+export const nodeHttpTransport = deliveryTransport(postWithCheckedLookup);
+
 export const makeHttpTransport = Effect.fn("WebPushTransport.makeHttpTransport")(function* (
   options: WebPushHttpTransportOptions = {},
 ) {
   const http = yield* HttpClient.HttpClient;
-  const ttlSeconds = options.ttlSeconds ?? DEFAULT_TTL_SECONDS;
-
-  const send: WebPushDeliveryTransport = Effect.fn("WebPushTransport.send")(function* ({
-    subscription,
-    payload,
-    vapid,
-  }) {
-    const nowSeconds = Math.floor(DateTime.toEpochMillis(yield* DateTime.now) / 1000);
-    const plaintext = yield* encodePayloadJson(payload).pipe(
-      Effect.mapError(
-        (cause) =>
-          new WebPushError({ reason: "delivery_failed", message: "Unencodable payload.", cause }),
-      ),
-    );
-    // Bad stored keys throw inside node:crypto; one broken subscription must not stop the rest.
-    const request = yield* Effect.try({
-      try: () => {
-        const endpoint = new URL(subscription.endpoint);
-        const jwt = signVapidJwt({
-          audience: endpoint.origin,
-          subject: vapid.subject,
-          expiresAtSeconds: nowSeconds + VAPID_JWT_LIFETIME_SECONDS,
-          privateKeyPkcs8Pem: vapid.privateKeyPkcs8Pem,
-        });
-        const body = encryptWebPushPayload({
-          plaintext: Buffer.from(plaintext),
-          receiverPublicKey: Buffer.from(subscription.keys.p256dh, "base64url"),
-          authSecret: Buffer.from(subscription.keys.auth, "base64url"),
-          seed: freshSeed(),
-        });
-        return HttpClientRequest.post(endpoint.toString()).pipe(
-          HttpClientRequest.setHeaders({
-            Authorization: `vapid t=${jwt}, k=${vapid.publicKey}`,
-            TTL: String(ttlSeconds),
-            Urgency: payload.priority === "high" ? "high" : "normal",
-            "Content-Encoding": "aes128gcm",
-          }),
-          HttpClientRequest.bodyUint8Array(body, "application/octet-stream"),
-        );
-      },
-      catch: (cause) =>
-        new WebPushError({
-          reason: "invalid_subscription",
-          message: `Could not sign or encrypt a push for ${subscription.id}.`,
-          cause,
-        }),
-    });
-
-    const response = yield* http.execute(request).pipe(
-      Effect.timeout(REQUEST_TIMEOUT),
-      Effect.mapError(
-        (cause) =>
-          new WebPushError({
-            reason: "delivery_failed",
-            message: `Push service at ${new URL(request.url).origin} did not answer.`,
-            cause,
-          }),
-      ),
-    );
-    const body = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
-    return outcomeForStatus(response.status, body);
-  });
-  return send;
+  return deliveryTransport(
+    (request) => responseStatus(request).pipe(Effect.provideService(HttpClient.HttpClient, http)),
+    options.ttlSeconds,
+  );
 });
