@@ -22,7 +22,11 @@ export type RepoMonitorGuardOutcome =
   | "skipped_cooldown"
   | "skipped_rate_limit";
 
-export type RepoMonitorLoopReason = "self_account" | "t3_managed_agent" | "agent_marker";
+export type RepoMonitorLoopReason =
+  | "self_account"
+  | "self_account_unknown"
+  | "t3_managed_agent"
+  | "agent_marker";
 
 export interface RepoMonitorDedupeKeyInput {
   readonly projectId: ProjectId | string;
@@ -47,7 +51,8 @@ export interface RepoMonitorLoopCheckInput {
   readonly title?: string | undefined;
   readonly body?: string | undefined;
   readonly originatedByT3Agent?: boolean | undefined;
-  readonly selfAccountLogins?: ReadonlyArray<string> | undefined;
+  /** null: the self accounts could not be resolved, so any authored event may be our own. */
+  readonly selfAccountLogins?: ReadonlyArray<string> | null | undefined;
   readonly managedAgentLogins?: ReadonlyArray<string> | undefined;
   readonly agentMarkers?: ReadonlyArray<string> | undefined;
 }
@@ -72,7 +77,7 @@ export interface RepoMonitorGuardInput {
   readonly globalKillSwitch: boolean;
   readonly ruleEnabled: boolean;
   readonly event: RepoMonitorGuardEventInput;
-  readonly selfAccountLogins?: ReadonlyArray<string>;
+  readonly selfAccountLogins?: ReadonlyArray<string> | null;
   readonly managedAgentLogins?: ReadonlyArray<string>;
   readonly agentMarkers?: ReadonlyArray<string>;
   readonly seenDedupeKeys?: ReadonlySet<string> | ReadonlyArray<string>;
@@ -120,6 +125,10 @@ export function detectRepoMonitorAgentLoop(
   }
 
   const normalizedAuthor = input.authorLogin ? input.authorLogin.trim().toLowerCase() : null;
+
+  if (normalizedAuthor && input.selfAccountLogins === null) {
+    return { isLoop: true, reason: "self_account_unknown" };
+  }
 
   if (normalizedAuthor && input.selfAccountLogins && input.selfAccountLogins.length > 0) {
     const isSelf = input.selfAccountLogins.some(

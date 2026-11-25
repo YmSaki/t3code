@@ -74,7 +74,7 @@ export interface RepoMonitorDryRunProjectInput {
   readonly ruleId?: RepoMonitorRuleId | undefined;
   readonly snapshot?: RepoMonitorSnapshot | undefined;
   readonly globalKillSwitch?: boolean | undefined;
-  readonly selfAccountLogins?: ReadonlyArray<string> | undefined;
+  readonly selfAccountLogins?: ReadonlyArray<string> | null | undefined;
   readonly managedAgentLogins?: ReadonlyArray<string> | undefined;
   readonly emitOnInitialCursor?: boolean | undefined;
 }
@@ -83,7 +83,7 @@ export interface RepoMonitorPollProjectInput {
   readonly projectId: ProjectId;
   readonly snapshot?: RepoMonitorSnapshot | undefined;
   readonly globalKillSwitch?: boolean | undefined;
-  readonly selfAccountLogins?: ReadonlyArray<string> | undefined;
+  readonly selfAccountLogins?: ReadonlyArray<string> | null | undefined;
   readonly managedAgentLogins?: ReadonlyArray<string> | undefined;
   readonly emitOnInitialCursor?: boolean | undefined;
 }
@@ -102,7 +102,7 @@ export interface RepoMonitorWebhookIngestInput {
   readonly event: RepoMonitorCandidateEvent;
   readonly ruleId?: RepoMonitorRuleId | undefined;
   readonly globalKillSwitch?: boolean | undefined;
-  readonly selfAccountLogins?: ReadonlyArray<string> | undefined;
+  readonly selfAccountLogins?: ReadonlyArray<string> | null | undefined;
   readonly managedAgentLogins?: ReadonlyArray<string> | undefined;
 }
 
@@ -290,7 +290,7 @@ export const make = Effect.fn("RepoMonitorService.make")(function* (
       readonly rule: RepoMonitorRule;
       readonly event: RepoMonitorCandidateEvent;
       readonly globalKillSwitch: boolean;
-      readonly selfAccountLogins?: ReadonlyArray<string> | undefined;
+      readonly selfAccountLogins?: ReadonlyArray<string> | null | undefined;
       readonly managedAgentLogins?: ReadonlyArray<string> | undefined;
       readonly now: DateTime.Utc;
     }) {
@@ -356,7 +356,7 @@ export const make = Effect.fn("RepoMonitorService.make")(function* (
       readonly rule: RepoMonitorRule;
       readonly event: RepoMonitorCandidateEvent;
       readonly globalKillSwitch: boolean;
-      readonly selfAccountLogins?: ReadonlyArray<string> | undefined;
+      readonly selfAccountLogins?: ReadonlyArray<string> | null | undefined;
       readonly managedAgentLogins?: ReadonlyArray<string> | undefined;
       readonly now: DateTime.Utc;
     }) {

@@ -14,7 +14,10 @@ import {
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import type { RepoMonitorBranchSnapshot } from "@t3tools/shared/repoMonitorEval.core";
+import type {
+  RepoMonitorBranchSnapshot,
+  RepoMonitorIssueSnapshot,
+} from "@t3tools/shared/repoMonitorEval.core";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -37,6 +40,7 @@ const makeHarness = () => {
     heads: [{ name: "main", headSha: "sha-1" }] as ReadonlyArray<RepoMonitorBranchSnapshot>,
     /** null: the forge cannot be read. */
     viewers: null as ReadonlyArray<string> | null,
+    issues: [] as ReadonlyArray<RepoMonitorIssueSnapshot>,
     failLaunch: false,
   };
   const dispatched: Array<{ kind: string; input: RepoMonitorActionDispatchInput }> = [];
@@ -57,7 +61,7 @@ const makeHarness = () => {
       state.viewers === null
         ? Effect.fail(new RepoMonitorError({ message: "gh is not signed in" }))
         : Effect.succeed({ entries: [], viewers: state.viewers }),
-    issues: () => Effect.succeed([]),
+    issues: () => Effect.sync(() => state.issues),
   });
   const store = repoMonitorStoreLayer.pipe(
     Layer.provideMerge(NodeSqliteClient.layer({ filename: ":memory:" })),
@@ -297,6 +301,86 @@ describe("RepoMonitorRuntimeWiring", () => {
       }).pipe(Effect.provide(harness.layer));
     },
   );
+
+  it.effect(
+    "never runs on its own issues while pull requests cannot be listed, and recovers once they can",
+    () => {
+      const harness = makeHarness();
+      const issueBy = (key: string, authorLogin: string): RepoMonitorIssueSnapshot => ({
+        key,
+        title: `Issue ${key}`,
+        stateCategory: "open",
+        authorLogin,
+        labels: [],
+        createdAt: "2026-11-22T00:00:00.000Z",
+        updatedAt: "2026-11-22T00:00:00.000Z",
+      });
+      const poll = (issues: ReadonlyArray<RepoMonitorIssueSnapshot>) => {
+        harness.state.issues = [...harness.state.issues, ...issues];
+        return RepoMonitorRuntimeWiring.runRepoMonitorPollCycle().pipe(
+          Effect.map((triggered) => triggered.map((event) => event.issueKey)),
+        );
+      };
+      return Effect.gen(function* () {
+        yield* Migration0109;
+        yield* TestClock.adjust(Duration.hours(100));
+        const service = yield* RepoMonitorService.RepoMonitorService;
+        yield* service.upsertRule({
+          ...pushRule,
+          name: TrimmedNonEmptyString.make("Triage issues"),
+          eventKinds: ["issue_opened"],
+          actionKind: "notify_pm",
+          promptTemplate: TrimmedNonEmptyString.make("Triage {{issueKey}}"),
+        });
+
+        // Cold start with the forge identity never resolved: nothing authored may run.
+        assert.deepStrictEqual(yield* poll([]), []);
+        assert.deepStrictEqual(yield* poll([issueBy("1", "t3-agent"), issueBy("2", "alice")]), []);
+
+        harness.state.viewers = ["t3-agent"];
+        assert.deepStrictEqual(yield* poll([issueBy("3", "t3-agent"), issueBy("4", "alice")]), [
+          "4",
+        ]);
+
+        // Pull requests fail again: the identity seen last still guards issues.
+        harness.state.viewers = null;
+        assert.deepStrictEqual(yield* poll([issueBy("5", "t3-agent"), issueBy("6", "bob")]), ["6"]);
+        assert.deepStrictEqual(
+          harness.dispatched.map(({ input }) => input.event.issueKey),
+          ["4", "6"],
+        );
+      }).pipe(Effect.provide(harness.layer));
+    },
+  );
+
+  it.effect("skips authored webhooks until the forge identity is known", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      yield* Migration0109;
+      yield* TestClock.adjust(Duration.hours(100));
+      const service = yield* RepoMonitorService.RepoMonitorService;
+      yield* service.upsertRule({ ...pushRule, actionKind: "notify_pm" });
+      yield* RepoMonitorRuntimeWiring.runRepoMonitorPollCycle();
+
+      const body = JSON.stringify({
+        ref: "refs/heads/main",
+        before: "sha-1",
+        after: "sha-7",
+        sender: { login: "t3-agent" },
+      });
+      const own = yield* RepoMonitorRuntimeWiring.handleRepoMonitorWebhook({
+        projectId: PROJECT_ID,
+        secret: SECRET,
+        headers: { "x-github-event": "push", "x-hub-signature-256": sign(body) },
+        body: new TextEncoder().encode(body),
+      });
+      assert.deepStrictEqual(
+        own.status === "accepted" ? own.events.map((event) => event.outcome) : own.status,
+        ["skipped_loop_guard"],
+      );
+      assert.lengthOf(harness.dispatched, 0);
+    }).pipe(Effect.provide(harness.layer));
+  });
 
   it.effect("serializes concurrent poll and webhook processing for the same project", () =>
     Effect.gen(function* () {
