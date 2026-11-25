@@ -49,7 +49,7 @@ describe("withRelayClientTracing", () => {
 });
 
 describe("nonInterferingTracer", () => {
-  it.effect("exports failures without their messages", () =>
+  it.effect("exports failures without their messages or stack frames", () =>
     Effect.gen(function* () {
       const exits: Array<Exit.Exit<unknown, unknown>> = [];
       const delegate = Tracer.make({
@@ -83,6 +83,7 @@ describe("nonInterferingTracer", () => {
       const text = exported.map((error) => `${error.message}\n${error.stack}`).join("\n");
       expect(text).toContain("Caused by: Error");
       expect(text).not.toContain("studio-mac");
+      expect(text).not.toContain("relayTracing.test");
     }),
   );
 });

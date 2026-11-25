@@ -67,20 +67,8 @@ export const withLocalTracing = <A, E, R>(effect: Effect.Effect<A, E, R>): Effec
     ),
   );
 
-// Error messages can carry machine names (environment labels) and paths, so
-// relay spans export only the error name and its stack frames.
-function traceFrames(error: Error): Array<string> {
-  const lines = (error.stack ?? "").split("\n");
-  const headerLines = error.message.split("\n").length;
-  const frames = lines.slice(0, headerLines).join("\n").endsWith(error.message)
-    ? lines.slice(headerLines)
-    : lines;
-  const effectFrameIndex = frames.findIndex((line) =>
-    /(?:Generator\.next|~effect\/Effect)/.test(line),
-  );
-  return effectFrameIndex < 0 ? frames : frames.slice(0, effectFrameIndex);
-}
-
+// Messages carry machine names and stack frames carry local paths, so relay
+// spans export only the error names along the cause chain.
 function traceSafeError(value: unknown, seen = new WeakSet<object>()): Error {
   const name =
     typeof value === "object" && value !== null && "name" in value && typeof value.name === "string"
@@ -97,10 +85,7 @@ function traceSafeError(value: unknown, seen = new WeakSet<object>()): Error {
 
   const error = new Error(name, cause ? { cause } : undefined);
   error.name = name;
-  error.stack = [name, ...(value instanceof Error ? traceFrames(value) : [])].join("\n");
-  if (cause) {
-    error.stack = `${error.stack}\nCaused by: ${cause.stack}`;
-  }
+  error.stack = cause ? `${name}\nCaused by: ${cause.stack}` : name;
   return error;
 }
 
