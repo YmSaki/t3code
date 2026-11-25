@@ -7,6 +7,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeTimersPromises from "node:timers/promises";
 import * as NodeUtil from "node:util";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { _electron, type ElectronApplication } from "playwright-core";
 
 // A snapshot from an older build on purpose: the packaged server must migrate it forward, as it
@@ -34,8 +35,11 @@ NodeFS.mkdirSync(artifactsDir, { recursive: true });
 
 const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-desktop-launch-"));
 const t3Home = NodePath.join(home, "t3");
-NodeFS.mkdirSync(NodePath.join(t3Home, "userdata"), { recursive: true });
-NodeFS.copyFileSync(FIXTURE_DB, NodePath.join(t3Home, "userdata/statev2.sqlite"));
+const stateDir = NodePath.join(t3Home, "userdata");
+NodeFS.mkdirSync(stateDir, { recursive: true });
+NodeFS.copyFileSync(FIXTURE_DB, NodePath.join(stateDir, "statev2.sqlite"));
+// Model an upgrade so first launch does not register the fixture launcher on the user's PATH.
+NodeFS.writeFileSync(NodePath.join(stateDir, "desktop-settings.json"), "{}\n");
 
 let step = "launching the app";
 let app: ElectronApplication | undefined;
@@ -71,6 +75,12 @@ try {
     // main process on a keychain dialog. macOS keeps its Electron profile in the runner's HOME.
     env: {
       ...process.env,
+      ...(HostProcess.Platform.defaultValue() === "win32"
+        ? {
+            APPDATA: NodePath.join(home, "AppData", "Roaming"),
+            LOCALAPPDATA: NodePath.join(home, "AppData", "Local"),
+          }
+        : {}),
       XDG_CONFIG_HOME: NodePath.join(home, ".config"),
       XDG_DATA_HOME: NodePath.join(home, ".local/share"),
       T3CODE_HOME: t3Home,

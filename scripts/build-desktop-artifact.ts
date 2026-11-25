@@ -773,7 +773,7 @@ export class WindowsPackagedPayloadValidationError extends Schema.TaggedError<Wi
 ) {
   override get message(): string {
     if (this.reason === "file-limit-exceeded") {
-      return `Windows packaged payload contains ${String(this.fileCount)} files; expected at most ${String(this.fileLimit)}.`;
+      return `Windows packaged payload contains ${String(this.fileCount)} files excluding prepared server cache entries; expected at most ${String(this.fileLimit)}.`;
     }
     if (this.reason === "unpacked-native-missing") {
       return `Windows server sidecar is missing ${String(this.missingFiles?.length ?? 0)} unpacked native files.`;
@@ -3241,7 +3241,62 @@ function collectUnpackedAsarFiles(
   return output;
 }
 
-const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (root: string) {
+const decodePreparedWindowsCacheManifest = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      format: Schema.Literal(1),
+      runtime: Schema.NonEmptyString,
+      entries: Schema.NonEmptyArray(
+        Schema.Struct({
+          module: Schema.String.check(
+            Schema.isPattern(/^server\.asar\/apps\/server\/dist\/[^/\\]+\.mjs$/),
+          ),
+          file: Schema.String.check(Schema.isPattern(/^[a-f0-9]{8}$/)),
+        }),
+      ),
+    }),
+  ),
+);
+
+const findPreparedWindowsCacheFiles = Effect.fn("desktopArtifact.findPreparedWindowsCacheFiles")(
+  function* (
+    resourcesDir: string,
+    serverDist: ReturnType<typeof statFile>,
+    targetArch: typeof BuildArch.Type,
+  ) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const cacheDir = path.join(resourcesDir, "server-compile-cache");
+    const manifestPath = path.join(cacheDir, "manifest.json");
+    const manifest = yield* fs
+      .readFileString(manifestPath)
+      .pipe(Effect.map(decodePreparedWindowsCacheManifest), Effect.orElseSucceed(Option.none));
+    const files = new Set<string>();
+    if (Option.isNone(manifest) || !("files" in serverDist)) return files;
+    const [platform, arch] = manifest.value.runtime.split("-").slice(-3);
+    if (platform !== "win32" || arch !== targetArch) return files;
+
+    // Allow one prepared bytecode file per bundled server chunk.
+    const modules = new Set<string>();
+    for (const { module, file } of manifest.value.entries) {
+      const entry = serverDist.files[module.slice(module.lastIndexOf("/") + 1)];
+      if (entry && "size" in entry && !entry.unpacked && !modules.has(module)) {
+        const filePath = path.join(cacheDir, file);
+        const stat = yield* fs.stat(filePath).pipe(Effect.orElseSucceed(() => null));
+        if (stat?.type !== "File") continue;
+        modules.add(module);
+        files.add(filePath);
+      }
+    }
+    if (files.size > 0) files.add(manifestPath);
+    return files;
+  },
+);
+
+const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (
+  root: string,
+  preparedCacheFiles: ReadonlySet<string>,
+) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const pendingDirectories = [root];
@@ -3256,7 +3311,7 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
       const stat = yield* fs.stat(entryPath);
       if (stat.type === "Directory") {
         pendingDirectories.push(entryPath);
-      } else if (stat.type === "File") {
+      } else if (stat.type === "File" && !preparedCacheFiles.has(entryPath)) {
         count += 1;
       }
     }
@@ -3421,11 +3476,15 @@ export const validateWindowsPackagedPayload = Effect.fn(
     });
   }
 
-  const unpackedFiles = yield* Effect.try({
+  const { unpackedFiles, serverDist } = yield* Effect.try({
     try: () => {
       // @electron/asar requires host separators even for archive entry names.
-      statFile(asarPath, path.join("apps", "server", "dist", "bin.mjs"));
-      return [...collectUnpackedAsarFiles(getRawHeader(asarPath).header)].sort();
+      const serverDistPath = path.join("apps", "server", "dist");
+      statFile(asarPath, path.join(serverDistPath, "bin.mjs"));
+      return {
+        serverDist: statFile(asarPath, serverDistPath),
+        unpackedFiles: [...collectUnpackedAsarFiles(getRawHeader(asarPath).header)].sort(),
+      };
     },
     catch: (cause) =>
       new WindowsPackagedPayloadValidationError({
@@ -3572,7 +3631,12 @@ export const validateWindowsPackagedPayload = Effect.fn(
     }
   }
 
-  const fileCount = yield* countPayloadFiles(packagedAppDir);
+  const preparedCacheFiles = yield* findPreparedWindowsCacheFiles(
+    resourcesDir,
+    serverDist,
+    input.targetArch,
+  );
+  const fileCount = yield* countPayloadFiles(packagedAppDir, preparedCacheFiles);
   if (fileCount > fileLimit) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
@@ -3590,7 +3654,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
   });
 
   yield* Effect.log(
-    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files, ${String(unpackedFiles.length)} sidecar natives).`,
+    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files excluding prepared server cache entries, ${String(unpackedFiles.length)} sidecar natives).`,
   );
   return { packagedAppDir, fileCount, unpackedFiles } as const;
 });

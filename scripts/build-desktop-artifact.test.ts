@@ -1402,23 +1402,62 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
-  it.effect("rejects a Windows payload that regresses above the file-count budget", () =>
+  it.effect("counts unexpected loose files against the Windows payload budget", () =>
     Effect.scoped(
       Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
-        const error = yield* validateWindowsPackagedPayload({
+        const input = {
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
-          targetArch: "x64",
+          targetArch: "x64" as const,
           appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
-          fileLimit: 2,
+        };
+        const { fileCount: fileLimit } = yield* validateWindowsPackagedPayload(input);
+
+        const cacheDir = path.join(fixture.packagedAppDir, "resources", "server-compile-cache");
+        yield* fs.makeDirectory(cacheDir);
+        const manifestPath = path.join(cacheDir, "manifest.json");
+        const manifest = {
+          format: 1,
+          runtime: "44.10.1-v24.22.1-win32-x64-3759534073",
+          entries: [{ module: "server.asar/apps/server/dist/bin.mjs", file: "01234567" }],
+        };
+        yield* fs.writeFileString(manifestPath, JSON.stringify(manifest));
+        const missingBlobError = yield* validateWindowsPackagedPayload({
+          ...input,
+          fileLimit,
         }).pipe(Effect.flip);
+        assert.instanceOf(missingBlobError, WindowsPackagedPayloadValidationError);
+        assert.equal(missingBlobError.fileCount, fileLimit + 1);
+
+        yield* fs.writeFileString(path.join(cacheDir, "01234567"), "bytecode");
+        yield* validateWindowsPackagedPayload({ ...input, fileLimit });
+
+        const wrongArchError = yield* validateWindowsPackagedPayload({
+          ...input,
+          targetArch: "arm64",
+          fileLimit,
+        }).pipe(Effect.flip);
+        assert.instanceOf(wrongArchError, WindowsPackagedPayloadValidationError);
+        assert.equal(wrongArchError.fileCount, fileLimit + 2);
+
+        yield* fs.writeFileString(path.join(cacheDir, "89abcdef"), "unexpected loose file");
+        manifest.entries.push({
+          module: "server.asar/apps/server/dist/missing.mjs",
+          file: "89abcdef",
+        });
+        yield* fs.writeFileString(manifestPath, JSON.stringify(manifest));
+        const error = yield* validateWindowsPackagedPayload({ ...input, fileLimit }).pipe(
+          Effect.flip,
+        );
 
         assert.instanceOf(error, WindowsPackagedPayloadValidationError);
         assert.equal(error.reason, "file-limit-exceeded");
-        assert.isAbove(error.fileCount ?? 0, 2);
+        assert.equal(error.fileCount, fileLimit + 1);
       }),
-    ),
+    ).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   it.effect("rejects a sidecar whose extracted server bundle cannot resolve", () =>
