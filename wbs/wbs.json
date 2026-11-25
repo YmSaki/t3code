@@ -3271,6 +3271,624 @@
           "note": "詳細画面遷移は必ず selectWorkspaceDetail 経由で行い、Feature Screen 内の直接OS分岐を避ける。"
         }
       ]
+    },
+    {
+      "id": "phase2",
+      "name": "T3 Code 魔改造 Phase 2 (セキュリティ・プライバシー・フォーク自立化)",
+      "tasks": [
+        {
+          "id": "9",
+          "name": "9 セキュリティ強化・プライバシー・フォーク自立化",
+          "children": [
+            {
+              "id": "9.1",
+              "name": "9.1 着手済み（PR あり）",
+              "children": [
+                {
+                  "id": "9.1.1",
+                  "name": "リソーステレメトリ生のコマンドライン引数除去 (#34)",
+                  "qty": 1,
+                  "hours": 4,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[PR #78 レビュー待ち] native/resource-monitor v4 固定分類化。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#34",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.1.2",
+                  "name": "Web Push SSRF 対策 (#35)",
+                  "qty": 1,
+                  "hours": 4,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[PR #47 レビュー待ち] 公開アドレス検証・DNS固定。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#35",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.1.3",
+                  "name": "migrate-dev-db Web Push 除外 (#43)",
+                  "qty": 1,
+                  "hours": 1,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[PR #45 レビュー待ち] CLEARED_TABLES へ追加。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#43",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.1.4",
+                  "name": "フォーク版リリース基盤・衝突解消 (#46/#48/#51/#67/#69)",
+                  "qty": 1,
+                  "hours": 16,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[Draft PR #79 作業中] T3CodeJP 独立リリース基盤。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#48",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "9.2",
+              "name": "9.2 除外（アプリ内更新・リリース配布・ブランディング・Connect自前運用）",
+              "children": [
+                {
+                  "id": "9.2.1",
+                  "name": "サーバー/Web 配布・アプリ内更新 (#49)",
+                  "qty": 1,
+                  "hours": 8,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[除外: アプリ内更新/リリース系] ユーザー指示により今回のOpus対象外。",
+                  "_archLayer": "infra",
+                  "_req": "#49",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.2.2",
+                  "name": "モバイルアプリ配布・更新 (#50)",
+                  "qty": 1,
+                  "hours": 8,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[除外: アプリ内更新/リリース系] ユーザー指示により今回のOpus対象外。",
+                  "_archLayer": "infra",
+                  "_req": "#50",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.2.3",
+                  "name": "起動失敗ダイアログ再インストール先変更 (#68)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[除外: アプリ内更新/リリース系] ユーザー指示により今回のOpus対象外。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#68",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.2.4",
+                  "name": "フォーク版ブランディング識別 (#70)",
+                  "qty": 1,
+                  "hours": 4,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[除外: アプリ内更新/リリース系] ユーザー指示により今回のOpus対象外。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#70",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.2.5",
+                  "name": "フォーク版 T3 Connect 自前運用 (#77)",
+                  "qty": 1,
+                  "hours": 12,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[除外: アプリ内更新/リリース系] ユーザー指示により今回のOpus対象外。",
+                  "_archLayer": "infra",
+                  "_req": "#77",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "9.3",
+              "name": "9.3 セキュリティ強化（未着手・Opus対象）",
+              "children": [
+                {
+                  "id": "9.3.1",
+                  "name": "ServerSecretStore OS保護ストア暗号化 (#36)",
+                  "qty": 1,
+                  "hours": 8,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] @napi-rs/keyring + AES-256-GCM 移行。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#36",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.3.2",
+                  "name": "ペアリング資格情報 HMAC digest 化 (#37)",
+                  "qty": 1,
+                  "hours": 4,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] SQLite 平文削除 + Connect 契約維持。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#37",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.3.3",
+                  "name": "VAPID 秘密鍵を ServerSecretStore へ移送 (#38)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] SQLite から参照文字列化。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#38",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.3.4",
+                  "name": "SecretResolver 参照外キー削除・任意TTL (#39)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] キャッシュ整理と任意TTL。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#39",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.3.5",
+                  "name": "SIGUSR2 ヒープダンプ隔離・内部パス保護 (#40)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] <stateDir>/diagnostics/heap/ 隔離。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#40",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.3.6",
+                  "name": "プロバイダー子プロセスの内部環境変数除去 (#41)",
+                  "qty": 1,
+                  "hours": 4,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] mergeProviderInstanceEnvironment + 再継承遮断。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#41",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.3.7",
+                  "name": "git stderr 警告・spawn エラーサニタイズ (#42)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 構造化ログ・exe名縮小。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#42",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "9.4",
+              "name": "9.4 Web Push・開発DB 修正（未着手・Opus対象）",
+              "children": [
+                {
+                  "id": "9.4.1",
+                  "name": "VAPID 鍵不一致時の購読再利用バグ修正 (#44)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 異なる VAPID 鍵環境での誤表示解消。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#44",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.4.2",
+                  "name": "開発DB複製時の監視・iCal購読資格分離 (#65)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] migrate-dev-db での監視/iCal クリーンアップ。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#65",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.4.3",
+                  "name": "開発DB最終書出失敗時の既存DB保持 (#66)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 原子置換・バックアップ保持。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#66",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "9.5",
+              "name": "9.5 プライバシー・テレメトリ・トレーシング（未着手・Opus対象）",
+              "children": [
+                {
+                  "id": "9.5.1",
+                  "name": "テレメトリ実効値と上書き元の環境別表示 (#52)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 設定UI表示改善。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#52",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.2",
+                  "name": "分析用プロバイダー認証ファイル読取・照合廃止 (#53)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] Telemetry Identity 縮小。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#53",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.3",
+                  "name": "同意前接続での端末・アカウント識別子送信停止 (#54)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 同意前識別子ガード。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#54",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.4",
+                  "name": "委譲タスクイベントから非公開モデル名除外 (#55)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] イベントサニタイズ。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#55",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.5",
+                  "name": "任意 WSL ディストリ名を利用統計から除外 (#56)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] WSL名除去。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#56",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.6",
+                  "name": "フォーク利用統計の受領者確定・同意画面一致 (#57)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 同意文言・送信先整合。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#57",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.7",
+                  "name": "Web relay トレース同意の接続環境別適用 (#58)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 環境別同意ゲート。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#58",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.8",
+                  "name": "relay 受信後 Webhook ジョブ span をローカル戻し (#59)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] withLocalTracing 適用。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#59",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.9",
+                  "name": "外部 relay 診断例外からスタックフレーム除去 (#60)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 例外サニタイズ。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#60",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.10",
+                  "name": "HTTP トレースから接続元IPとUA除去 (#61)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] ヘッダー・属性除去。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#61",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.11",
+                  "name": "Mobile 初回同意までクラッシュ・起動計測停止 (#62)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] Mobile 同意ゲート。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#62",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.12",
+                  "name": "Connect 初回設定の接続公開/活動共有個別選択 (#63)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] Onboarding 分離。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#63",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.5.13",
+                  "name": "Mobile Connect リンク失敗時の活動公開設定回復 (#64)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 失敗時ロールバック。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#64",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "9.6",
+              "name": "9.6 フォーク安全化・運用衛生（未着手・Opus対象）",
+              "children": [
+                {
+                  "id": "9.6.1",
+                  "name": "診断手順・調査ソース・報告先のフォーク対応 (#71)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 診断・スキル参照先更新。",
+                  "_archLayer": "infra",
+                  "_req": "#71",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.6.2",
+                  "name": "モデルマニフェスト取得元明示・失敗時外部取得停止 (#72)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 外部フェッチ遮断。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#72",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.6.3",
+                  "name": "Star 案内対象リポ明示・操作先一致 (#73)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] UI文言・リンク一致。",
+                  "_archLayer": "ui-shell",
+                  "_req": "#73",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.6.4",
+                  "name": "フォーク独自脆弱性の非公開報告窓口整備 (#74)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] SECURITY.md 更新。",
+                  "_archLayer": "infra",
+                  "_req": "#74",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.6.5",
+                  "name": "上流投稿者リストのフォーク自動適用停止 (#75)",
+                  "qty": 1,
+                  "hours": 2,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] contribution-triage 調整。",
+                  "_archLayer": "infra",
+                  "_req": "#75",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                },
+                {
+                  "id": "9.6.6",
+                  "name": "RepoMonitor 本人情報未取得時の自己投稿自動実行抑止 (#76)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[未着手] 部分失敗時の自己投稿ガード維持。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#76",
+                  "plan": {
+                    "start": "2026-11-25",
+                    "end": "2026-12-05"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
