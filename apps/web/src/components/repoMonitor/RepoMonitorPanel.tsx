@@ -42,7 +42,6 @@ import { useProjects } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import {
   repoMonitorEnvironment,
-  useRepoMonitorGlobalKillSwitch,
   useRepoMonitorPresets,
   useRepoMonitorRules,
 } from "../../state/repoMonitors";
@@ -230,7 +229,8 @@ export function RepoMonitorPanel({
 
   const rulesQuery = useRepoMonitorRules(activeEnvironmentId, activeProjectId ?? undefined);
   const presetsQuery = useRepoMonitorPresets(activeEnvironmentId);
-  const globalKillSwitch = useRepoMonitorGlobalKillSwitch(activeEnvironmentId);
+  const globalKillSwitch = rulesQuery.data?.globalKillSwitch ?? false;
+  const killSwitchDisabled = isTogglingKillSwitch || !rulesQuery.isSuccess || rulesQuery.isPending;
 
   const createRule = useAtomCommand(repoMonitorEnvironment.createRule, { reportFailure: false });
   const updateRule = useAtomCommand(repoMonitorEnvironment.updateRule, { reportFailure: false });
@@ -300,7 +300,7 @@ export function RepoMonitorPanel({
   };
 
   const handleToggleKillSwitch = async (nextActive: boolean) => {
-    if (activeEnvironmentId === null || isTogglingKillSwitch) return;
+    if (activeEnvironmentId === null || killSwitchDisabled) return;
     setIsTogglingKillSwitch(true);
     const result = await setGlobalKillSwitch({
       environmentId: activeEnvironmentId,
@@ -597,7 +597,7 @@ export function RepoMonitorPanel({
           <Button
             size="sm"
             variant={globalKillSwitch ? "destructive" : "outline"}
-            disabled={isTogglingKillSwitch}
+            disabled={killSwitchDisabled}
             onClick={() => void handleToggleKillSwitch(!globalKillSwitch)}
           >
             <PowerOffIcon />
@@ -624,7 +624,7 @@ export function RepoMonitorPanel({
             <Button
               size="xs"
               variant="outline"
-              disabled={isTogglingKillSwitch}
+              disabled={killSwitchDisabled}
               onClick={() => void handleToggleKillSwitch(false)}
             >
               {gt("Resume")}

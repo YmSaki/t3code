@@ -3801,8 +3801,7 @@ export const layerWsRpc = (
             })),
           ),
         [WS_METHODS.artifactsExportStandalone]: (input) => artifactService.exportStandalone(input),
-        [WS_METHODS.repoMonitorListRules]: (input) =>
-          repoMonitorService.listRules(input.projectId).pipe(Effect.map((rules) => ({ rules }))),
+        [WS_METHODS.repoMonitorListRules]: (input) => repoMonitorService.listRules(input.projectId),
         [WS_METHODS.repoMonitorUpsertRule]: (input) => repoMonitorService.upsertRule(input),
         [WS_METHODS.repoMonitorDeleteRule]: (input) => repoMonitorService.deleteRule(input.id),
         [WS_METHODS.repoMonitorListEvents]: (input) =>

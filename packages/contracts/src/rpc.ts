@@ -553,6 +553,7 @@ import {
   RepoMonitorRuleDeleteInput,
   RepoMonitorRuleId,
   RepoMonitorRuleListInput,
+  RepoMonitorRuleListResult,
   RepoMonitorRuleUpsertInput,
 } from "./repoMonitor.ts";
 import { RuntimeMode } from "./providerPolicy.ts";
@@ -2985,7 +2986,7 @@ const RepoMonitorPresetRpcSchema = Schema.Struct({
 
 const WsRepoMonitorListRulesRpc = Rpc.make(WS_METHODS.repoMonitorListRules, {
   payload: RepoMonitorRuleListInput,
-  success: Schema.Struct({ rules: Schema.Array(RepoMonitorRule) }),
+  success: RepoMonitorRuleListResult,
   error: RepoMonitorRpcError,
 });
 

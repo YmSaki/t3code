@@ -1,4 +1,3 @@
-import { useAtomValue } from "@effect/atom-react";
 import { createRepoMonitorEnvironmentAtoms } from "@t3tools/client-runtime/state/repoMonitors";
 import {
   PositiveInt,
@@ -6,16 +5,11 @@ import {
   type ProjectId,
   type RepoMonitorRuleId,
 } from "@t3tools/contracts";
-import { Atom } from "effect/reactivity";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { useEnvironmentQuery } from "./query";
 
 export const repoMonitorEnvironment = createRepoMonitorEnvironmentAtoms(connectionAtomRuntime);
-
-const DEFAULT_GLOBAL_KILL_SWITCH_ATOM = Atom.make(false).pipe(
-  Atom.withLabel("repo-monitor:global-kill-switch:none"),
-);
 
 export function useRepoMonitorRules(
   environmentId: EnvironmentId | null,
@@ -63,13 +57,5 @@ export function useRepoMonitorPresets(environmentId: EnvironmentId | null) {
           environmentId,
           input: {},
         }),
-  );
-}
-
-export function useRepoMonitorGlobalKillSwitch(environmentId: EnvironmentId | null): boolean {
-  return useAtomValue(
-    environmentId === null
-      ? DEFAULT_GLOBAL_KILL_SWITCH_ATOM
-      : repoMonitorEnvironment.globalKillSwitch(environmentId),
   );
 }
