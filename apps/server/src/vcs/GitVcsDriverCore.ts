@@ -5414,7 +5414,12 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       remoteNamesResult.exitCode === 0 ? parseRemoteNames(remoteNamesResult.stdout) : [];
     if (remoteNamesResult.exitCode !== 0 && remoteNamesResult.stderr.trim().length > 0) {
       yield* Effect.logWarning(
-        `GitVcsDriver.listRefs: remote name lookup returned code ${remoteNamesResult.exitCode} for ${gitCommonDir}: ${remoteNamesResult.stderr.trim()}. Falling back to an empty remote name list.`,
+        "GitVcsDriver.listRefs: remote name lookup failed. Falling back to an empty remote name list.",
+        {
+          gitCommonDir,
+          exitCode: remoteNamesResult.exitCode,
+          stderrLength: remoteNamesResult.stderr.length,
+        },
       );
     }
     const defaultBranch =

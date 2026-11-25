@@ -265,6 +265,22 @@ function finalizeRunProcess<R>(
 
 const commandName = (command: string) => command.replace(/^.*[\\/]/, "");
 
+// The spawner puts the full command line, arguments included, in pathOrDescriptor and the
+// nested Node error's spawnargs. Keep the reason fields callers match NotFound on.
+const withoutSpawnArguments = (cause: unknown, executableName: string): unknown => {
+  if (!PlatformError.isPlatformError(cause)) return cause;
+  const reason = cause.reason;
+  if (reason._tag === "BadArgument" || reason.module !== "ChildProcess") return cause;
+  return PlatformError.systemError({
+    _tag: reason._tag,
+    module: reason.module,
+    method: reason.method,
+    syscall: reason.syscall,
+    description: reason.description,
+    pathOrDescriptor: executableName,
+  });
+};
+
 const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
   spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
   input: ProcessRunInput,
@@ -280,16 +296,17 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
     input.env === undefined ? {} : { env: input.env, extendEnv },
   );
 
+  const executableName = commandName(spawnCommand.executable);
   const toSpawnError = (cause: unknown) =>
     new ProcessSpawnError({
       command: input.command,
       argumentCount: input.args.length,
       cwd: input.cwd,
       spawnCwd: input.spawnCwd,
-      resolvedCommand: spawnCommand.command,
+      resolvedCommand: executableName,
       resolvedArgumentCount: spawnCommand.args.length,
       shell: spawnCommand.shell,
-      cause,
+      cause: withoutSpawnArguments(cause, executableName),
     });
 
   const spawn = spawner
