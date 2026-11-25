@@ -194,7 +194,10 @@ const resolveThemePaths = Effect.fn(function* (explicitBaseDir: Option.Option<st
     Option.isNone(configuredBaseDir) &&
     !(yield* hasLiveServer(userdataPaths.serverRuntimeStatePath))
   ) {
-    const devPaths = yield* ServerConfig.deriveServerPaths(baseDir, DEV_STATE_PLACEHOLDER_URL);
+    const devPaths = yield* ServerConfig.deriveServerPaths(
+      yield* resolveBaseDir(undefined, true),
+      DEV_STATE_PLACEHOLDER_URL,
+    );
     if (yield* hasLiveServer(devPaths.serverRuntimeStatePath)) derivedPaths = devPaths;
   }
   return {

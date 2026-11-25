@@ -2,14 +2,14 @@
 # Installs the T3 Code CLI from a GitHub Release archive. Needs only sh, tar,
 # sha256sum or shasum, and curl or wget; no Node, npm, or compiler.
 #
-#   curl -fsSL https://t3.codes/install.sh | sh
+# Release assets are published at https://github.com/YmSaki/t3code/releases.
 #
 # Environment:
 #   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
 #   T3CODE_VERSION           exact version to install (overrides T3CODE_CHANNEL)
-#   T3CODE_HOME              T3 home directory (default: ~/.t3)
-#   T3CODE_INSTALL_BIN_DIR   where the `t3` command goes (default: ~/.local/bin)
+#   T3CODE_HOME              T3 home directory (default: ~/.t3codejp)
+#   T3CODE_INSTALL_BIN_DIR   where the `t3` command goes (default: $T3CODE_HOME/cli-bin)
 #   T3CODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
 # The archive is unpacked into $T3CODE_HOME/runtime/versions/<version>, the
@@ -17,9 +17,9 @@
 # instead of fetching the release again.
 set -eu
 
-repo="pingdotgg/t3code"
+repo="YmSaki/t3code"
 base_url="${T3CODE_RELEASE_BASE_URL:-https://github.com/${repo}/releases/download}"
-t3_home="${T3CODE_HOME:-$HOME/.t3}"
+t3_home="${T3CODE_HOME:-$HOME/.t3codejp}"
 case "$t3_home" in
   /*) ;;
   *)
@@ -28,7 +28,8 @@ case "$t3_home" in
     t3_home="${t3_cwd%??}/$t3_home"
     ;;
 esac
-bin_dir="${T3CODE_INSTALL_BIN_DIR:-$HOME/.local/bin}"
+bin_dir="${T3CODE_INSTALL_BIN_DIR:-$t3_home/cli-bin}"
+while [ "${base_url%/}" != "$base_url" ]; do base_url="${base_url%/}"; done
 # Trailing slashes would put `//` in the paths the t3 command guard compares.
 while [ "${t3_home%/}" != "$t3_home" ] && [ "$t3_home" != / ]; do t3_home="${t3_home%/}"; done
 while [ "${bin_dir%/}" != "$bin_dir" ] && [ "$bin_dir" != / ]; do bin_dir="${bin_dir%/}"; done
@@ -163,7 +164,7 @@ download() {
 case "$(uname -s)" in
   Darwin) platform="darwin" ;;
   Linux) platform="linux" ;;
-  *) fail "unsupported operating system $(uname -s); use the desktop app or npm" ;;
+  *) fail "unsupported operating system $(uname -s); use the desktop app or build from source" ;;
 esac
 case "$(uname -m)" in
   arm64 | aarch64) arch="arm64" ;;
@@ -171,7 +172,7 @@ case "$(uname -m)" in
   *) fail "unsupported architecture $(uname -m)" ;;
 esac
 if [ "${platform}-${arch}" = darwin-x64 ]; then
-  fail "there is no t3 CLI for Intel Macs. Install the desktop app from https://t3.codes/download, or run a server from source: https://github.com/${repo}/blob/main/docs/user/install.md#intel-macs"
+  fail "there is no t3 CLI for Intel Macs. Install the desktop app from https://github.com/${repo}/releases, or run a server from source: https://github.com/${repo}/blob/main/docs/user/install.md#intel-macs"
 fi
 command -v tar >/dev/null 2>&1 || fail "tar is required"
 if command -v sha256sum >/dev/null 2>&1; then
@@ -242,7 +243,7 @@ else
   fetch_status=0
   fetch "${base_url}/v${version}/SHA256SUMS" "${staging}/SHA256SUMS" || fetch_status=$?
   if [ "$fetch_status" -eq 44 ]; then
-    fail "t3 ${version} has no release archive for ${platform}-${arch}; releases before the self-contained CLI can only be installed with \`npm install -g t3@${version}\`"
+    fail "t3 ${version} has no release archive for ${platform}-${arch}"
   elif [ "$fetch_status" -ne 0 ]; then
     fail "could not download the release checksums"
   fi

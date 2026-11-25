@@ -1,36 +1,49 @@
+import {
+  CLI_INSTALL_BIN_DIRNAME,
+  CLI_INSTALL_PS1_FILE,
+  CLI_INSTALL_SH_FILE,
+  cliReleaseAssetUrl,
+} from "@t3tools/shared/cliRelease";
+import { DEFAULT_HOME_DIRECTORY } from "@t3tools/shared/productIdentity";
 import { T } from "gt-react";
+import { APP_VERSION } from "~/branding";
 import { cn } from "~/lib/utils";
 
 import { CommandBlock } from "./CommandBlock";
 
 /**
- * Setup steps for another computer: install `t3`, then run `command`. Both installers are shown
+ * Setup steps for another computer: install `t3`, then run the action. Both installers are shown
  * because the browser showing this is often not the computer being set up.
  */
 export function InstallT3Commands({
-  command,
+  action,
   className,
 }: {
-  readonly command: string;
+  readonly action: "connect" | "pair";
   readonly className?: string;
 }) {
   return (
     <div className={cn("space-y-2", className)}>
       <p className="text-xs text-muted-foreground">macOS, Linux</p>
-      <CommandBlock command="curl -fsSL https://t3.codes/install.sh | sh" />
-      <p className="text-xs text-muted-foreground">Windows (PowerShell)</p>
-      <CommandBlock command="irm https://t3.codes/install.ps1 | iex" />
+      <CommandBlock
+        command={`curl -fsSL ${cliReleaseAssetUrl(APP_VERSION, CLI_INSTALL_SH_FILE)} | sh`}
+      />
       <p className="text-xs text-muted-foreground">
         <T>Then</T>
       </p>
-      <CommandBlock command={command} />
+      <CommandBlock
+        command={`~/${DEFAULT_HOME_DIRECTORY}/${CLI_INSTALL_BIN_DIRNAME}/t3 ${action}`}
+      />
+      <p className="text-xs text-muted-foreground">Windows (PowerShell)</p>
+      <CommandBlock
+        command={`irm ${cliReleaseAssetUrl(APP_VERSION, CLI_INSTALL_PS1_FILE)} | iex`}
+      />
       <p className="text-xs text-muted-foreground">
-        <T>
-          Skip the install if you already have <code className="font-mono">t3</code>. If{" "}
-          <code className="font-mono">t3</code> is not found after installing, add the folder the
-          installer names to your PATH.
-        </T>
+        <T>Then</T>
       </p>
+      <CommandBlock
+        command={`& "$HOME\\${DEFAULT_HOME_DIRECTORY}\\${CLI_INSTALL_BIN_DIRNAME}\\t3.cmd" ${action}`}
+      />
     </div>
   );
 }

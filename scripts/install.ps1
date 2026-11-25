@@ -1,14 +1,14 @@
 # Installs the T3 Code CLI from a GitHub Release archive on Windows. Needs
 # only PowerShell 5.1+; no Node, npm, or compiler.
 #
-#   irm https://t3.codes/install.ps1 | iex
+# Release assets are published at https://github.com/YmSaki/t3code/releases.
 #
 # Environment:
 #   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
 #                            (default: stable; preview is a maintainers' test train)
 #   T3CODE_VERSION           exact version to install (overrides T3CODE_CHANNEL)
-#   T3CODE_HOME              T3 home directory (default: ~\.t3)
-#   T3CODE_INSTALL_BIN_DIR   where t3.exe is linked (default: ~\.local\bin)
+#   T3CODE_HOME              T3 home directory (default: ~\.t3codejp)
+#   T3CODE_INSTALL_BIN_DIR   where t3.exe is linked (default: $T3CODE_HOME\cli-bin)
 #   T3CODE_RELEASE_BASE_URL  mirror for releases/download (default: GitHub)
 #
 # The archive is unpacked into $T3CODE_HOME\runtime\versions\<version>, the
@@ -16,10 +16,11 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repo = "pingdotgg/t3code"
+$repo = "YmSaki/t3code"
 $baseUrl = if ($env:T3CODE_RELEASE_BASE_URL) { $env:T3CODE_RELEASE_BASE_URL.TrimEnd("/") } else { "https://github.com/$repo/releases/download" }
-$t3Home = if ($env:T3CODE_HOME) { $env:T3CODE_HOME } else { Join-Path $HOME ".t3" }
-$binDir = if ($env:T3CODE_INSTALL_BIN_DIR) { $env:T3CODE_INSTALL_BIN_DIR } else { Join-Path $HOME ".local\bin" }
+$t3Home = if ($env:T3CODE_HOME) { $env:T3CODE_HOME } else { Join-Path $HOME ".t3codejp" }
+$t3Home = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($t3Home)
+$binDir = if ($env:T3CODE_INSTALL_BIN_DIR) { $env:T3CODE_INSTALL_BIN_DIR } else { Join-Path $t3Home "cli-bin" }
 # Absolute, so PATH never gets a folder that changes with the working directory.
 $binDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($binDir)
 
@@ -197,7 +198,7 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
     } catch {
       $status = $_.Exception.Response.StatusCode.value__
       if ($status -eq 404) {
-        Fail "t3 $version has no release archive for win32-$arch; releases before the self-contained CLI can only be installed with 'npm install -g t3@$version'"
+        Fail "t3 $version has no release archive for win32-$arch"
       }
       throw
     }

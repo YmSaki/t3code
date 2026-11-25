@@ -97,7 +97,7 @@ function T3ConnectSteps() {
         )}
       </SetupStep>
       <SetupStep number={2}>
-        <RunOnComputer command="t3 connect" />
+        <RunOnComputer action="connect" />
         {isSignedIn ? (
           <div className="mt-4 space-y-1.5">
             <CloudEnvironmentConnectRows
@@ -132,7 +132,7 @@ function PairingSteps() {
   return (
     <>
       <SetupStep number={1}>
-        <RunOnComputer command="t3 pair" />
+        <RunOnComputer action="pair" />
       </SetupStep>
       <SetupStep number={2}>
         <Button render={<Link to="/settings/connections" />} size="sm">
@@ -158,13 +158,13 @@ function SetupStep({
   );
 }
 
-function RunOnComputer({ command }: { readonly command: string }) {
+function RunOnComputer({ action }: { readonly action: "connect" | "pair" }) {
   return (
     <>
       <p>
         <T>Run on your computer:</T>
       </p>
-      <InstallT3Commands command={command} className="mt-2" />
+      <InstallT3Commands action={action} className="mt-2" />
       <a
         className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
         href={DESKTOP_DOWNLOAD_URL}

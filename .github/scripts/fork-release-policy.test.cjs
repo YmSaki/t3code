@@ -8,7 +8,10 @@ const candidate = "a".repeat(40);
 const promoted = "b".repeat(40);
 const repo = { owner: "YmSaki", repo: "t3code" };
 
-function release(tagName, { hoursAgo = 8, isDraft = false, isPrerelease = tagName.includes("-") } = {}) {
+function release(
+  tagName,
+  { hoursAgo = 8, isDraft = false, isPrerelease = tagName.includes("-") } = {},
+) {
   return {
     tagName,
     isDraft,
@@ -35,10 +38,14 @@ function fixture({ pages = [[]], context: overrides, compare = {}, ...options } 
       reads.push(["releases", cursor]);
       const index = Number(cursor ?? "0");
       const hasNextPage = index + 1 < pages.length;
-      return { repository: { releases: {
-        nodes: pages[index],
-        pageInfo: { hasNextPage, endCursor: hasNextPage ? String(index + 1) : null },
-      } } };
+      return {
+        repository: {
+          releases: {
+            nodes: pages[index],
+            pageInfo: { hasNextPage, endCursor: hasNextPage ? String(index + 1) : null },
+          },
+        },
+      };
     },
     rest: {
       actions: {
@@ -84,7 +91,11 @@ test("uses the highest published fork Stable core across pages and ignores draft
   const { run } = fixture({
     dispatchChannel: "nightly",
     pages: [
-      [release("v1.2.9"), release("v99.0.0", { isDraft: true }), release("v88.0.0", { isPrerelease: true })],
+      [
+        release("v1.2.9"),
+        release("v99.0.0", { isDraft: true }),
+        release("v88.0.0", { isPrerelease: true }),
+      ],
       [release("v1.2.10"), release("v70.0.0-preview.20261125.101")],
     ],
   });
@@ -100,7 +111,10 @@ test("plans a branch Preview as a draft with no update feed", async () => {
   assert.equal(plan.isPrerelease, true);
   assert.equal(plan.hasUpdateFeed, false);
   assert.equal(plan.makeLatest, false);
-  assert.equal(reads.some(([kind]) => kind === "compare"), false);
+  assert.equal(
+    reads.some(([kind]) => kind === "compare"),
+    false,
+  );
 });
 
 test("rejects foreign repositories before inspecting release history", async () => {
@@ -114,7 +128,11 @@ test("Stable dispatch promotes the latest published eligible Nightly commit on m
   const { run, reads } = fixture({
     dispatchChannel: "stable",
     pages: [
-      [release("v1.2.10"), release("v0.9.0-nightly.20261125.999", { hoursAgo: 1 }), release("v5.0.0-preview.20261125.9", { hoursAgo: 1 })],
+      [
+        release("v1.2.10"),
+        release("v0.9.0-nightly.20261125.999", { hoursAgo: 1 }),
+        release("v5.0.0-preview.20261125.9", { hoursAgo: 1 }),
+      ],
       [release(tag, { hoursAgo: 2 }), release("v1.2.11-nightly.20261125.999", { isDraft: true })],
     ],
   });
@@ -123,7 +141,10 @@ test("Stable dispatch promotes the latest published eligible Nightly commit on m
   assert.equal(plan.tag, "v1.2.11");
   assert.equal(plan.name, "T3CodeJP v1.2.11");
   assert.equal(plan.makeLatest, true);
-  assert.deepEqual(reads.filter(([kind]) => kind === "commit"), [["commit", tag]]);
+  assert.deepEqual(
+    reads.filter(([kind]) => kind === "commit"),
+    [["commit", tag]],
+  );
   assert.ok(reads.some(([kind, ref]) => kind === "compare" && ref === `${promoted}...main`));
 });
 
@@ -131,7 +152,12 @@ test("a Preview or draft Nightly cannot be promoted even with a Stable version o
   const { run } = fixture({
     dispatchChannel: "stable",
     dispatchVersion: "1.0.0",
-    pages: [[release("v1.0.0-preview.20261124.11"), release("v1.0.0-nightly.20261124.10", { isDraft: true })]],
+    pages: [
+      [
+        release("v1.0.0-preview.20261124.11"),
+        release("v1.0.0-nightly.20261124.10", { isDraft: true }),
+      ],
+    ],
   });
   await assert.rejects(run, /No published fork Nightly/);
 });
@@ -160,10 +186,22 @@ test("a Stable tag can bootstrap the fork at 1.0.0 and must be on main", async (
   const { run } = fixture({ context });
   assert.equal((await run()).ref, candidate);
   assert.equal((await run()).tag, "v1.0.0");
-  await assert.rejects(fixture({ context, compare: { [`${candidate}...main`]: "diverged" } }).run, /not contained in main/);
-  await assert.rejects(fixture({ context: { ...context, ref: "refs/tags/v0.1.9" } }).run, /1\.0\.0 or newer/);
-  await assert.rejects(fixture({ context, pages: [[release("v1.1.0")]] }).run, /newer than published Stable/);
-  await assert.rejects(fixture({ context: { ...context, ref: "refs/tags/v1.0.0-preview.20261124.10" } }).run, /plain Stable tag/);
+  await assert.rejects(
+    fixture({ context, compare: { [`${candidate}...main`]: "diverged" } }).run,
+    /not contained in main/,
+  );
+  await assert.rejects(
+    fixture({ context: { ...context, ref: "refs/tags/v0.1.9" } }).run,
+    /1\.0\.0 or newer/,
+  );
+  await assert.rejects(
+    fixture({ context, pages: [[release("v1.1.0")]] }).run,
+    /newer than published Stable/,
+  );
+  await assert.rejects(
+    fixture({ context: { ...context, ref: "refs/tags/v1.0.0-preview.20261124.10" } }).run,
+    /plain Stable tag/,
+  );
 });
 
 test("automatic Nightly respects the six-hour gap and requires new commits", async () => {
@@ -172,7 +210,11 @@ test("automatic Nightly respects the six-hour gap and requires new commits", asy
   const recent = fixture({ context, pages: [[release(tag, { hoursAgo: 5 })]] });
   assert.equal((await recent.run()).shouldBuild, false);
   const pages = [[release(tag, { hoursAgo: 6 })]];
-  const unchanged = fixture({ context, pages, compare: { [`${tag}...${candidate}`]: "identical" } });
+  const unchanged = fixture({
+    context,
+    pages,
+    compare: { [`${tag}...${candidate}`]: "identical" },
+  });
   assert.equal((await unchanged.run()).shouldBuild, false);
   assert.equal((await fixture({ context, pages }).run()).shouldBuild, true);
 });
@@ -181,5 +223,8 @@ test("pausing Nightly skips only automatic runs", async () => {
   const paused = fixture({ context: { eventName: "schedule" }, pauseNightly: true });
   assert.equal((await paused.run()).shouldBuild, false);
   assert.deepEqual(paused.reads, []);
-  assert.equal((await fixture({ dispatchChannel: "nightly", pauseNightly: true }).run()).shouldBuild, true);
+  assert.equal(
+    (await fixture({ dispatchChannel: "nightly", pauseNightly: true }).run()).shouldBuild,
+    true,
+  );
 });

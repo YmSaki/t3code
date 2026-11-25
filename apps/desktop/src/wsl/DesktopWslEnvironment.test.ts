@@ -149,9 +149,9 @@ describe.skipIf(posixShellRunner === null)("WSL runtime install script (executed
       archivePath,
       archiveSha,
       runtimeId,
-      runtimeParent: `${work}/home/.t3/wsl-runtime`,
-      runtimeRoot: `${work}/home/.t3/wsl-runtime/${runtimeId}`,
-      serverEntry: `${work}/home/.t3/wsl-runtime/${runtimeId}/t3`,
+      runtimeParent: `${work}/home/.t3codejp/wsl-runtime`,
+      runtimeRoot: `${work}/home/.t3codejp/wsl-runtime/${runtimeId}`,
+      serverEntry: `${work}/home/.t3codejp/wsl-runtime/${runtimeId}/t3`,
       installScript,
       install: (archive?: string, sha?: string, t3Home?: string | null) =>
         runShell(installScript(archive, sha, t3Home)),

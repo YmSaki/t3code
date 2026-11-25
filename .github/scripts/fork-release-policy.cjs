@@ -19,7 +19,10 @@ const RELEASES_QUERY = `
 function releaseChannel(eventName, dispatchChannel) {
   if (eventName === "schedule") return "nightly";
   if (eventName === "push") return "stable";
-  if (eventName === "workflow_dispatch" && ["preview", "stable", "nightly"].includes(dispatchChannel)) {
+  if (
+    eventName === "workflow_dispatch" &&
+    ["preview", "stable", "nightly"].includes(dispatchChannel)
+  ) {
     return dispatchChannel;
   }
   throw new Error("Unsupported fork release event or channel.");
@@ -67,7 +70,11 @@ async function readForkReleaseHistory(github, repositoryName) {
       if (release.isPrerelease) {
         const version = NIGHTLY_TAG.exec(release.tagName)?.[1];
         const core = version === undefined ? undefined : coreVersion(version);
-        if (core && core.parts[0] >= 1 && (!latestNightly || publishedAt > latestNightly.publishedAt)) {
+        if (
+          core &&
+          core.parts[0] >= 1 &&
+          (!latestNightly || publishedAt > latestNightly.publishedAt)
+        ) {
           latestNightly = { tag: release.tagName, version, publishedAt };
         }
       } else if (release.tagName.startsWith("v")) {
@@ -103,7 +110,11 @@ async function stampPrerelease({ github, context, channel, baseVersion }) {
     run_id: context.runId,
   });
   const started = new Date(data.created_at);
-  if (!Number.isFinite(started.getTime()) || !Number.isSafeInteger(context.runNumber) || context.runNumber < 1) {
+  if (
+    !Number.isFinite(started.getTime()) ||
+    !Number.isSafeInteger(context.runNumber) ||
+    context.runNumber < 1
+  ) {
     throw new Error("GitHub did not provide a valid release run date and number.");
   }
   const date = started.toISOString().slice(0, 10).replaceAll("-", "");
@@ -159,12 +170,17 @@ async function planForkRelease({
     if (!pushedTag) {
       if (!latestNightly) throw new Error("No published fork Nightly is available to promote.");
       target ??= requireStableVersion(latestNightly.version);
-      const { data } = await github.rest.repos.getCommit({ ...context.repo, ref: latestNightly.tag });
+      const { data } = await github.rest.repos.getCommit({
+        ...context.repo,
+        ref: latestNightly.tag,
+      });
       ref = data.sha;
       await assertCommitOnDefaultBranch({ github, context, sha: ref });
     }
     if (latestStable && !isNewerVersion(target, latestStable)) {
-      throw new Error(`A fork Stable version must be newer than published Stable v${latestStable.version}.`);
+      throw new Error(
+        `A fork Stable version must be newer than published Stable v${latestStable.version}.`,
+      );
     }
     version = target.version;
   } else {
@@ -184,7 +200,10 @@ async function planForkRelease({
     ref,
     version,
     tag,
-    name: channel === "stable" ? `T3CodeJP ${tag}` : `T3CodeJP ${track} ${version} (${ref.slice(0, 12)})`,
+    name:
+      channel === "stable"
+        ? `T3CodeJP ${tag}`
+        : `T3CodeJP ${track} ${version} (${ref.slice(0, 12)})`,
     draft: channel === "preview",
     isPrerelease: channel !== "stable",
     makeLatest: channel === "stable",

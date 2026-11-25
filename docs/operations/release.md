@@ -2,7 +2,107 @@
 
 > For maintainers. Using T3 Code? See [docs/user](../user/).
 
-This document covers the unified release workflow for stable and nightly desktop releases.
+## T3CodeJP fork releases
+
+T3CodeJP is an unofficial fork. Its release repository is
+[`YmSaki/t3code`](https://github.com/YmSaki/t3code/releases); upstream releases are not
+fallbacks for a missing fork version. The upstream workflow below remains guarded to
+`pingdotgg/t3code`. Fork releases use `.github/workflows/fork-release.yml` and do not
+publish the upstream npm package, AUR packages, marketing site, or Discord announcements.
+
+Publication is disabled unless the repository variable `T3CODEJP_RELEASE_PUBLISH` is
+`true`. With it unset, scheduled runs skip and manual runs retain validated Actions
+artifacts without creating a GitHub Release. Enable it only after checking the fork's
+branding, platform installation/update paths, and signing configuration. The publish
+job alone receives permission to write release assets; no Release App credentials are
+needed. Disabling the variable again stops subsequent publication and scheduled builds.
+
+### Versions and channels
+
+The fork has its own version sequence, starting at `1.0.0`, independent of upstream's
+package versions. Stable tags are `vX.Y.Z`. Nightly and preview versions use
+`X.Y.Z-nightly.YYYYMMDD.RUN` and `X.Y.Z-preview.YYYYMMDD.RUN`; their core previews the
+next fork stable version. Do not add a fork suffix or build metadata to distinguish
+installations: the repository and application identity provide that separation, while
+the existing updater understands the stable/nightly version formats.
+
+Manual stable promotion uses a published fork nightly on `main`, rather than whichever
+commit happens to be newest when stable ships. An explicit stable tag identifies the
+commit to build. Preview is the default manual channel and stays a draft with no update
+feed or updater manifests when publication is enabled; otherwise its files remain Actions
+artifacts. Never publish a preview draft by hand. Scheduled nightlies
+keep the upstream new-commit and six-hour publication-gap checks.
+
+### Distribution boundaries
+
+The distribution targets match upstream:
+
+| Surface            | Targets                                             | Distribution boundary                                                                      |
+| ------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Desktop            | macOS arm64/x64, Linux arm64/x64, Windows arm64/x64 | Fork GitHub Release, with platform update metadata for Stable and Nightly                  |
+| Standalone server  | macOS arm64, Linux arm64/x64, Windows arm64/x64     | CLI archives and `SHA256SUMS` in the same fork release; no npm publication                 |
+| Bundled web client | Every server archive and desktop build              | Ships with that server's version                                                           |
+| Hosted web client  | Stable and Nightly                                  | Requires fork-owned domains and authentication configuration before deployment             |
+| Mobile             | iOS and Android                                     | Requires separate fork app identifiers, signing, store/EAS projects, and OTA configuration |
+
+There is no macOS x64 CLI archive; this matches upstream's Node single-executable
+restriction. A Windows build must embed the Linux CLI archive of the same version and
+architecture for WSL. Publish neither desktop update metadata nor a hosted client
+until every corresponding server archive, checksum, and platform smoke check is ready.
+Installer scripts are release assets from that same source revision. Setup commands
+use the client's exact version instead of a mutable script on `main`.
+
+Hosted web, mobile distribution, and fork-owned Connect infrastructure are separate
+configuration prerequisites, not services inherited from the official app. Do not use
+`.env.example` as production credentials. An unconfigured fork build must leave Connect
+disabled; enabling it requires an explicit fork Clerk and relay configuration. Client
+tracing is optional and must not require Axiom credentials while disabled.
+
+### Installation identity and existing data
+
+The fork's application ID is `io.github.ymsaki.t3codejp`, its URL scheme is
+`t3codejp`, and its default production home is `~/.t3codejp`. `T3CODE_HOME` and
+`--home-dir` remain explicit overrides. Development worktrees keep their isolated
+`.t3` directory. Avoid setting a shared home when running official and fork builds
+side by side.
+
+The fork does not automatically import the official app's Electron profile or
+`~/.t3/userdata`. Keep the official installation and a stopped, complete backup before
+trying an explicit migration. Do not point a fork at the only copy of official data.
+Copying a database alone omits settings, secrets, attachments, and other stored files;
+an active SQLite database may also have uncheckpointed WAL contents. Migration must
+use a consistent snapshot or a copy taken after the owning applications and services
+have stopped. Verify threads, settings, provider credentials, and reconnection using
+the copy before relying on it. Signing into a fork Connect account does not migrate an
+official Connect account or its linked environments.
+
+### Compatibility and recovery
+
+Version equality across upstream and fork is not a compatibility guarantee. Web,
+desktop, and mobile negotiate the orchestration protocol; different protocol versions
+are rejected. Matching protocols are necessary but do not prove that a particular
+cross-version feature or update path has been verified. Record the tested
+client/server combinations for each release, including local, direct remote, and
+fork Connect connections where supported.
+
+Before an upgrade or channel switch, stop active agent work and retain both the exact
+previous installer/archive and a consistent backup of its data home. The target
+runtime's database preflight must pass before switching. `--allow-downgrade` permits
+an older version number; it does not undo database migrations or bypass that check.
+
+If an update fails, first retain the failed installation's logs and data separately.
+To restore a previous release, stop the application and its background service,
+restore that release's matching data backup into the fork home, then reinstall and
+start the retained version. Check saved threads and settings and reconnect clients.
+Do not overlay an old database on a running server or mix a new database with old
+userdata files. A rollback loses changes made after the backup; keep the failed
+version's copy until recovery has been checked.
+
+## Upstream release workflow reference
+
+The remaining sections describe upstream's unified stable and nightly release workflow.
+Their upstream domains, credentials, npm publication, and deployment instructions do
+not configure a T3CodeJP release.
 
 Beta is the product label, not a release channel or version suffix. Release channels
 remain stable and nightly. To ship 0.1.0 Beta, use `channel=stable` and

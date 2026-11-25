@@ -68,8 +68,10 @@ describe("DesktopEnvironment", () => {
       );
       const production = yield* makeEnvironment();
 
+      assert.equal(production.appUserModelId, "io.github.ymsaki.t3codejp");
+      assert.equal(development.appUserModelId, "io.github.ymsaki.t3codejp.dev");
       assert.equal(development.stateDir, "/Users/alice/.t3/dev");
-      assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(production.stateDir, "/Users/alice/.t3codejp/userdata");
     }),
   );
 });

@@ -13,6 +13,7 @@ import * as Semaphore from "effect/Semaphore";
 import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import {
+  CLI_INSTALL_BIN_DIRNAME,
   CLI_RELEASE_CHECKSUMS_FILE,
   cliArchiveFileName,
   cliArchivePlatformKey,
@@ -643,7 +644,7 @@ export const findPosixLauncher = Effect.fn("cloud.pinned_runtime.find_posix_laun
         .map((directory) => path.resolve(cwd, directory, "t3")),
       path.join(
         environment["T3CODE_INSTALL_BIN_DIR"] ||
-          path.join(yield* HostProcess.HomeDirectory, ".local", "bin"),
+          path.join(path.dirname(path.dirname(input.versionsDir)), CLI_INSTALL_BIN_DIRNAME),
         "t3",
       ),
       ...recorded.split(/\r?\n/),
@@ -691,14 +692,13 @@ const shellLauncherTargets = Effect.fn("cloud.pinned_runtime.shell_launcher_targ
   const path = yield* Path.Path;
   const platform = yield* HostProcess.Platform;
   const environment = yield* HostProcess.Environment;
-  const home = yield* HostProcess.HomeDirectory;
   const launcherName = platform === "win32" ? "t3.cmd" : "t3";
   const launchersFile = path.join(baseDir, PINNED_RUNTIME_DIR, PINNED_RUNTIME_LAUNCHERS_FILE);
   const recorded = (yield* fs.readFileString(launchersFile).pipe(Effect.orElseSucceed(() => "")))
     .split(/\r?\n/)
     .filter((launcher) => launcher.trim().length > 0);
   const found = [
-    environment["T3CODE_INSTALL_BIN_DIR"] || path.join(home, ".local", "bin"),
+    environment["T3CODE_INSTALL_BIN_DIR"] || path.join(baseDir, CLI_INSTALL_BIN_DIRNAME),
     ...(environment["PATH"] ?? environment["Path"] ?? "").split(platform === "win32" ? ";" : ":"),
   ]
     .filter((directory) => path.isAbsolute(directory))

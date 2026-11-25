@@ -80,10 +80,10 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
       if (failures-- > 0) return response.writeHead(504).end();
       const url = new URL(request.url ?? "/", "http://fixture");
       const body =
-        url.pathname === "/pingdotgg/t3code/releases/latest" &&
+        url.pathname === "/YmSaki/t3code/releases/latest" &&
         request.headers.accept === "application/json"
           ? { tag_name: "v1.2.3" }
-          : url.pathname === "/repos/pingdotgg/t3code/releases"
+          : url.pathname === "/repos/YmSaki/t3code/releases"
             ? { "1": nightlies, "2": [{ tag_name: `v${version}` }, { tag_name: "v1.2.3" }] }[
                 url.searchParams.get("page") ?? ""
               ]
@@ -137,57 +137,161 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
   });
 });
 
-// regression: #35834
 describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
   "installer archive download",
   () => {
-    it("names the archive when it returns 404", async () => {
-      const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-archive-"));
-      const arch = HostProcess.Architecture.defaultValue() === "arm64" ? "arm64" : "x64";
-      const archive = `t3-1.2.3-linux-${arch}.tar.gz`;
-      const server = NodeHttp.createServer((request, response) => {
-        if (request.url === "/v1.2.3/SHA256SUMS")
-          return response.end(`${"0".repeat(64)}  ${archive}\n`);
-        response.writeHead(404).end();
-      });
-      try {
-        await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-        const address = server.address();
-        if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
-        const { code, output } = await new Promise<{ code: number | null; output: string }>(
-          (resolve, reject) => {
-            const child = NodeChildProcess.spawn(
-              "sh",
-              [NodePath.resolve(import.meta.dirname, "install.sh")],
-              {
+    it.each([true, false])(
+      "uses only the fork's release archives when available: %s",
+      async (published) => {
+        const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-archive-"));
+        const arch = HostProcess.Architecture.defaultValue() === "arm64" ? "arm64" : "x64";
+        const stem = `t3-1.2.3-linux-${arch}`;
+        const archiveName = `${stem}.tar.gz`;
+        const fork = "/YmSaki/t3code/releases/download/v1.2.3";
+        const upstream = "/pingdotgg/t3code/releases/download/v1.2.3";
+        const assets = new Map<string, Buffer | string>();
+        const requests: string[] = [];
+        const server = NodeHttp.createServer((request, response) => {
+          const url = request.url ?? "";
+          requests.push(url);
+          const body = assets.get(url);
+          if (body !== undefined) return response.end(body);
+          response.writeHead(404).end();
+        });
+        try {
+          await NodeFSP.mkdir(NodePath.join(root, stem));
+          for (const [origin, label] of [
+            [upstream, "upstream"],
+            [fork, "fork"],
+          ] as const) {
+            await NodeFSP.writeFile(
+              NodePath.join(root, stem, "t3"),
+              `#!/bin/sh\n[ "$1" = --version ] && echo "t3 v1.2.3" || echo "${label}"\n`,
+              { mode: 0o755 },
+            );
+            const archive = NodeChildProcess.execFileSync("tar", ["-czf", "-", "-C", root, stem]);
+            const digest = NodeCrypto.createHash("sha256").update(archive).digest("hex");
+            assets.set(`${origin}/SHA256SUMS`, `${digest}  ${archiveName}\n`);
+            if (origin === upstream || published) assets.set(`${origin}/${archiveName}`, archive);
+          }
+          const upstreamLauncher = NodePath.join(root, ".local/bin/t3");
+          await NodeFSP.mkdir(NodePath.dirname(upstreamLauncher), { recursive: true });
+          await NodeFSP.writeFile(upstreamLauncher, "upstream launcher");
+          await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+          const address = server.address();
+          if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
+          const installer = NodePath.join(root, "install.sh");
+          const source = await NodeFSP.readFile(
+            NodePath.join(import.meta.dirname, "install.sh"),
+            "utf8",
+          );
+          await NodeFSP.writeFile(
+            installer,
+            source.replaceAll("https://github.com", `http://127.0.0.1:${address.port}`),
+          );
+          const { code, output } = await new Promise<{ code: number | null; output: string }>(
+            (resolve, reject) => {
+              const child = NodeChildProcess.spawn("sh", [installer], {
                 env: {
                   ...process.env,
+                  HOME: root,
                   T3CODE_CHANNEL: "",
                   T3CODE_VERSION: "1.2.3",
-                  T3CODE_HOME: NodePath.join(root, "home"),
-                  T3CODE_INSTALL_BIN_DIR: NodePath.join(root, "bin"),
-                  T3CODE_RELEASE_BASE_URL: `http://127.0.0.1:${address.port}`,
+                  T3CODE_HOME: "",
+                  T3CODE_INSTALL_BIN_DIR: "",
+                  T3CODE_RELEASE_BASE_URL: "",
                 },
                 stdio: ["ignore", "pipe", "pipe"],
-              },
+              });
+              let output = "";
+              child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
+              child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
+              child.on("error", reject);
+              child.on("close", (code) => resolve({ code, output }));
+            },
+          );
+          expect(requests).toEqual([`${fork}/SHA256SUMS`, `${fork}/${archiveName}`]);
+          expect(await NodeFSP.readFile(upstreamLauncher, "utf8")).toBe("upstream launcher");
+          const launcher = NodePath.join(root, ".t3codejp/cli-bin/t3");
+          if (published) {
+            expect(code, output).toBe(0);
+            expect(NodeChildProcess.execFileSync(launcher, ["origin"], { encoding: "utf8" })).toBe(
+              "fork\n",
             );
-            let output = "";
-            child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
-            child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
-            child.on("error", reject);
-            child.on("close", (code) => resolve({ code, output }));
-          },
-        );
-        expect(code, output).not.toBe(0);
-        expect(output).toMatch(new RegExp(`t3 install: .*${archive.replaceAll(".", "\\.")}`));
-      } finally {
-        server.closeAllConnections();
-        await new Promise<void>((resolve) => server.close(() => resolve()));
-        await NodeFSP.rm(root, { recursive: true, force: true });
-      }
-    });
+          } else {
+            expect(code, output).not.toBe(0);
+            expect(output).toContain(`could not download ${archiveName}`);
+            await expect(NodeFSP.access(launcher)).rejects.toMatchObject({ code: "ENOENT" });
+          }
+        } finally {
+          server.closeAllConnections();
+          await new Promise<void>((resolve) => server.close(() => resolve()));
+          await NodeFSP.rm(root, { recursive: true, force: true });
+        }
+      },
+    );
   },
 );
+
+describe.skipIf(HostProcess.Platform.defaultValue() !== "win32")("installer release origin", () => {
+  it("fails on a missing fork release even if upstream released the same version", async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-origin-"));
+    const requests: string[] = [];
+    const server = NodeHttp.createServer((request, response) => {
+      const path = request.url ?? "";
+      requests.push(path);
+      if (path.startsWith("/pingdotgg/t3code/releases/download/v1.2.3/")) {
+        return response.end("upstream release contents");
+      }
+      response.writeHead(404).end();
+    });
+    try {
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
+      const installer = NodePath.join(root, "install.ps1");
+      const source = await NodeFSP.readFile(
+        NodePath.join(import.meta.dirname, "install.ps1"),
+        "utf8",
+      );
+      await NodeFSP.writeFile(
+        installer,
+        source.replaceAll("https://github.com", `http://127.0.0.1:${address.port}`),
+      );
+      const { code, output } = await new Promise<{ code: number | null; output: string }>(
+        (resolve, reject) => {
+          const child = NodeChildProcess.spawn(
+            "powershell.exe",
+            ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer],
+            {
+              env: {
+                ...process.env,
+                T3CODE_VERSION: "1.2.3",
+                T3CODE_HOME: NodePath.join(root, "home"),
+                T3CODE_INSTALL_BIN_DIR: NodePath.join(root, "bin"),
+                T3CODE_RELEASE_BASE_URL: "",
+              },
+              stdio: ["ignore", "pipe", "pipe"],
+            },
+          );
+          let output = "";
+          child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
+          child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
+          child.on("error", reject);
+          child.on("close", (code) => resolve({ code, output }));
+        },
+      );
+      expect(code, output).not.toBe(0);
+      expect(requests).toEqual(["/YmSaki/t3code/releases/download/v1.2.3/SHA256SUMS"]);
+      expect(output).toContain("has no release archive for");
+      expect(output).not.toContain("npm install");
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 /** Runs an installer for a version that is already unpacked, so only the t3 command step runs. */
 async function installOver(input: {
@@ -376,6 +480,19 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "win32")("install.ps1 t3
 
       const again = await installOver({ script: "install.ps1", home, binDir });
       expect(again.code, again.output).toBe(0);
+
+      const upstream = await NodeFSP.readFile(shim, "utf8");
+      const isolated = await installOver({
+        script: "install.ps1",
+        home,
+        binDir,
+        env: { T3CODE_INSTALL_BIN_DIR: "" },
+      });
+      expect(isolated.code, isolated.output).toBe(0);
+      expect(await NodeFSP.readFile(NodePath.join(home, "cli-bin", "t3.cmd"), "utf8")).toContain(
+        NodePath.join(isolated.target, "t3.exe"),
+      );
+      expect(await NodeFSP.readFile(shim, "utf8")).toBe(upstream);
 
       // Another t3 first on PATH still runs, so the installer names this one in full.
       const otherBin = NodePath.join(root, "other");

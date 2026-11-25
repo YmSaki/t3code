@@ -1,3 +1,4 @@
+import { DESKTOP_APP_ID, PRODUCT_NAME } from "@t3tools/shared/productIdentity";
 import type {
   DesktopAppBranding,
   DesktopAppStageLabel,
@@ -85,8 +86,6 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = "T3 Code";
-
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
@@ -104,9 +103,9 @@ export function resolveDesktopAppBranding(input: {
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
   return {
-    baseName: APP_BASE_NAME,
+    baseName: PRODUCT_NAME,
     stageLabel,
-    displayName: `${APP_BASE_NAME} (${stageLabel})`,
+    displayName: stageLabel === "Beta" ? PRODUCT_NAME : `${PRODUCT_NAME} (${stageLabel})`,
   };
 }
 
@@ -157,6 +156,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
         ? path.join(homeDirectory, "Library", "Application Support")
         : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
   const baseDir = resolveDesktopBaseDir({
+    isDevelopment,
     homeDirectory,
     joinPath: path.join,
     t3Home: config.t3Home,
@@ -228,7 +228,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+      isDevelopment ? `${DESKTOP_APP_ID}.dev` : DESKTOP_APP_ID,
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     linuxApplicationsDir,

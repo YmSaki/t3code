@@ -2240,22 +2240,6 @@
   "bc8ab792af1d656f": "Auf deinem Computer ausführen:",
   "0ba14e4e920cfa00": "Oder lade die Desktop-App herunter",
   "0e79b7a6508a6286": "Dann",
-  "363b9991fa23d36b": [
-    "Überspringe die Installation, wenn du ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": "t3"
-    },
-    " bereits hast. Wenn",
-    " ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": "t3"
-    },
-    " nach der Installation nicht gefunden wird, füge den Ordner, den das Installationsprogramm nennt, zu deinem PATH hinzu."
-  ],
   "87b24d00c08f54bb": "Tastenkürzel-Datei kann nicht geöffnet werden",
   "0ee16208cbfcdbf4": "Unbekannter Fehler beim Öffnen der Datei.",
   "9e20856550715c74": [

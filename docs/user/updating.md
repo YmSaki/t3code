@@ -1,4 +1,9 @@
-# Updating T3 Code
+# Updating T3CodeJP
+
+Use installers and server archives from the
+[T3CodeJP releases](https://github.com/YmSaki/t3code/releases). The official T3 Code
+npm package and app-store listings do not distribute this fork. Its default data
+directory is `~/.t3codejp`; keep a backup before moving data from another installation.
 
 The app you use and the server running your agents can be on different machines.
 When a server is behind your web or desktop app, the update button at the bottom
@@ -101,12 +106,12 @@ Update the side the notice names, then reconnect.
 
 The offered action depends on how the server runs:
 
-| Action                     | What to do                                                                                                                                                                                      |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update server**          | Keep the client open while it installs and reconnects. Supported background services update remotely. For a desktop-hosted server, this also closes and relaunches the desktop app on the host. |
-| **Update the desktop app** | Update the desktop app on the machine running the server, then reopen it if needed.                                                                                                             |
-| **Copy update command**    | Run the command on the named host to update the detected global npm install or installed `t3` command, then restart the server with your usual options.                                         |
-| **Copy relaunch command**  | Stop the command-line server on its host and relaunch with the copied command, keeping your usual subcommand and options. This does not update an installed `t3` command.                       |
+| Action                     | What to do                                                                                                                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Update server**          | Keep the client open while it installs and reconnects. Supported background services update remotely. For a desktop-hosted server, this also closes and relaunches the desktop app on the host.              |
+| **Update the desktop app** | Update the desktop app on the machine running the server, then reopen it if needed.                                                                                                                          |
+| **Copy update command**    | Run the command on the named host using the fork's installed CLI, then restart the server with your usual options. If the command names the official npm package, install the matching fork archive instead. |
+| **Copy relaunch command**  | Stop the command-line server on its host and relaunch with the copied command, keeping your usual subcommand and options. This does not update an installed `t3` command.                                    |
 
 On the host, run:
 
@@ -124,9 +129,11 @@ If you decline the restart for a background service installed by an older
 release, the service can stay down after a crash or reboot until you run
 `t3 service restart`.
 
-If you run the server with `npx` rather than an installed `t3`, there is
-nothing to update on the host: stop the server and relaunch it as
-`npx t3@<client-version>` with the same subcommand and options.
+If you previously ran the official server through `npx t3`, install the fork's
+standalone CLI instead. Do not use `npx t3@<client-version>` to obtain a T3CodeJP
+version. Check which `t3` your shell runs before updating; the fork's default
+launcher is `~/.t3codejp/cli-bin/t3` on macOS/Linux or
+`~\.t3codejp\cli-bin\t3.cmd` on Windows.
 
 ## If an update fails
 
@@ -164,13 +171,15 @@ details** to include the error in a bug report.
 
 ## Registries and proxies
 
-Each server checks T3 Code releases, and providers installed with npm, through
-its own npm, so the checks use npm's configured registry, authentication, and
-proxy settings. Providers installed with Homebrew or pnpm check through those
+T3CodeJP checks its own GitHub Releases for server versions and downloads.
+A missing fork archive is unavailable; an official build is not substituted.
+`T3CODE_RELEASE_BASE_URL` can select an archive mirror on the server, but does
+not change the repository used to discover versions.
+
+Provider updates still use the package manager that installed each provider.
+For npm-installed providers, configure npm's registry, authentication, and proxy
+on the server's machine. Homebrew and pnpm installations use their respective
 tools.
-Configure npm on the server's machine. If that registry cannot be reached, the
-release shows as unavailable; T3 Code does not try the public registry instead.
-Machines without npm check the public npm registry directly.
 
 ## Update providers
 
