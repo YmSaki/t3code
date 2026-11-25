@@ -156,6 +156,21 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
       const sourceDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-src-" });
       const destDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-dest-" });
       const source = yield* createFixtureSource(sourceDir);
+      yield* withDatabase(
+        source,
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`INSERT INTO web_push_subscriptions
+            (id, endpoint, keys_json, created_at, updated_at)
+            VALUES ('subscription-1', 'https://push.example/test',
+              '{"p256dh":"test-p256dh","auth":"test-auth"}', '2026-08-01', '2026-08-01')`;
+          yield* sql`INSERT INTO web_push_vapid_keys
+            (id, public_key, private_key_pkcs8_pem, subject, created_at)
+            VALUES ('default', 'test-public-key', 'test-private-key', 'mailto:push@example.test',
+              '2026-08-01')`;
+        }),
+      );
+      const sourceBefore = yield* fs.readFile(source);
 
       const result = yield* runMigrateDevDb(
         { baseDir: destDir, source, projects: 5, threadsPerProject: 2 },
@@ -186,6 +201,8 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
             webhooks: number;
             transfers: number;
             links: number;
+            pushSubscriptions: number;
+            vapidKeys: number;
           }>`
             SELECT
               (SELECT COUNT(*) FROM auth_sessions) AS auth,
@@ -193,7 +210,9 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
               (SELECT COUNT(*) FROM scheduled_task_webhook_replay_keys) +
                 (SELECT COUNT(*) FROM scheduled_task_webhook_pending) AS webhooks,
               (SELECT COUNT(*) FROM orchestration_v2_projection_context_transfers) AS transfers,
-              (SELECT COUNT(*) FROM peer_environment_links) AS links`;
+              (SELECT COUNT(*) FROM peer_environment_links) AS links,
+              (SELECT COUNT(*) FROM web_push_subscriptions) AS pushSubscriptions,
+              (SELECT COUNT(*) FROM web_push_vapid_keys) AS vapidKeys`;
           return { threads, events, sessions, pullRequest, project, leftovers };
         }),
       );
@@ -234,12 +253,15 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         ],
         "copied project scripts stay listed but never run on settle in the original checkout",
       );
+      assert.deepStrictEqual(yield* fs.readFile(source), sourceBefore);
       assert.deepStrictEqual(kept.leftovers, {
         auth: 0,
         tasks: 0,
         webhooks: 0,
         transfers: 0,
         links: 0,
+        pushSubscriptions: 0,
+        vapidKeys: 0,
       });
     }),
   );
