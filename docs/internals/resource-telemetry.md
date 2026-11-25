@@ -21,7 +21,7 @@ subscriber, plus on-demand and export samples. Consuming host power for backgrou
 live diagnostics. There is no telemetry database or recurring shell-probe fallback.
 
 History has independent bounds for age, snapshot count, process rows, and retained
-bytes. A count limit alone cannot bound memory when command lines vary in size.
+bytes. The byte limit accounts for variable-length executable names and statuses.
 Large process trees therefore shorten the available history window. Linux task
 enumeration is disabled because walking every `/proc/<pid>/task/<tid>` directory
 makes sampling itself expensive.
