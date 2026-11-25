@@ -6,19 +6,6 @@ import type {
 
 import { BUNDLED_MODEL_MANIFEST } from "../provider/ModelManifest.ts";
 
-/**
- * Drivers whose model catalogs are published by the vendor. Other drivers
- * (OpenCode, Pi, ACP agents) list models from the user's own configuration,
- * such as local Ollama tags, so their model names stay out of analytics.
- */
-const VENDOR_CATALOG_DRIVERS: ReadonlySet<string> = new Set([
-  "codex",
-  "claudeAgent",
-  "cursor",
-  "grok",
-  "antigravity",
-]);
-
 export interface ProviderDimensions {
   readonly provider: string;
   readonly model?: string;
@@ -27,7 +14,7 @@ export interface ProviderDimensions {
 /**
  * Anonymous provider and model for a model selection. Instance ids are
  * user-defined, so only the driver kind is reported. The model is reported
- * only when it comes from a vendor catalog and is not a user-added custom model.
+ * under the same public catalog rule as provider turns.
  */
 export function providerDimensions(
   providers: ReadonlyArray<ServerProvider>,
@@ -35,10 +22,8 @@ export function providerDimensions(
 ): ProviderDimensions {
   const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
   if (provider === undefined) return { provider: "unknown" };
-  const model = provider.models.find((candidate) => candidate.slug === selection.model);
-  return VENDOR_CATALOG_DRIVERS.has(provider.driver) && model !== undefined && !model.isCustom
-    ? { provider: provider.driver, model: model.slug }
-    : { provider: provider.driver };
+  const model = catalogModelLabel(providers, selection.model);
+  return model === undefined ? { provider: provider.driver } : { provider: provider.driver, model };
 }
 
 const DATED_SNAPSHOT = /-\d{8}$/u;
