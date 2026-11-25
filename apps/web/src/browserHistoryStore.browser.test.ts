@@ -257,10 +257,10 @@ it("keeps overlapping visits from independent documents", async () => {
     JSON.stringify({ state: { byProjectKey: { a: [page] } }, version: 1 }),
   );
   try {
-    using documents = new DisposableStack();
+    using fixtures = new DisposableStack();
     const [first, second] = await Promise.all([
-      openHistoryDocument(documents),
-      openHistoryDocument(documents),
+      openHistoryDocument(fixtures),
+      openHistoryDocument(fixtures),
     ]);
     first.getState().recordVisit("a", oldEntry.url, oldEntry.lastVisitedAt);
     second.getState().recordVisit("b", otherEntry.url, otherEntry.lastVisitedAt);
@@ -270,10 +270,11 @@ it("keeps overlapping visits from independent documents", async () => {
       expect(second.getState().byProjectKey).toEqual(expected);
     });
 
-    // A fresh document should read the committed visits even after the legacy seed is gone.
     localStorage.removeItem(storageKey);
-    const reopened = await openHistoryDocument(documents);
-    await vi.waitFor(() => expect(reopened.getState().byProjectKey).toEqual(expected));
+    const db = await openHistoryFixture(fixtures);
+    await vi.waitFor(async () =>
+      expect(await readHistoryFixture(db)).toHaveProperty("byProjectKey", expected),
+    );
   } finally {
     await resetHistoryFixture();
   }
