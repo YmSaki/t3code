@@ -1,4 +1,3 @@
-// @effect-diagnostics-next-line nodeBuiltinImport:off -- inject SQLite disk failures into real database copies.
 import * as NodeSqlite from "node:sqlite";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -8,7 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as SqlClient from "effect/sql/SqlClient";
-import { vi } from "vitest";
+import { vi } from "vite-plus/test";
 
 import { runMigrations } from "../src/persistence/Migrations.ts";
 import * as WorklogStore from "../src/worklog/WorklogStore.ts";
