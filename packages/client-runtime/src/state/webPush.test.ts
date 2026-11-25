@@ -22,11 +22,7 @@ import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import { RpcPermissionGuard } from "../rpc/client.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { awaitAtomResult, runAtomCommand } from "./runtime.ts";
-import {
-  createWebPushEnvironmentAtoms,
-  removeWebPushSubscriptionFromList,
-  upsertWebPushSubscriptionList,
-} from "./webPush.ts";
+import { createWebPushEnvironmentAtoms } from "./webPush.ts";
 
 vi.mock("./session.ts", () => ({
   createEnvironmentSessionAtoms: () => ({ sessionStateAtom: mockSessions }),
@@ -37,10 +33,21 @@ const mockSessions = Atom.family((_id: EnvironmentId) =>
 );
 
 const envId = EnvironmentId.make("env-web-push");
+const otherEnvId = EnvironmentId.make("env-other");
+const persistedSubscription: WebPushSubscription = {
+  id: WebPushSubscriptionId.make("sub-persisted"),
+  endpoint: "https://push.example/persisted",
+  keys: { p256dh: "p256-persisted", auth: "auth-persisted" },
+  deviceLabel: "Existing browser",
+  enabled: true,
+  createdAt: "2026-11-22T00:00:00.000Z",
+  updatedAt: "2026-11-22T00:00:00.000Z",
+};
 
 const createTestWebPushAtoms = Effect.gen(function* () {
-  const stored = new Map<string, WebPushSubscription>();
+  const stored = new Map([[persistedSubscription.endpoint, persistedSubscription]]);
   const client = {
+    [WS_METHODS.webPushListSubscriptions]: () => Effect.sync(() => [...stored.values()]),
     [WS_METHODS.webPushGetVapidPublicKey]: () =>
       Effect.succeed({
         publicKey:
@@ -84,10 +91,26 @@ const createTestWebPushAtoms = Effect.gen(function* () {
     retryNow: Effect.void,
   } as unknown as EnvironmentSupervisor["Service"]);
 
+  const otherSession = yield* SubscriptionRef.make(
+    Option.some({
+      client: {
+        [WS_METHODS.webPushListSubscriptions]: () => Effect.succeed([]),
+      },
+    } as unknown as RpcSession),
+  );
   const registryService = EnvironmentRegistry.of({
-    run: (_id, effect) =>
+    run: (id, effect) =>
       effect.pipe(
-        Effect.provideService(EnvironmentSupervisor, supervisor),
+        Effect.provideService(
+          EnvironmentSupervisor,
+          id === otherEnvId
+            ? {
+                ...supervisor,
+                target: { environmentId: otherEnvId, label: "Other Env" },
+                session: otherSession,
+              }
+            : supervisor,
+        ),
         Effect.provideService(RpcPermissionGuard, {
           authorize: () => Effect.void,
         }),
@@ -104,27 +127,7 @@ const createTestWebPushAtoms = Effect.gen(function* () {
 });
 
 describe("createWebPushEnvironmentAtoms", () => {
-  it("upserts and removes subscriptions purely", () => {
-    const first: WebPushSubscription = {
-      id: WebPushSubscriptionId.make("sub-1"),
-      endpoint: "https://push.example/1",
-      keys: { p256dh: "k1", auth: "a1" },
-      deviceLabel: "Phone",
-      enabled: true,
-      createdAt: "2026-11-22T00:00:00.000Z",
-      updatedAt: "2026-11-22T00:00:00.000Z",
-    };
-    const updated: WebPushSubscription = {
-      ...first,
-      deviceLabel: "Updated Phone",
-    };
-    const list = upsertWebPushSubscriptionList([first], updated);
-    expect(list).toHaveLength(1);
-    expect(list[0]?.deviceLabel).toBe("Updated Phone");
-    expect(removeWebPushSubscriptionFromList(list, { id: first.id })).toEqual([]);
-  });
-
-  it.effect("reads VAPID key and tracks subscribe/unsubscribe in session atom", () =>
+  it.effect("loads persisted subscriptions per environment and refreshes after changes", () =>
     Effect.gen(function* () {
       const atoms = yield* createTestWebPushAtoms;
       const registry = yield* Effect.acquireRelease(
@@ -152,9 +155,12 @@ describe("createWebPushEnvironmentAtoms", () => {
       const vapid = yield* awaitAtomResult(registry, vapidAtom);
       expect(vapid.subject).toBe("mailto:admin@example.com");
 
-      const subsAtom = atoms.subscriptionsAtom(envId);
+      const subsAtom = atoms.subscriptions({ environmentId: envId, input: {} });
       yield* AtomRegistry.mount(registry, subsAtom);
-      expect(registry.get(subsAtom)).toEqual([]);
+      expect(yield* awaitAtomResult(registry, subsAtom)).toEqual([persistedSubscription]);
+      const otherSubsAtom = atoms.subscriptions({ environmentId: otherEnvId, input: {} });
+      yield* AtomRegistry.mount(registry, otherSubsAtom);
+      expect(yield* awaitAtomResult(registry, otherSubsAtom)).toEqual([]);
 
       const subscribeExit = yield* Effect.promise(() =>
         runAtomCommand(registry, atoms.subscribe, {
@@ -167,8 +173,16 @@ describe("createWebPushEnvironmentAtoms", () => {
         }),
       );
       expect(subscribeExit._tag).toBe("Success");
-      expect(registry.get(subsAtom)).toHaveLength(1);
-      expect(registry.get(subsAtom)[0]?.deviceLabel).toBe("Safari PWA");
+      const subscriptions = yield* awaitAtomResult(registry, subsAtom);
+      expect(subscriptions).toHaveLength(2);
+      expect(subscriptions.find((sub) => sub.deviceLabel === "Safari PWA")).toBeDefined();
+      expect(yield* awaitAtomResult(registry, otherSubsAtom)).toEqual([]);
+
+      const reloadedRegistry = yield* Effect.acquireRelease(
+        Effect.sync(() => AtomRegistry.make()),
+        (r) => Effect.sync(() => r.dispose()),
+      );
+      expect(yield* awaitAtomResult(reloadedRegistry, subsAtom)).toEqual(subscriptions);
 
       const unsubscribeExit = yield* Effect.promise(() =>
         runAtomCommand(registry, atoms.unsubscribe, {
@@ -177,7 +191,7 @@ describe("createWebPushEnvironmentAtoms", () => {
         }),
       );
       expect(unsubscribeExit._tag).toBe("Success");
-      expect(registry.get(subsAtom)).toEqual([]);
+      expect(yield* awaitAtomResult(registry, subsAtom)).toEqual([persistedSubscription]);
     }).pipe(Effect.scoped),
   );
 });
