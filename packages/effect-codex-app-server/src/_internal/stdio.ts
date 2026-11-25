@@ -104,20 +104,36 @@ const decodeStderrLine = (bytes: Uint8Array, platform: NodeJS.Platform): string 
 
 const STDERR_PENDING_MAX_BYTES = STDERR_TAIL_MAX_CHARS * 4;
 
+const isCp932LeadByte = (byte: number): boolean =>
+  (byte >= 0x81 && byte <= 0x9f) || (byte >= 0xe0 && byte <= 0xfc);
+
 const trimPendingLineTail = (
   bytes: Uint8Array<ArrayBuffer>,
   start: number,
+  platform: NodeJS.Platform,
 ): Uint8Array<ArrayBuffer> => {
   const minStart = bytes.length - STDERR_PENDING_MAX_BYTES;
   if (minStart <= start) {
     return bytes.slice(start);
   }
-  let trimStart = minStart;
-  // Avoid landing in the middle of a multi-byte UTF-8 sequence, which would force CP932 fallback.
-  for (let i = 0; i < 3 && trimStart < bytes.length && (bytes[trimStart]! & 0xc0) === 0x80; i++) {
-    trimStart += 1;
+  const utf8Decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+  for (let offset = 0; offset < 4 && minStart + offset < bytes.length; offset++) {
+    try {
+      utf8Decoder.decode(bytes.subarray(minStart + offset));
+      return bytes.slice(minStart + offset);
+    } catch {
+      // Try next byte boundary in case minStart landed inside a multi-byte UTF-8 sequence.
+    }
   }
-  return bytes.slice(trimStart);
+  if (platform === "win32") {
+    // Walk CP932 character boundaries from line start so 2-byte characters stay aligned.
+    let cursor = start;
+    while (cursor < minStart && cursor < bytes.length) {
+      cursor += isCp932LeadByte(bytes[cursor]!) ? 2 : 1;
+    }
+    return bytes.slice(Math.min(cursor, bytes.length));
+  }
+  return bytes.slice(minStart);
 };
 
 export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
@@ -139,7 +155,7 @@ export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
         }
         return {
           text,
-          pending: trimPendingLineTail(bytes, start),
+          pending: trimPendingLineTail(bytes, start, platform),
         };
       }),
     ),

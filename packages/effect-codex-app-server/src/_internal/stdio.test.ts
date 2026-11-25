@@ -183,6 +183,32 @@ describe("Codex App Server stderr decoding", () => {
     }),
   );
 
+  it.effect("keeps long CP932 lines aligned across chunk boundaries on Windows", () =>
+    Effect.gen(function* () {
+      const longCp932 = new Uint8Array(40_001);
+      longCp932[0] = 0x61; // odd-offset prefix 'a' + 20,000 CP932 'リ' (0x83, 0x8a)
+      for (let i = 1; i < longCp932.length; i += 2) {
+        longCp932[i] = 0x83;
+        longCp932[i + 1] = 0x8a;
+      }
+      const lf = Uint8Array.from([10]);
+      const combined = new Uint8Array(longCp932.length + 1);
+      combined.set(longCp932);
+      combined.set(lf, longCp932.length);
+      const singleChunk = yield* readTail([combined], "win32");
+      const splitChunks = yield* readTail([longCp932, lf], "win32");
+      assert.equal(splitChunks, singleChunk);
+      assert.isTrue(splitChunks.endsWith("リリリ\n"));
+    }),
+  );
+
+  it.effect("keeps CP932 fallback restricted to Windows", () =>
+    Effect.gen(function* () {
+      const tail = yield* readTail([cp932PathNotFound], "linux");
+      assert.equal(tail, new TextDecoder("utf-8", { ignoreBOM: true }).decode(cp932PathNotFound));
+    }),
+  );
+
   it.effect("retains interior U+FEFF characters across lines", () =>
     Effect.gen(function* () {
       const tail = yield* readTail([utf8("x\n\uFEFFy")], "linux");
