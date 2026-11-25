@@ -6,6 +6,7 @@ import {
   type WebPushSubscriptionDeleteInput,
   type WebPushSubscriptionId,
   type WebPushSubscriptionInput,
+  type WebPushSubscriptionSummary,
   type WebPushVapidPublicKeyResult,
 } from "@t3tools/contracts";
 import {
@@ -83,7 +84,10 @@ export class WebPushService extends Context.Service<
     readonly unsubscribe: (
       input: WebPushSubscriptionDeleteInput,
     ) => Effect.Effect<boolean, WebPushError>;
-    readonly listSubscriptions: Effect.Effect<ReadonlyArray<WebPushSubscription>, WebPushError>;
+    readonly listSubscriptions: Effect.Effect<
+      ReadonlyArray<WebPushSubscriptionSummary>,
+      WebPushError
+    >;
     readonly getPreferences: Effect.Effect<WebPushPreferences>;
     readonly setPreferences: (preferences: WebPushPreferences) => Effect.Effect<WebPushPreferences>;
     readonly notifyEvent: (
@@ -149,8 +153,18 @@ export const make = Effect.fn("WebPushService.make")(function* (
     return yield* store.deleteSubscription(input);
   });
 
-  const listSubscriptions: WebPushService["Service"]["listSubscriptions"] =
-    store.listSubscriptions();
+  const listSubscriptions: WebPushService["Service"]["listSubscriptions"] = store
+    .listSubscriptions()
+    .pipe(
+      Effect.map((subscriptions) =>
+        subscriptions.map(({ id, endpoint, deviceLabel, enabled }) => ({
+          id,
+          endpoint,
+          deviceLabel,
+          enabled,
+        })),
+      ),
+    );
 
   const getPreferences: WebPushService["Service"]["getPreferences"] = Effect.sync(
     () => currentPreferences,

@@ -6,6 +6,7 @@ import {
   type AuthSessionState,
   type WebPushSubscription,
   type WebPushSubscriptionInput,
+  type WebPushSubscriptionSummary,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -34,14 +35,11 @@ const mockSessions = Atom.family((_id: EnvironmentId) =>
 
 const envId = EnvironmentId.make("env-web-push");
 const otherEnvId = EnvironmentId.make("env-other");
-const persistedSubscription: WebPushSubscription = {
+const persistedSubscription: WebPushSubscriptionSummary = {
   id: WebPushSubscriptionId.make("sub-persisted"),
   endpoint: "https://push.example/persisted",
-  keys: { p256dh: "p256-persisted", auth: "auth-persisted" },
   deviceLabel: "Existing browser",
   enabled: true,
-  createdAt: "2026-11-22T00:00:00.000Z",
-  updatedAt: "2026-11-22T00:00:00.000Z",
 };
 
 const createTestWebPushAtoms = Effect.gen(function* () {
@@ -56,17 +54,19 @@ const createTestWebPushAtoms = Effect.gen(function* () {
       }),
     [WS_METHODS.webPushSubscribe]: (input: WebPushSubscriptionInput) =>
       Effect.sync(() => {
-        const sub: WebPushSubscription = {
+        const sub: WebPushSubscriptionSummary = {
           id: input.id ?? WebPushSubscriptionId.make("sub-1"),
           endpoint: input.endpoint,
-          keys: input.keys,
           deviceLabel: input.deviceLabel ?? null,
           enabled: input.enabled ?? true,
-          createdAt: "2026-11-22T00:00:00.000Z",
-          updatedAt: "2026-11-22T00:00:00.000Z",
         };
         stored.set(sub.endpoint, sub);
-        return sub;
+        return {
+          ...sub,
+          keys: input.keys,
+          createdAt: "2026-11-22T00:00:00.000Z",
+          updatedAt: "2026-11-22T00:00:00.000Z",
+        } satisfies WebPushSubscription;
       }),
     [WS_METHODS.webPushUnsubscribe]: ({ endpoint }: { endpoint?: string }) =>
       Effect.sync(() => ({

@@ -3,6 +3,7 @@ import {
   WebPushSubscriptionId,
   type WebPushSubscription,
   type WebPushSubscriptionInput,
+  type WebPushSubscriptionSummary,
 } from "@t3tools/contracts";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -12,7 +13,7 @@ import { render } from "../../../test/render";
 
 const { state, subscribeRpc, unsubscribeRpc, browserUnsubscribe } = vi.hoisted(() => {
   const state = {
-    subscriptions: {} as Record<string, ReadonlyArray<WebPushSubscription>>,
+    subscriptions: {} as Record<string, ReadonlyArray<WebPushSubscriptionSummary>>,
     endpoint: "https://push.example/this-browser",
   };
   return {
@@ -102,15 +103,12 @@ import { WebPushSettingsSection } from "./WebPushSettingsSection";
 const environmentA = EnvironmentId.make("environment-a");
 const environmentB = EnvironmentId.make("environment-b");
 
-function subscription(endpoint: string, enabled = true): WebPushSubscription {
+function subscription(endpoint: string, enabled = true): WebPushSubscriptionSummary {
   return {
     id: WebPushSubscriptionId.make(endpoint),
     endpoint,
-    keys: { p256dh: "p256dh", auth: "auth" },
     deviceLabel: "Browser",
     enabled,
-    createdAt: "2026-11-25T00:00:00.000Z",
-    updatedAt: "2026-11-25T00:00:00.000Z",
   };
 }
 
@@ -130,7 +128,13 @@ function setup() {
     }) => {
       const sub = subscription(input.endpoint);
       state.subscriptions[environmentId] = [sub];
-      return { _tag: "Success", value: sub };
+      const value: WebPushSubscription = {
+        ...sub,
+        keys: input.keys,
+        createdAt: "2026-11-25T00:00:00.000Z",
+        updatedAt: "2026-11-25T00:00:00.000Z",
+      };
+      return { _tag: "Success", value };
     },
   );
   unsubscribeRpc.mockClear();

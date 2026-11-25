@@ -479,6 +479,7 @@ import {
   WebPushSubscription,
   WebPushSubscriptionDeleteInput,
   WebPushSubscriptionInput,
+  WebPushSubscriptionSummary,
   WebPushVapidPublicKeyResult,
 } from "./selfHost.ts";
 import {
@@ -2549,7 +2550,7 @@ const WsWebPushSubscribeRpc = Rpc.make(WS_METHODS.webPushSubscribe, {
 
 const WsWebPushListSubscriptionsRpc = Rpc.make(WS_METHODS.webPushListSubscriptions, {
   payload: Schema.Struct({}),
-  success: Schema.Array(WebPushSubscription),
+  success: Schema.Array(WebPushSubscriptionSummary),
   error: Schema.Union([WebPushError, EnvironmentAuthorizationError]),
 });
 

@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import {
   EnvironmentId,
@@ -101,6 +102,11 @@ export const WebPushSubscription = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 export type WebPushSubscription = typeof WebPushSubscription.Type;
+
+export const WebPushSubscriptionSummary = WebPushSubscription.mapFields(
+  Struct.pick(["id", "endpoint", "deviceLabel", "enabled"]),
+);
+export type WebPushSubscriptionSummary = typeof WebPushSubscriptionSummary.Type;
 
 export const WebPushSubscriptionInput = Schema.Struct({
   id: Schema.optional(WebPushSubscriptionId),
