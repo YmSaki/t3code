@@ -67,13 +67,16 @@ export const withLocalTracing = <A, E, R>(effect: Effect.Effect<A, E, R>): Effec
     ),
   );
 
+const SAFE_ERROR_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.$]{0,63}$/;
+
 // Messages carry machine names and stack frames carry local paths, so relay
-// spans export only the error names along the cause chain.
+// spans export only validated error type names along the cause chain.
 function traceSafeError(value: unknown, seen = new WeakSet<object>()): Error {
-  const name =
+  const rawName =
     typeof value === "object" && value !== null && "name" in value && typeof value.name === "string"
       ? value.name
       : "Error";
+  const name = SAFE_ERROR_NAME_PATTERN.test(rawName) ? rawName : "Error";
 
   let cause: Error | undefined;
   if (typeof value === "object" && value !== null && !seen.has(value)) {

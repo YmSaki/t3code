@@ -63,11 +63,16 @@ describe("nonInterferingTracer", () => {
           return span;
         },
       });
+      const cause = Object.assign(new Error("connect ECONNREFUSED studio-mac.local"), {
+        name: "SocketError\n    at connect (/home/alice/app.js:7:2)",
+        stack: "SocketError\n    at inner (/Users/bob/project/cause.ts:12:3)",
+      });
       const failure = Object.assign(
-        new Error("studio-mac could not establish a WebSocket connection.", {
-          cause: new Error("connect ECONNREFUSED studio-mac.local"),
-        }),
-        { name: "ConnectionTransientError" },
+        new Error("studio-mac could not establish a WebSocket connection.", { cause }),
+        {
+          name: "ConnectionTransientError",
+          stack: "ConnectionTransientError\n    at outer (/var/app/server/outer.ts:99:1)",
+        },
       );
 
       yield* Effect.fail(failure).pipe(
@@ -78,11 +83,14 @@ describe("nonInterferingTracer", () => {
 
       const exit = exits[0];
       if (exit === undefined || !Exit.isFailure(exit)) throw new Error("expected a failed span");
-      const exported = Cause.prettyErrors(exit.cause);
+      const exported = Cause.prettyErrors(exit.cause, { includeCauseInStack: true });
       expect(exported.map((error) => error.name)).toEqual(["ConnectionTransientError"]);
       const text = exported.map((error) => `${error.message}\n${error.stack}`).join("\n");
       expect(text).toContain("Caused by: Error");
       expect(text).not.toContain("studio-mac");
+      expect(text).not.toContain("/home/alice");
+      expect(text).not.toContain("/Users/bob");
+      expect(text).not.toContain("/var/app");
       expect(text).not.toContain("relayTracing.test");
     }),
   );
