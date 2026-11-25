@@ -8,6 +8,7 @@ import {
   RepoMonitorEventId,
   type RepoMonitorEventRecord,
   type RepoMonitorRule,
+  type RepoMonitorRuleListResult,
   RepoMonitorRuleId,
   type RepoMonitorRuleUpsertInput,
   type ThreadId,
@@ -110,7 +111,7 @@ export class RepoMonitorService extends Context.Service<
   {
     readonly listRules: (
       projectId?: ProjectId | undefined,
-    ) => Effect.Effect<ReadonlyArray<RepoMonitorRule>, RepoMonitorError>;
+    ) => Effect.Effect<RepoMonitorRuleListResult, RepoMonitorError>;
     readonly upsertRule: (
       input: RepoMonitorRuleUpsertInput,
     ) => Effect.Effect<RepoMonitorRule, RepoMonitorError>;
@@ -257,6 +258,14 @@ export const make = Effect.fn("RepoMonitorService.make")(function* (
     explicit !== undefined
       ? Effect.succeed(explicit)
       : (options?.getGlobalKillSwitch ?? Effect.succeed(false));
+
+  const listRules = Effect.fn("RepoMonitorService.listRules")(function* (
+    projectId?: ProjectId | undefined,
+  ) {
+    const rules = yield* store.listRules(projectId);
+    const globalKillSwitch = yield* resolveKillSwitch();
+    return { rules, globalKillSwitch };
+  });
 
   const resolveSnapshot = (
     projectId: ProjectId,
@@ -700,7 +709,7 @@ export const make = Effect.fn("RepoMonitorService.make")(function* (
   });
 
   return RepoMonitorService.of({
-    listRules: store.listRules,
+    listRules,
     upsertRule,
     deleteRule,
     listEvents: store.listEvents,

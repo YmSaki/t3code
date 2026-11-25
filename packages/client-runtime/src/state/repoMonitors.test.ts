@@ -96,12 +96,13 @@ function createTestRepoMonitorAtoms() {
       },
     ];
     let ruleReads = 0;
+    let globalKillSwitch = true;
 
     const client = {
       [WS_METHODS.repoMonitorListRules]: () =>
         Effect.sync(() => {
           ruleReads += 1;
-          return { rules: [...rules] };
+          return { rules: [...rules], globalKillSwitch };
         }),
       [WS_METHODS.repoMonitorListEvents]: () => Effect.sync(() => ({ events: [...events] })),
       [WS_METHODS.repoMonitorListPresets]: () =>
@@ -180,7 +181,10 @@ function createTestRepoMonitorAtoms() {
           ],
         }),
       [WS_METHODS.pmSetKillSwitch]: (input: { readonly active: boolean }) =>
-        Effect.succeed({ scope: "global" as const, active: input.active }),
+        Effect.sync(() => {
+          globalKillSwitch = input.active;
+          return { scope: "global" as const, active: globalKillSwitch };
+        }),
     } as unknown as RpcSession["client"];
 
     const supervisor = {
@@ -240,6 +244,7 @@ describe("createRepoMonitorEnvironmentAtoms", () => {
         const initialRules = yield* awaitAtomResult(registry, rulesAtom);
         expect(initialRules.rules).toHaveLength(1);
         expect(getRuleReads()).toBe(1);
+        expect(initialRules.globalKillSwitch).toBe(true);
 
         const initialEvents = yield* awaitAtomResult(registry, eventsAtom);
         expect(countTriggeredRepoMonitorEvents(initialEvents.events)).toBe(1);
@@ -285,11 +290,21 @@ describe("createRepoMonitorEnvironmentAtoms", () => {
         const ksExit = yield* Effect.promise(() =>
           runAtomCommand(registry, atoms.setGlobalKillSwitch, {
             environmentId: envId,
-            input: { scope: "global", active: true },
+            input: { scope: "global", active: false },
           }),
         );
         expect(AsyncResult.isSuccess(ksExit)).toBe(true);
-        expect(registry.get(atoms.globalKillSwitch(envId))).toBe(true);
+        const afterResume = yield* awaitAtomResult(registry, rulesAtom);
+        expect(afterResume.globalKillSwitch).toBe(false);
+        expect(getRuleReads()).toBe(4);
+
+        const freshRegistry = yield* Effect.acquireRelease(
+          Effect.sync(() => AtomRegistry.make()),
+          (r) => Effect.sync(() => r.dispose()),
+        );
+        yield* AtomRegistry.mount(freshRegistry, rulesAtom);
+        const reloadedRules = yield* awaitAtomResult(freshRegistry, rulesAtom);
+        expect(reloadedRules.globalKillSwitch).toBe(false);
 
         const deleteExit = yield* Effect.promise(() =>
           runAtomCommand(registry, atoms.deleteRule, {

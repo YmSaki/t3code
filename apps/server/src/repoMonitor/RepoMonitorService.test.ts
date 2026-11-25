@@ -15,6 +15,7 @@ import type {
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
 
 import Migration0109 from "../persistence/Migrations/109_RepoMonitors.ts";
@@ -82,6 +83,35 @@ const secondSnapshot: RepoMonitorSnapshot = {
 };
 
 describe("RepoMonitorService", () => {
+  it.effect("lists the current global stop state even when the project has no rules", () =>
+    Effect.gen(function* () {
+      yield* Migration0109;
+      const stopped = yield* Ref.make(true);
+      const service = yield* RepoMonitorService.pipe(
+        Effect.provide(
+          repoMonitorServiceLayer({ getGlobalKillSwitch: Ref.get(stopped) }).pipe(
+            Layer.provide(repoMonitorStoreLayer),
+          ),
+        ),
+      );
+
+      assert.deepStrictEqual(yield* service.listRules(PROJECT_ID), {
+        globalKillSwitch: true,
+        rules: [],
+      });
+
+      yield* Ref.set(stopped, false);
+      assert.deepStrictEqual(yield* service.listRules(), {
+        globalKillSwitch: false,
+        rules: [],
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" }), NodeCrypto.layer),
+      ),
+    ),
+  );
+
   it.effect(
     "evaluates poll diffs, sanitizes untrusted text, enforces cooldown/loop guards, and converges with webhooks",
     () =>

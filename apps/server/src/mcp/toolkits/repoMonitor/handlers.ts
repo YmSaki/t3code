@@ -52,7 +52,7 @@ export const layer = McpToolAccess.toLayer(RepoMonitorToolkit, {
       const context = yield* readCaller();
       const service = yield* RepoMonitorService.RepoMonitorService;
       const projectId = input.projectId ?? context.caller?.projectId;
-      const rules = yield* service.listRules(projectId).pipe(Effect.mapError(toMcpFailure));
+      const { rules } = yield* service.listRules(projectId).pipe(Effect.mapError(toMcpFailure));
       return { rules };
     }),
   ),

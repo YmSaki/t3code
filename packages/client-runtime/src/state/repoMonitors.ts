@@ -42,12 +42,6 @@ export function createRepoMonitorEnvironmentAtoms<R, E>(
   const eventsRevision = Atom.family((environmentId: EnvironmentId) =>
     Atom.make(0).pipe(Atom.withLabel(`environment-data:repo-monitor:events-rev:${environmentId}`)),
   );
-  const globalKillSwitch = Atom.family((environmentId: EnvironmentId) =>
-    Atom.make(false).pipe(
-      Atom.withLabel(`environment-data:repo-monitor:global-kill-switch:${environmentId}`),
-    ),
-  );
-
   const bumpRules = (registry: AtomRegistry.AtomRegistry, environmentId: EnvironmentId) =>
     Effect.sync(() => {
       registry.update(rulesRevision(environmentId), (n) => n + 1);
@@ -106,17 +100,13 @@ export function createRepoMonitorEnvironmentAtoms<R, E>(
   const setGlobalKillSwitch = createEnvironmentRpcCommand(runtime, {
     label: "environment-data:repo-monitor:set-global-kill-switch",
     tag: WS_METHODS.pmSetKillSwitch,
-    onSuccess: ({ environmentId, input }, registry) =>
-      Effect.sync(() => {
-        registry.set(globalKillSwitch(environmentId), input.active);
-      }),
+    onSuccess: ({ environmentId }, registry) => bumpRules(registry, environmentId),
   });
 
   return {
     listRules,
     listEvents,
     presets,
-    globalKillSwitch,
     upsertRule,
     createRule,
     updateRule,
