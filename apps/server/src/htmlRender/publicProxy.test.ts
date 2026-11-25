@@ -37,6 +37,11 @@ const TEST_DNS: Record<string, ReadonlyArray<{ address: string; family: number }
     { address: "93.184.215.14", family: 4 },
     { address: "198.18.2.41", family: 4 },
   ],
+  "mapped.private.test": [{ address: "::ffff:10.0.0.1", family: 6 }],
+  "mixed.mapped.test": [
+    { address: "93.184.215.14", family: 4 },
+    { address: "::ffff:7f00:1", family: 6 },
+  ],
 };
 vi.mock("node:dns/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof NodeDnsPromises>();
@@ -108,6 +113,10 @@ describe("publicProxy", () => {
         ipv4Target("169.254.169.254", 80),
         ipv4Target("198.18.0.1", 80),
         domainTarget("localhost", 80),
+        domainTarget("mapped.private.test", 80),
+        domainTarget("mixed.mapped.test", 80),
+        ipv6Target("::ffff:7f00:1", 80),
+        ipv6Target("::ffff:a00:1", 80),
         ipv6Target("64:ff9b::7f00:1", 80),
         ipv6Target("64:ff9b::a00:1", 80),
         ipv6Target("2002:7f00:1::1", 80),

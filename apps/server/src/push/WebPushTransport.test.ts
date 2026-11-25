@@ -273,6 +273,7 @@ it.effect("revalidates stored destinations and every DNS answer before each deli
       "http://push.example.com/sub",
       "https://user@push.example.com/sub",
       "https://[::ffff:10.0.0.1]/sub",
+      "https://[::ffff:7f00:1]/sub",
       "https://198.51.100.7/sub",
     ]) {
       const error = yield* Effect.flip(
@@ -285,6 +286,12 @@ it.effect("revalidates stored destinations and every DNS answer before each deli
     expect((yield* send({ subscription, payload, vapid })).status).toBe("delivered");
     for (const answers of [
       [{ address: "127.0.0.1", family: 4 }],
+      [{ address: "::ffff:10.0.0.1", family: 6 }],
+      [{ address: "::ffff:7f00:1", family: 6 }],
+      [
+        { address: "93.184.215.14", family: 4 },
+        { address: "::ffff:a00:1", family: 6 },
+      ],
       [
         { address: "93.184.215.14", family: 4 },
         { address: "fd00::1", family: 6 },
@@ -300,7 +307,7 @@ it.effect("revalidates stored destinations and every DNS answer before each deli
       const error = yield* Effect.flip(send({ subscription, payload, vapid }));
       expect(error.message).toBe("Push endpoint did not resolve to a public address.");
     }
-    expect(lookup).toHaveBeenCalledTimes(9);
+    expect(lookup).toHaveBeenCalledTimes(12);
     expect(lookup).toHaveBeenCalledWith("push.example.com", { all: true, verbatim: true });
     expect(seen).toHaveLength(1);
   }),

@@ -30,6 +30,8 @@ for (const [network, prefix] of [
   LOCAL_ADDRESSES.addSubnet(network, prefix, "ipv6");
 }
 
+const IPV4_MAPPED = new NodeNet.BlockList();
+IPV4_MAPPED.addSubnet("::ffff:0:0", 96, "ipv6");
 const NAT64 = new NodeNet.BlockList();
 NAT64.addSubnet("64:ff9b::", 96, "ipv6");
 const SIX_TO_FOUR = new NodeNet.BlockList();
@@ -50,9 +52,14 @@ const ipv6Groups = (address: string) => {
   );
 };
 
-// Check the translated IPv4 too, while allowing public NAT64 targets on IPv6-only networks.
+// Check the embedded IPv4 too, while allowing public NAT64 targets on IPv6-only networks.
 const embeddedIPv4 = (address: string) => {
-  const at = NAT64.check(address, "ipv6") ? 6 : SIX_TO_FOUR.check(address, "ipv6") ? 1 : -1;
+  const at =
+    IPV4_MAPPED.check(address, "ipv6") || NAT64.check(address, "ipv6")
+      ? 6
+      : SIX_TO_FOUR.check(address, "ipv6")
+        ? 1
+        : -1;
   if (at === -1) return undefined;
   const groups = ipv6Groups(address);
   const high = groups[at] ?? 0;
@@ -69,10 +76,10 @@ const ownAddresses = () => {
 };
 
 const isLocal = (address: string, family: number): boolean => {
-  const type = family === 6 ? "ipv6" : "ipv4";
-  if (LOCAL_ADDRESSES.check(address, type) || ownAddresses().check(address, type)) return true;
   const embedded = family === 6 ? embeddedIPv4(address) : undefined;
-  return embedded !== undefined && isLocal(embedded, 4);
+  if (embedded !== undefined && isLocal(embedded, 4)) return true;
+  const type = family === 6 ? "ipv6" : "ipv4";
+  return LOCAL_ADDRESSES.check(address, type) || ownAddresses().check(address, type);
 };
 
 export const isLocalIpLiteral = (address: string) => {

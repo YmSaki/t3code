@@ -65,6 +65,8 @@ layer("WebPushStore", (it) => {
         "https://@push.example/sub",
         "https://127.0.0.1/sub",
         "https://[::ffff:10.0.0.1]/sub",
+        "https://[::ffff:7f00:1]/sub",
+        "https://[0:0:0:0:0:ffff:0a00:0001]/sub",
         "https://198.51.100.7/sub",
         "https://[::ffff:198.51.100.7]/sub",
       ]) {
