@@ -71,7 +71,7 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
           cpuPercent: entry.cpuPercent,
           rssBytes: entry.residentBytes,
           elapsed: formatElapsed(entry.runTimeMs),
-          command: entry.command || entry.name || "unknown",
+          command: entry.command,
           depth: Math.max(0, entry.depth - 1),
           childPids: entry.childPids,
         }));

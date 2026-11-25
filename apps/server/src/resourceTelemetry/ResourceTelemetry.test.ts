@@ -1,7 +1,8 @@
-import type {
-  DesktopHostTelemetrySnapshot,
-  ResourceMonitorProcessSample,
-  ResourceMonitorSnapshotEvent,
+import {
+  RESOURCE_MONITOR_PROTOCOL_VERSION,
+  type DesktopHostTelemetrySnapshot,
+  type ResourceMonitorProcessSample,
+  type ResourceMonitorSnapshotEvent,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
@@ -33,8 +34,9 @@ function processSample(
 ): ResourceMonitorProcessSample {
   return {
     runTimeMs: 1_000,
-    name: `process-${input.pid}`,
-    command: `process-${input.pid}`,
+    executableName: `process-${input.pid}`,
+    electronType: null,
+    providerHint: null,
     status: "Running",
     cpuPercent: 0,
     cpuTimeMs: 0,
@@ -65,8 +67,8 @@ function nativeSnapshot(input: {
       pid: CODEX_PID,
       ppid: SERVER_PID,
       startTimeMs: 200,
-      name: "codex",
-      command: "codex app-server",
+      executableName: "codex",
+      providerHint: "codex",
       cpuTimeMs: input.childCpuTimeMs,
       ioWriteBytes: input.childWriteBytes,
     }),
@@ -74,21 +76,19 @@ function nativeSnapshot(input: {
       pid: ELECTRON_PID,
       ppid: 1,
       startTimeMs: 300,
-      name: "electron",
-      command: "electron",
+      executableName: "electron",
       cpuTimeMs: input.sequence * 20,
     }),
     processSample({
       pid: MONITOR_PID,
       ppid: SERVER_PID,
       startTimeMs: 400,
-      name: "t3-resource-monitor",
-      command: "t3-resource-monitor",
+      executableName: "t3-resource-monitor",
       cpuTimeMs: input.sequence * 5,
     }),
   ];
   return {
-    version: 3,
+    version: RESOURCE_MONITOR_PROTOCOL_VERSION,
     type: "snapshot",
     sequence: input.sequence,
     sampledAtUnixMs: input.sampledAtUnixMs,

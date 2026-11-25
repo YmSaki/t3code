@@ -1,17 +1,25 @@
-import type {
-  DesktopElectronProcessMetric,
-  DesktopHostTelemetrySnapshot,
-  ResourceMonitorProcessSample,
-  ResourceMonitorSnapshotEvent,
-  ResourceTelemetryAggregate,
-  ResourceTelemetryProcess,
-  ResourceTelemetryProcessCategory,
+import {
+  ResourceMonitorProviderHint,
+  type DesktopElectronProcessMetric,
+  type DesktopHostTelemetrySnapshot,
+  type ResourceMonitorProcessSample,
+  type ResourceMonitorSnapshotEvent,
+  type ResourceTelemetryAggregate,
+  type ResourceTelemetryProcess,
+  type ResourceTelemetryProcessCategory,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
 const MAX_DELTA_INTERVAL_MS = 30_000;
 const ELECTRON_IDENTITY_TOLERANCE_MS = 2_000;
+const MAX_EXECUTABLE_NAME_BYTES = 1_024;
+const ELECTRON_LABELS: Partial<Record<ResourceTelemetryProcessCategory, string>> = {
+  "electron-main": "main",
+  "electron-renderer": "renderer",
+  "electron-gpu": "gpu-process",
+  "electron-utility": "other",
+};
 
 export interface ProcessState {
   readonly process: ResourceTelemetryProcess;
@@ -116,10 +124,20 @@ function electronCategory(metric: DesktopElectronProcessMetric): ResourceTelemet
 function inferredElectronCategory(
   process: ResourceMonitorProcessSample,
 ): ResourceTelemetryProcessCategory {
-  const command = process.command.toLowerCase();
-  if (command.includes("--type=renderer")) return "electron-renderer";
-  if (command.includes("--type=gpu-process")) return "electron-gpu";
+  if (process.electronType === "renderer") return "electron-renderer";
+  if (process.electronType === "gpu-process") return "electron-gpu";
   return "electron-utility";
+}
+
+function safeProcessName(executableName: string | null): string {
+  return typeof executableName === "string" &&
+    executableName.trim() !== "" &&
+    executableName !== "." &&
+    executableName !== ".." &&
+    Buffer.byteLength(executableName) <= MAX_EXECUTABLE_NAME_BYTES &&
+    !/[/\\\p{Cc}]/u.test(executableName)
+    ? executableName
+    : "unknown";
 }
 
 function matchElectronMetric(
@@ -150,8 +168,9 @@ function syntheticNativeSample(
     ppid: 0,
     startTimeMs: metric.creationTimeMs,
     runTimeMs: Math.max(0, sampledAtMs - metric.creationTimeMs),
-    name: metric.name ?? metric.serviceName ?? metric.type,
-    command: metric.name ?? metric.serviceName ?? metric.type,
+    executableName: null,
+    electronType: null,
+    providerHint: null,
     status: "Running",
     cpuPercent: metric.cpuPercent,
     cpuTimeMs,
@@ -520,6 +539,13 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
       : previous && elapsedMs > 0 && elapsedMs <= MAX_DELTA_INTERVAL_MS
         ? (cpuTimeDelta / elapsedMs) * 100
         : finiteNonNegative(process.cpuPercent);
+    const name = safeProcessName(process.executableName);
+    const electronLabel = ELECTRON_LABELS[category];
+    const providerLabel =
+      process.providerHint !== null &&
+      ResourceMonitorProviderHint.literals.includes(process.providerHint)
+        ? ` [${process.providerHint}]`
+        : "";
     const normalizedProcess: ResourceTelemetryProcess = {
       identity: {
         pid: process.pid,
@@ -530,8 +556,8 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
         (left, right) => left - right,
       ),
       depth: depths.get(process.pid) ?? 0,
-      name: process.name,
-      command: process.command,
+      name,
+      command: name + (electronLabel ? ` [${electronLabel}]` : "") + providerLabel,
       status: process.status,
       category,
       ...(electronMetric ? { electronType: electronMetric.type } : {}),

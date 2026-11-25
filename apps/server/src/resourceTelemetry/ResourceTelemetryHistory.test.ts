@@ -1,8 +1,9 @@
-import type {
-  DesktopHostTelemetrySnapshot,
-  ResourceMonitorProcessSample,
-  ResourceMonitorSnapshotEvent,
-  ResourceTelemetryHealth,
+import {
+  RESOURCE_MONITOR_PROTOCOL_VERSION,
+  type DesktopHostTelemetrySnapshot,
+  type ResourceMonitorProcessSample,
+  type ResourceMonitorSnapshotEvent,
+  type ResourceTelemetryHealth,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
@@ -21,8 +22,9 @@ function processSample(
 ): ResourceMonitorProcessSample {
   return {
     runTimeMs: 1_000,
-    name: `process-${input.pid}`,
-    command: `process-${input.pid}`,
+    executableName: `process-${input.pid}`,
+    electronType: null,
+    providerHint: null,
     status: "Running",
     cpuPercent: 0,
     cpuTimeMs: 0,
@@ -47,21 +49,20 @@ function snapshot(
       pid: ELECTRON_PID,
       ppid: 1,
       startTimeMs: 20,
-      name: "electron",
-      command: "electron",
+      executableName: "electron",
     }),
     processSample({
       pid: CHILD_PID,
       ppid: SERVER_PID,
       startTimeMs: 30,
-      name: "codex",
-      command: "codex app-server",
+      executableName: "codex",
+      providerHint: "codex",
       cpuTimeMs: childCpuTimeMs,
       ioWriteBytes: childWriteBytes,
     }),
   ];
   return {
-    version: 3,
+    version: RESOURCE_MONITOR_PROTOCOL_VERSION,
     type: "snapshot",
     sequence,
     sampledAtUnixMs,
@@ -296,15 +297,13 @@ describe("buildResourceTelemetryHistory", () => {
               pid: ELECTRON_PID,
               ppid: SERVER_PID,
               startTimeMs: 999,
-              name: "reused",
-              command: "unrelated process",
+              executableName: "reused",
             }),
             processSample({
               pid: 201,
               ppid: 1,
               startTimeMs: 40,
-              name: "electron",
-              command: "electron",
+              executableName: "electron",
             }),
           ],
         },

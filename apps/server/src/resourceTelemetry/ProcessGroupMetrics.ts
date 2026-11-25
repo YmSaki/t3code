@@ -1,4 +1,4 @@
-import type { ResourceTelemetryProcess } from "@t3tools/contracts";
+import { ResourceMonitorProviderHint, type ResourceTelemetryProcess } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -38,10 +38,7 @@ const OTHER_GROUPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/chrom/, "browser"],
   [/^(?:ba|z|fi|da|c)?sh(?:\.exe)?$|^pwsh|^powershell|^cmd\.exe$/, "terminal"],
 ];
-// A CLI shipped as a script runs under a JavaScript runtime, so its process name is the
-// runtime's (older Claude packages run `node .../@anthropic-ai/claude-code/cli.js`). Only those
-// are matched by command line; any other name is matched by name alone, so a shell or `git`
-// whose arguments mention a provider stays in its own group.
+// A script CLI runs under a JavaScript runtime and carries its provider in the display label.
 const SCRIPT_RUNTIME = /^(?:node|bun|deno)(?:\.exe)?$/;
 
 const match = (groups: ReadonlyArray<readonly [RegExp, string]>, text: string) =>
@@ -50,7 +47,11 @@ const match = (groups: ReadonlyArray<readonly [RegExp, string]>, text: string) =
 const childGroup = (name: string, command: string) => {
   const lowerName = name.toLowerCase();
   if (SCRIPT_RUNTIME.test(lowerName))
-    return match(PROVIDER_GROUPS, command.toLowerCase()) ?? "other";
+    return (
+      ResourceMonitorProviderHint.literals.find(
+        (provider) => command === `${name} [${provider}]`,
+      ) ?? "other"
+    );
   return match(PROVIDER_GROUPS, lowerName) ?? match(OTHER_GROUPS, lowerName) ?? "other";
 };
 
