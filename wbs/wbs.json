@@ -3498,12 +3498,16 @@
                   "hours": 3,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[未着手] <stateDir>/diagnostics/heap/ 隔離。",
+                  "note": "[完了] PR #80 マージ済み (follow-up: #83)。<stateDir>/diagnostics/heap/ 隔離＋内部パス保護＋最新2件保持。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#40",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-25",
+                    "end": "2026-11-25"
                   }
                 },
                 {
@@ -3528,12 +3532,16 @@
                   "hours": 3,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[未着手] 構造化ログ・exe名縮小。",
+                  "note": "[完了] PR #81 マージ済み (follow-up: #84)。git listRefs stderr構造化＋ProcessSpawnError resolvedCommand/cause サニタイズ。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#42",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-25",
+                    "end": "2026-11-25"
                   }
                 }
               ]
@@ -3876,12 +3884,16 @@
                   "hours": 3,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[未着手] 部分失敗時の自己投稿ガード維持。",
+                  "note": "[完了] PR #82 マージ済み。Forge 本人情報部分失敗時の自己投稿ガード維持＋null 時 fail-closed。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#76",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-25",
+                    "end": "2026-11-25"
                   }
                 }
               ]
