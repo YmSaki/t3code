@@ -18,6 +18,7 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
@@ -484,6 +485,46 @@ it.effect.each(["origin", "github"] as const)(
       assert.equal((yield* driver.listRefs({ cwd })).hasPrimaryRemote, true);
     }).pipe(Effect.provide(layerTest)),
 );
+
+it.effect("lists refs without logging remote lookup stderr", () => {
+  const secret = "secret-remote-token";
+  const stderr = `fatal: https://user:${secret}@example.com/private`;
+  const messages: unknown[] = [];
+  const logger = Logger.make<unknown, void>(({ message }) => {
+    messages.push(message);
+  });
+  return Effect.gen(function* () {
+    const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const spawner = ChildProcessSpawner.make((command) =>
+      ChildProcess.isStandardCommand(command) && command.args.at(-1) === "remote"
+        ? Effect.succeed(
+            ChildProcessSpawner.makeHandle({
+              ...makeNonRepositoryHandle(),
+              stderr: Stream.encodeText(Stream.make(stderr)),
+            }),
+          )
+        : delegate.spawn(command),
+    );
+    const driver = yield* makeGitVcsDriverCore().pipe(
+      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+    );
+    const cwd = yield* makeTmpDir();
+    const { initialBranch } = yield* initRepoWithCommit(cwd);
+
+    const refs = yield* driver.listRefs({ cwd, refresh: true });
+
+    assert.isTrue(refs.refs.some((ref) => ref.name === initialBranch));
+    assert.isFalse(refs.hasPrimaryRemote);
+    const [warning] = messages.filter((message) =>
+      JSON.stringify(message).includes("remote name lookup failed"),
+    );
+    assert.deepInclude((warning as ReadonlyArray<object>)[1], {
+      exitCode: 128,
+      stderrLength: stderr.length,
+    });
+    assert.notInclude(JSON.stringify(messages), secret);
+  }).pipe(Effect.provide([layerTest, Logger.layer([logger], { mergeWithExisting: false })]));
+});
 
 it.effect(
   "refreshes remote status after external init while refs still cache a non-repository",

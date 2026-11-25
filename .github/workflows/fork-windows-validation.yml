@@ -180,7 +180,8 @@ jobs:
           git init .
           git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "$CHECKOUT_SHA"
-          git sparse-checkout set --no-cone '/scripts/smoke-windows-installer.ps1'
+          # Git Bash otherwise rewrites the anchored pattern as a Windows path.
+          MSYS_NO_PATHCONV=1 git sparse-checkout set --no-cone '/scripts/smoke-windows-installer.ps1'
           git -c checkout.workers=0 checkout --detach FETCH_HEAD
 
       - name: Set up Node for the runtime verifier

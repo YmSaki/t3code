@@ -986,6 +986,7 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
 
       expect(command).toEqual({
         command: "node.exe",
+        executable: "node.exe",
         args: ["script.js", "hello & goodbye"],
         shell: false,
       });
@@ -1016,6 +1017,7 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
 
         expect(yield* resolve(true)).toEqual({
           command: executable,
+          executable,
           args: ["serve", "--port=4096"],
           shell: false,
         });
@@ -1058,6 +1060,7 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
           String.raw`^"slash\\\^"quote^"`,
           String.raw`^"x^|y^<z^>^^^"`,
         ].join(" "),
+        executable: "C:\\Program Files\\npm & tools\\vp.cmd",
         args: [],
         shell: true,
       });
@@ -1173,6 +1176,7 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
 
       expect(command).toEqual({
         command: "missing & calc",
+        executable: "missing & calc",
         args: ["unsafe & value"],
         shell: false,
       });
