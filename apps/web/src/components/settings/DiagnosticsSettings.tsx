@@ -21,7 +21,6 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { useRef, useState, type ReactNode } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
-import type { MessageResolver } from "../../i18n/messages";
 import type {
   ServerProcessDiagnosticsEntry,
   ServerProcessResourceHistorySummary,
@@ -43,7 +42,11 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
-import { formatDiagnosticsDuration } from "./DiagnosticsSettings.logic";
+import {
+  formatDiagnosticsDuration,
+  formatProcessName,
+  formatProcessType,
+} from "./DiagnosticsSettings.logic";
 import { ExpandableText } from "./ExpandableText";
 import { ResourceTelemetryDiagnostics } from "./ResourceTelemetryDiagnostics";
 import { formatCpuTime } from "./ResourceTelemetryDiagnostics.logic";
@@ -238,24 +241,6 @@ function TraceIdCell({ traceId }: { traceId: string }) {
       </Tooltip>
     </div>
   );
-}
-
-function formatProcessName(command: string): string {
-  const firstToken = command.trim().split(/\s+/)[0];
-  if (!firstToken) return command;
-  const normalized = firstToken.replace(/^['"]|['"]$/g, "");
-  const segments = normalized.split(/[\\/]/).filter(Boolean);
-  return segments.at(-1) ?? normalized;
-}
-
-function formatProcessType(
-  process: ServerProcessDiagnosticsEntry,
-  resolve: MessageResolver,
-): string {
-  if (process.depth > 0) return resolve(msg("Subprocess"));
-  if (/\b(codex|claude|opencode|cursor)\b/i.test(process.command))
-    return resolve(msg("Agent", { $context: "process type" }));
-  return resolve(msg("Process", { $context: "process type" }));
 }
 
 function ProcessNameCell({

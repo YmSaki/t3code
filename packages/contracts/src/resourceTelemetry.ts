@@ -4,7 +4,7 @@ import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchema
 import { HostPowerSnapshot } from "./background.ts";
 import { DesktopUpdateChannelSchema, DesktopUpdateStateSchema } from "./ipc.ts";
 
-export const RESOURCE_MONITOR_PROTOCOL_VERSION = 3 as const;
+export const RESOURCE_MONITOR_PROTOCOL_VERSION = 4 as const;
 
 export const HostResourcesSnapshot = Schema.Struct({
   sampledAt: NonNegativeInt,
@@ -69,13 +69,23 @@ export const ResourceMonitorCapabilities = Schema.Struct({
 });
 export type ResourceMonitorCapabilities = typeof ResourceMonitorCapabilities.Type;
 
+export const ResourceMonitorProviderHint = Schema.Literals([
+  "codex",
+  "claude",
+  "cursor",
+  "opencode",
+  "grok",
+  "antigravity",
+]);
+
 export const ResourceMonitorProcessSample = Schema.Struct({
   pid: PositiveInt,
   ppid: NonNegativeInt,
   startTimeMs: NonNegativeInt,
   runTimeMs: NonNegativeInt,
-  name: Schema.String,
-  command: Schema.String,
+  executableName: Schema.NullOr(Schema.String),
+  electronType: Schema.NullOr(Schema.Literals(["renderer", "gpu-process", "other"])),
+  providerHint: Schema.NullOr(ResourceMonitorProviderHint),
   status: Schema.String,
   cpuPercent: Schema.Number,
   cpuTimeMs: NonNegativeInt,

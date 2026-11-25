@@ -1,7 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
-import type {
-  DesktopHostTelemetrySnapshot,
-  ResourceMonitorSnapshotEvent,
+import {
+  RESOURCE_MONITOR_PROTOCOL_VERSION,
+  type DesktopHostTelemetrySnapshot,
+  type ResourceMonitorSnapshotEvent,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -14,6 +15,7 @@ import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClie
 import * as ResourceAttribution from "../resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceTelemetry from "../resourceTelemetry/ResourceTelemetry.ts";
 import * as ProcessDiagnostics from "./ProcessDiagnostics.ts";
+import * as ProcessResourceMonitor from "./ProcessResourceMonitor.ts";
 
 // ProcessDiagnostics treats process.pid as the server, so the fixture PID is an
 // offset from it. A fixed PID collides whenever the test worker is assigned it.
@@ -24,7 +26,7 @@ function makeNativeSnapshot(
   processes: ResourceMonitorSnapshotEvent["processes"],
 ): ResourceMonitorSnapshotEvent {
   return {
-    version: 3,
+    version: RESOURCE_MONITOR_PROTOCOL_VERSION,
     type: "snapshot",
     sequence: 1,
     sampledAtUnixMs: DateTime.toEpochMillis(DateTime.makeUnsafe("2026-05-05T10:00:00.000Z")),
@@ -42,6 +44,7 @@ function layerTelemetryFor(
 ) {
   const layerNative = NativeTelemetryClient.layerTest({
     sampleNow: Effect.succeed({ generation: 0, snapshot }),
+    readHistory: () => Effect.succeed([snapshot]),
     health: Effect.succeed({
       status: "healthy",
       hello: Option.none(),
@@ -67,6 +70,62 @@ function layerTelemetryFor(
 }
 
 describe("ProcessDiagnostics", () => {
+  it.effect("projects safe process labels through current and historical diagnostics", () =>
+    Effect.gen(function* () {
+      const marker = "T3_TEST_POSITIONAL_SECRET_34";
+      const child = {
+        pid: CHILD_PID,
+        ppid: SERVER_PID,
+        startTimeMs: 2_000,
+        runTimeMs: 4_000,
+        executableName: "node.exe",
+        electronType: null,
+        providerHint: "claude" as const,
+        name: marker,
+        command: `node.exe ${marker}`,
+        extra: marker,
+        status: "Running",
+        cpuPercent: 1.5,
+        cpuTimeMs: 60,
+        residentBytes: 2_048,
+        virtualBytes: 4_096,
+        ioReadBytes: 0,
+        ioWriteBytes: 0,
+        ioSemantics: "storage" as const,
+      };
+      const snapshot = {
+        ...makeNativeSnapshot([child]),
+        sampledAtUnixMs: DateTime.toEpochMillis(yield* DateTime.now),
+      };
+      const layer = Layer.mergeAll(ProcessDiagnostics.layer, ProcessResourceMonitor.layer).pipe(
+        Layer.provideMerge(layerTelemetryFor(snapshot)),
+      );
+      yield* Effect.gen(function* () {
+        const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
+        const diagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
+        const monitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
+        const window = { windowMs: 60_000, bucketMs: 10_000 };
+        const current = yield* telemetry.refresh;
+        const history = yield* telemetry.readHistory(window);
+        const legacyCurrent = yield* diagnostics.read;
+        const legacyHistory = yield* monitor.readHistory(window);
+        expect(
+          [current, history, legacyCurrent, legacyHistory].map((result) =>
+            JSON.stringify(result).includes(marker),
+          ),
+        ).toEqual([false, false, false, false]);
+        expect(current.processes).toMatchObject([
+          { name: "node.exe", command: "node.exe [claude]" },
+        ]);
+        expect(history.topProcesses).toMatchObject([{ command: "node.exe [claude]" }]);
+        expect(legacyCurrent.processes).toMatchObject([{ command: "node.exe [claude]" }]);
+        expect(legacyHistory.topProcesses).toMatchObject([{ command: "node.exe [claude]" }]);
+        expect(current.processes[0]).not.toHaveProperty("providerHint");
+        expect(current.processes[0]).not.toHaveProperty("extra");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("rejects stale process identities before signaling", () =>
     Effect.gen(function* () {
       const snapshot = makeNativeSnapshot([]);
@@ -103,8 +162,9 @@ describe("ProcessDiagnostics", () => {
           ppid: SERVER_PID,
           startTimeMs: 2_000,
           runTimeMs: 4_000,
-          name: "agent",
-          command: "codex app-server",
+          executableName: "codex",
+          electronType: null,
+          providerHint: "codex",
           status: "Running",
           cpuPercent: 1.5,
           cpuTimeMs: 60,
@@ -170,8 +230,9 @@ describe("ProcessDiagnostics", () => {
           ppid: 1,
           startTimeMs: 2_000,
           runTimeMs: 4_000,
-          name: "electron",
-          command: "electron",
+          executableName: "electron",
+          electronType: null,
+          providerHint: null,
           status: "Running",
           cpuPercent: 1.5,
           cpuTimeMs: 60,

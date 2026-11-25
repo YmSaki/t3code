@@ -40,7 +40,7 @@ export const make = Effect.fn("makeProcessResourceMonitor")(function* () {
             processKey: `${entry.identity.pid}:${entry.identity.startTimeMs}`,
             pid: entry.identity.pid,
             ppid: entry.ppid,
-            command: entry.command || entry.name || "unknown",
+            command: entry.command,
             depth: entry.depth,
             isServerRoot: entry.category === "server",
             firstSeenAt: entry.firstSeenAt,
