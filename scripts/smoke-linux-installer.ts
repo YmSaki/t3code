@@ -4,6 +4,7 @@ import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
+import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 import * as NodeUtil from "node:util";
@@ -17,6 +18,7 @@ const { values } = NodeUtil.parseArgs({
     upstream: { type: "string" },
     "output-dir": { type: "string" },
     user: { type: "string", default: "t3-install-proof" },
+    "runtime-verifier": { type: "string" },
   },
 });
 NodeAssert.equal(HostProcess.Platform.defaultValue(), "linux");
@@ -76,6 +78,20 @@ run("chown", [`${user}:${user}`, runtimeDir, output]);
 const node = NodePath.join(output, "node");
 NodeFS.copyFileSync(process.execPath, node);
 NodeFS.chmodSync(node, 0o755);
+const runtimeVerifier = values["runtime-verifier"]
+  ? NodePath.join(output, "verify-linux-desktop-artifact.mjs")
+  : NodePath.join(import.meta.dirname, "verify-linux-desktop-artifact.ts");
+if (values["runtime-verifier"]) {
+  NodeFS.copyFileSync(NodePath.resolve(values["runtime-verifier"]), runtimeVerifier);
+  const playwrightPackage = NodeModule.createRequire(import.meta.url).resolve(
+    "playwright-core/package.json",
+  );
+  NodeFS.cpSync(
+    NodePath.dirname(playwrightPackage),
+    NodePath.join(output, "node_modules/playwright-core"),
+    { recursive: true },
+  );
+}
 const userRun = (command: string, args: string[]) =>
   run("runuser", [
     "-u",
@@ -180,7 +196,7 @@ const native = (
     "xvfb-run",
     "-a",
     node,
-    NodePath.join(import.meta.dirname, "verify-linux-desktop-artifact.ts"),
+    runtimeVerifier,
     "--executable",
     executable,
     "--version",

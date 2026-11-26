@@ -76,12 +76,17 @@ jobs:
         run: |
           set -euo pipefail
           node_binary=$(node -p process.execPath)
+          banner="import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);"
+          scripts/node_modules/.bin/esbuild scripts/verify-linux-desktop-artifact.ts \
+            --bundle --platform=node --format=esm --target=node26 --external:playwright-core --banner:js="$banner" \
+            --outfile="$RUNNER_TEMP/linux-verifier.mjs"
           sudo --preserve-env=CI,RUNNER_ENVIRONMENT "$node_binary" scripts/smoke-linux-installer.ts \
             --baseline "$PWD/validation-1.0.0/T3CodeJP-1.0.0-amd64.deb" \
             --candidate "$PWD/validation-1.0.1/T3CodeJP-1.0.1-amd64.deb" \
             --baseline-appimage "$(find "$PWD/validation-1.0.0" -maxdepth 1 -name '*.AppImage' -print -quit)" \
             --candidate-appimage "$(find "$PWD/validation-1.0.1" -maxdepth 1 -name '*.AppImage' -print -quit)" \
-            --upstream "$RUNNER_TEMP/upstream.deb" --output-dir "$RUNNER_TEMP/linux-install-proof" \
+            --upstream "$RUNNER_TEMP/upstream.deb" --output-dir /tmp/t3codejp-linux-install-proof \
+            --runtime-verifier "$RUNNER_TEMP/linux-verifier.mjs" \
             2>&1 | tee "$RUNNER_TEMP/linux-install-proof.log"
 
       - name: Upload native installation evidence
@@ -90,8 +95,9 @@ jobs:
         with:
           name: linux-installation-evidence
           path: |
-            ${{ runner.temp }}/linux-install-proof/**/*.json
-            ${{ runner.temp }}/linux-install-proof/**/*.png
-            ${{ runner.temp }}/linux-install-proof/**/*.txt
+            /tmp/t3codejp-linux-install-proof/**/*.json
+            /tmp/t3codejp-linux-install-proof/**/*.png
+            /tmp/t3codejp-linux-install-proof/**/*.txt
+            !/tmp/t3codejp-linux-install-proof/node_modules/**
             ${{ runner.temp }}/linux-install-proof.log
           retention-days: 7
