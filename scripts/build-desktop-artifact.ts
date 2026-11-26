@@ -2945,9 +2945,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
     buildConfig.afterPack = path.join(repoRoot, "scripts/linux-after-pack.ts");
+    buildConfig.extraMetadata = { desktopName: `${DESKTOP_APP_ID}.desktop` };
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
       executableName: PRODUCT_SLUG,
+      syncDesktopName: true,
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
