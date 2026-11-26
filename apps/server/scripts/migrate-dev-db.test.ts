@@ -1,11 +1,16 @@
+import * as NodeSqlite from "node:sqlite";
+
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as SqlClient from "effect/sql/SqlClient";
+import { vi } from "vite-plus/test";
 
 import { runMigrations } from "../src/persistence/Migrations.ts";
+import * as WorklogStore from "../src/worklog/WorklogStore.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { runMigrateDevDb } from "./migrate-dev-db.ts";
 
@@ -168,7 +173,23 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
             (id, public_key, private_key_pkcs8_pem, subject, created_at)
             VALUES ('default', 'test-public-key', 'test-private-key', 'mailto:push@example.test',
               '2026-08-01')`;
-        }),
+          yield* sql`INSERT INTO repo_monitor_rules
+            (id, project_id, name, enabled, event_kinds_json, action_kind, prompt_template,
+              created_at, updated_at)
+            VALUES ('rule-1', 'project-kept', 'Production monitor', 1, '["branch_push"]',
+              'launch_thread', 'Review this commit', '2026-08-01', '2026-08-01')`;
+          yield* sql`INSERT INTO repo_monitor_cursors (project_id, updated_at)
+            VALUES ('project-kept', '2026-08-01')`;
+          yield* sql`INSERT INTO repo_monitor_events
+            (id, rule_id, project_id, event_kind, dedupe_key, summary, outcome, occurred_at)
+            VALUES ('monitor-event-1', 'rule-1', 'project-kept', 'branch_push', 'commit-1',
+              'Production event', 'triggered', '2026-08-01')`;
+          yield* sql`INSERT INTO ical_feeds (id, name, token_hash, created_at, updated_at)
+            VALUES ('feed-1', 'Production calendar',
+              ${WorklogStore.hashIcalFeedToken("production-feed-token")}, '2026-08-01', '2026-08-01')`;
+          const store = yield* WorklogStore.WorklogStore;
+          assert.equal((yield* store.verifyFeedToken("production-feed-token"))?.enabled, true);
+        }).pipe(Effect.provide(WorklogStore.layer)),
       );
       const sourceBefore = yield* fs.readFile(source);
 
@@ -203,6 +224,10 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
             links: number;
             pushSubscriptions: number;
             vapidKeys: number;
+            monitorRules: number;
+            monitorCursors: number;
+            monitorEvents: number;
+            icalFeeds: number;
           }>`
             SELECT
               (SELECT COUNT(*) FROM auth_sessions) AS auth,
@@ -212,9 +237,15 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
               (SELECT COUNT(*) FROM orchestration_v2_projection_context_transfers) AS transfers,
               (SELECT COUNT(*) FROM peer_environment_links) AS links,
               (SELECT COUNT(*) FROM web_push_subscriptions) AS pushSubscriptions,
-              (SELECT COUNT(*) FROM web_push_vapid_keys) AS vapidKeys`;
+              (SELECT COUNT(*) FROM web_push_vapid_keys) AS vapidKeys,
+              (SELECT COUNT(*) FROM repo_monitor_rules) AS monitorRules,
+              (SELECT COUNT(*) FROM repo_monitor_cursors) AS monitorCursors,
+              (SELECT COUNT(*) FROM repo_monitor_events) AS monitorEvents,
+              (SELECT COUNT(*) FROM ical_feeds) AS icalFeeds`;
+          const store = yield* WorklogStore.WorklogStore;
+          assert.isNull(yield* store.verifyFeedToken("production-feed-token"));
           return { threads, events, sessions, pullRequest, project, leftovers };
-        }),
+        }).pipe(Effect.provide(WorklogStore.layer)),
       );
       assert.deepStrictEqual(
         kept.threads.map((row) => row.thread_id),
@@ -262,8 +293,105 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         links: 0,
         pushSubscriptions: 0,
         vapidKeys: 0,
+        monitorRules: 0,
+        monitorCursors: 0,
+        monitorEvents: 0,
+        icalFeeds: 0,
       });
     }),
+  );
+
+  it.effect.each(["compact", "permissions", "activation"] as const)(
+    "preserves the previous database after a $0 failure and can retry",
+    (failure) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const sourceDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "migrate-dev-db-failure-src-",
+        });
+        const destDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "migrate-dev-db-failure-dest-",
+        });
+        const source = yield* createFixtureSource(sourceDir);
+        const destination = yield* createFixtureSource(destDir);
+        yield* withDatabase(
+          destination,
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* sql`UPDATE projection_projects SET title = 'Dev-only edit'
+              WHERE project_id = 'project-kept'`;
+          }),
+        );
+        const sourceBefore = yield* fs.readFile(source);
+        const destinationBefore = yield* fs.readFile(destination);
+        const failFileOperation = (method: string, target: string) =>
+          Effect.fail(
+            PlatformError.systemError({
+              _tag: "PermissionDenied",
+              module: "FileSystem",
+              method,
+              pathOrDescriptor: target,
+            }),
+          );
+        const failingFs = FileSystem.make({
+          ...fs,
+          chmod: (target, mode) =>
+            failure === "permissions" ? failFileOperation("chmod", target) : fs.chmod(target, mode),
+          rename: (from, to) =>
+            failure === "activation" && to === destination
+              ? failFileOperation("rename", to)
+              : fs.rename(from, to),
+        });
+        const error = yield* Effect.gen(function* () {
+          const prepare = NodeSqlite.DatabaseSync.prototype.prepare;
+          using _prepare = vi
+            .spyOn(NodeSqlite.DatabaseSync.prototype, "prepare")
+            .mockImplementation(function (this: NodeSqlite.DatabaseSync, statement) {
+              if (failure === "compact" && statement.startsWith("VACUUM INTO")) {
+                throw Object.assign(new Error("database or disk is full"), { errcode: 13 });
+              }
+              return prepare.call(this, statement);
+            });
+          return yield* runMigrateDevDb(
+            { baseDir: destDir, source, projects: 5, threadsPerProject: 2 },
+            { sharedHome: sourceDir },
+          ).pipe(Effect.provideService(FileSystem.FileSystem, failingFs), Effect.flip);
+        });
+        assert.equal(error._tag, "MigrateDevDbPhaseError");
+        assert.deepStrictEqual(yield* fs.readFile(source), sourceBefore);
+        assert.deepStrictEqual(yield* fs.readFile(destination), destinationBefore);
+        yield* withDatabase(
+          destination,
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const [project] = yield* sql<{ title: string }>`SELECT title FROM projection_projects
+              WHERE project_id = 'project-kept'`;
+            assert.equal(project?.title, "Dev-only edit");
+          }),
+        );
+
+        const result = yield* runMigrateDevDb(
+          { baseDir: destDir, source, projects: 5, threadsPerProject: 2 },
+          { sharedHome: sourceDir },
+        );
+        yield* withDatabase(
+          result.databasePath,
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const [project] = yield* sql<{ title: string }>`SELECT title FROM projection_projects
+              WHERE project_id = 'project-kept'`;
+            assert.equal(project?.title, "Kept");
+            const [mode] = yield* sql.unsafe<{ journal_mode: string }>("PRAGMA journal_mode")
+              .unprepared;
+            assert.equal(mode?.journal_mode, "wal");
+          }),
+        );
+        assert.deepStrictEqual(yield* fs.readFile(source), sourceBefore);
+        assert.deepStrictEqual(yield* fs.readDirectory(path.dirname(destination)), [
+          "statev2.sqlite",
+        ]);
+      }),
   );
 
   it.effect("never copies an archived thread, and new events append after the source's", () =>
@@ -537,38 +665,52 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
     }),
   );
 
-  it.effect("refuses while a dev server holds the destination", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const sourceDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-busy-" });
-      const destDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-busy-dest-" });
-      const source = yield* createFixtureSource(sourceDir);
-      const stateDir = path.join(destDir, "userdata");
-      yield* fs.makeDirectory(stateDir, { recursive: true });
-      yield* fs.writeFileString(
-        path.join(stateDir, "server-runtime.json"),
-        `{"version":1,"pid":${process.pid}}`,
-      );
+  it.effect.each(["before copying", "after compaction"])(
+    "refuses a dev server started %s",
+    (started) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const sourceDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-busy-" });
+        const destDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-busy-dest-" });
+        const source = yield* createFixtureSource(sourceDir);
+        const destination = yield* createFixtureSource(destDir);
+        const destinationBefore = yield* fs.readFile(destination);
+        const stateDir = path.join(destDir, "userdata");
+        yield* fs.makeDirectory(stateDir, { recursive: true });
+        const markRunning = fs.writeFileString(
+          path.join(stateDir, "server-runtime.json"),
+          `{"version":1,"pid":${process.pid}}`,
+        );
+        if (started === "before copying") yield* markRunning;
+        const fileSystem = FileSystem.make({
+          ...fs,
+          chmod: (target, mode) => fs.chmod(target, mode).pipe(Effect.andThen(markRunning)),
+        });
 
-      const error = yield* runMigrateDevDb(
-        { baseDir: destDir, source, projects: 5, threadsPerProject: 10 },
-        { sharedHome: sourceDir },
-      ).pipe(Effect.flip);
-      assert.equal(error._tag, "MigrateDevDbServerRunningError");
-      if (error._tag === "MigrateDevDbServerRunningError") {
-        assert.equal(error.pid, process.pid);
-      }
-    }),
+        const error = yield* runMigrateDevDb(
+          { baseDir: destDir, source, projects: 5, threadsPerProject: 10 },
+          { sharedHome: sourceDir },
+        ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem), Effect.flip);
+        assert.equal(error._tag, "MigrateDevDbServerRunningError");
+        if (error._tag === "MigrateDevDbServerRunningError") {
+          assert.equal(error.pid, process.pid);
+        }
+        assert.deepStrictEqual(yield* fs.readFile(destination), destinationBefore);
+      }),
   );
 
-  it.effect("refuses a source that resolves to a destination path", () =>
+  it.effect.each([
+    "statev2.sqlite",
+    "statev2.sqlite.migrate-dev-db-tmp",
+    "statev2.sqlite.migrate-dev-db-compact",
+  ])("refuses a source that resolves to the rewritten path %s", (filename) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const sharedDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-overlap-" });
       const destDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-overlap-dest-" });
-      const leftoverSnapshot = path.join(destDir, "userdata", "statev2.sqlite.migrate-dev-db-tmp");
+      const leftoverSnapshot = path.join(destDir, "userdata", filename);
       yield* fs.makeDirectory(path.dirname(leftoverSnapshot), { recursive: true });
       yield* fs.writeFileString(leftoverSnapshot, "not a real db");
 
