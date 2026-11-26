@@ -351,7 +351,10 @@ describe("ssh tunnel scripts", () => {
         const runner = NodePath.join(root, "run-t3.sh");
         NodeFS.writeFileSync(
           runner,
-          SshTunnel.buildRemoteT3RunnerScript({ ...ARCHIVE, releaseBaseUrl }),
+          SshTunnel.buildRemoteT3RunnerScript({
+            ...ARCHIVE,
+            ...(releaseBaseUrl === undefined ? {} : { releaseBaseUrl }),
+          }),
         );
         const result = NodeChildProcess.spawnSync("sh", [runner, "--version"], {
           encoding: "utf8",
