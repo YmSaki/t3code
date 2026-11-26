@@ -153,11 +153,20 @@ async function planForkRelease({
   pauseNightly = false,
   publishEnabled = false,
   validateSigning = false,
+  distribution = "all",
   now = Date.now(),
 }) {
   const slug = `${context.repo.owner}/${context.repo.repo}`;
   if (slug.toLowerCase() !== FORK_REPOSITORY.toLowerCase()) {
     throw new Error(`Fork release preflight only runs in ${FORK_REPOSITORY}.`);
+  }
+
+  if (!["all", "cli"].includes(distribution)) throw new Error("Invalid release distribution.");
+  const cliOnly = distribution === "cli";
+  if (cliOnly && (context.eventName !== "workflow_dispatch" || validateSigning)) {
+    throw new Error(
+      "CLI-only builds require a manual distribution run without signing validation.",
+    );
   }
 
   const channel = releaseChannel(context.eventName, dispatchChannel);
@@ -227,20 +236,21 @@ async function planForkRelease({
   const publish = publishEnabled && !validateSigning;
   return {
     shouldBuild: true,
+    distribution,
     channel,
     ref,
     version,
     tag,
     name:
       channel === "stable"
-        ? `T3CodeJP ${tag}`
-        : `T3CodeJP ${track} ${version} (${ref.slice(0, 12)})`,
+        ? `T3CodeJP ${cliOnly ? "CLI " : ""}${tag}`
+        : `T3CodeJP ${cliOnly ? "CLI " : ""}${track} ${version} (${ref.slice(0, 12)})`,
     draft,
     publish,
-    requireSigning: validateSigning || (publish && !draft),
+    requireSigning: validateSigning || (publish && !draft && !cliOnly),
     isPrerelease: channel !== "stable",
-    makeLatest: channel === "stable",
-    hasUpdateFeed: channel !== "preview",
+    makeLatest: channel === "stable" && !cliOnly,
+    hasUpdateFeed: channel !== "preview" && !cliOnly,
   };
 }
 
