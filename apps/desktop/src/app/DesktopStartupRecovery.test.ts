@@ -8,6 +8,8 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -213,10 +215,16 @@ it.effect.each([
 );
 
 it.effect.each([
-  { action: "update", expected: "0.1.5" },
-  { action: "reinstall", expected: "https://github.com/YmSaki/t3code/releases/tag/v0.1.2" },
-  { action: "releases", expected: "https://github.com/YmSaki/t3code/releases" },
-])("resolves the $action recovery action to its destination", ({ action, expected }) =>
+  { action: "update", status: 200, expected: "0.1.5" },
+  {
+    action: "reinstall",
+    status: 200,
+    expected: "https://github.com/YmSaki/t3code/releases/tag/v0.1.2",
+  },
+  { action: "reinstall", status: 404, expected: "https://github.com/YmSaki/t3code/releases" },
+  { action: "reinstall", status: 503, expected: "https://github.com/YmSaki/t3code/releases" },
+  { action: "releases", status: 200, expected: "https://github.com/YmSaki/t3code/releases" },
+])("resolves the $action recovery action with HTTP $status", ({ action, status, expected }) =>
   Effect.scoped(
     Effect.gen(function* () {
       const target = yield* Deferred.make<string>();
@@ -243,6 +251,17 @@ it.effect.each([
       yield* listen.pipe(
         Effect.provide(
           Layer.mergeAll(
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make((request) =>
+                Effect.sync(() => {
+                  expect(action).toBe("reinstall");
+                  expect(request.method).toBe("HEAD");
+                  expect(request.url).toBe("https://github.com/YmSaki/t3code/releases/tag/v0.1.2");
+                  return HttpClientResponse.fromWeb(request, new Response(null, { status }));
+                }),
+              ),
+            ),
             FileSystem.layerNoop({
               readFileString: () => Effect.succeed(action === "reinstall" ? "0.1.2" : "0.1.3"),
             }),
