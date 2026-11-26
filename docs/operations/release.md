@@ -5,7 +5,7 @@
 ## T3CodeJP fork releases
 
 T3CodeJP is an unofficial fork. Its release repository is
-[`YmSaki/t3code`](https://github.com/YmSaki/t3code/releases); upstream releases are not
+[`YmSaki/t3codeJP`](https://github.com/YmSaki/t3codeJP/releases); upstream releases are not
 fallbacks for a missing fork version. The upstream workflow below remains guarded to
 `pingdotgg/t3code`. Fork releases use `.github/workflows/fork-release.yml` and do not
 publish the upstream npm package, AUR packages, marketing site, or Discord announcements.

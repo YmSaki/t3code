@@ -95,10 +95,10 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
       if (failures-- > 0) return response.writeHead(504).end();
       const url = new URL(request.url ?? "/", "http://fixture");
       const body =
-        url.pathname === "/YmSaki/t3code/releases/latest" &&
+        url.pathname === "/YmSaki/t3codeJP/releases/latest" &&
         request.headers.accept === "application/json"
           ? { tag_name: "v1.2.3" }
-          : url.pathname === "/repos/YmSaki/t3code/releases"
+          : url.pathname === "/repos/YmSaki/t3codeJP/releases"
             ? { "1": nightlies, "2": [{ tag_name: `v${version}` }, { tag_name: "v1.2.3" }] }[
                 url.searchParams.get("page") ?? ""
               ]
@@ -164,7 +164,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
         const arch = HostProcess.Architecture.defaultValue() === "arm64" ? "arm64" : "x64";
         const stem = `t3-1.2.3-linux-${arch}`;
         const archiveName = `${stem}.tar.gz`;
-        const fork = `${query ? "/mirror/releases/download" : "/YmSaki/t3code/releases/download"}/v1.2.3`;
+        const fork = `${query ? "/mirror/releases/download" : "/YmSaki/t3codeJP/releases/download"}/v1.2.3`;
         const upstream = "/pingdotgg/t3code/releases/download/v1.2.3";
         const assets = new Map<string, Buffer | string>();
         const requests: string[] = [];
@@ -306,7 +306,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "win32")("installer rele
         },
       );
       expect(code, output).not.toBe(0);
-      expect(requests).toEqual(["/YmSaki/t3code/releases/download/v1.2.3/SHA256SUMS"]);
+      expect(requests).toEqual(["/YmSaki/t3codeJP/releases/download/v1.2.3/SHA256SUMS"]);
       expect(output).toContain("has no release archive for");
       expect(output).not.toContain("npm install");
     } finally {

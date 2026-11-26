@@ -2,7 +2,7 @@
 # Installs the T3CodeJP CLI from a GitHub Release archive. Needs only sh, tar,
 # sha256sum or shasum, and curl or wget; no Node, npm, or compiler.
 #
-# Release assets are published at https://github.com/YmSaki/t3code/releases.
+# Release assets are published at https://github.com/YmSaki/t3codeJP/releases.
 #
 # Environment:
 #   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
@@ -17,7 +17,7 @@
 # instead of fetching the release again.
 set -eu
 
-repo="YmSaki/t3code"
+repo="YmSaki/t3codeJP"
 base_url="${T3CODE_RELEASE_BASE_URL:-https://github.com/${repo}/releases/download}"
 t3_home="${T3CODE_HOME:-$HOME/.t3codejp}"
 case "$t3_home" in

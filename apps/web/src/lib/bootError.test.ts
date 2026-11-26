@@ -80,9 +80,9 @@ it("routes boot recovery to the fork release channel and issue tracker", () => {
     ["nightly", "?q=nightly"],
   ] as const) {
     const links = bootRecoveryLinks({ ...environment, channel });
-    expect(links.download).toBe(`https://github.com/YmSaki/t3code/releases${suffix}`);
+    expect(links.download).toBe(`https://github.com/YmSaki/t3codeJP/releases${suffix}`);
     const issue = new URL(links.issue);
-    expect(issue.origin + issue.pathname).toBe("https://github.com/YmSaki/t3code/issues/new");
+    expect(issue.origin + issue.pathname).toBe("https://github.com/YmSaki/t3codeJP/issues/new");
     expect(issue.searchParams.get("template")).toBe("bug_report.yml");
   }
 });

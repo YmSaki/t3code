@@ -38,9 +38,9 @@ it.effect.each([
           requested.push(request.url);
           const url = new URL(request.url);
           const response =
-            url.pathname === "/repos/YmSaki/t3code/releases"
+            url.pathname === "/repos/YmSaki/t3codeJP/releases"
               ? Response.json([{ tag_name: `v${nightly}` }, { tag_name: `v${version}` }])
-              : url.pathname === `/YmSaki/t3code/releases/download/v${expected}/t3code-release.json`
+              : url.pathname === `/YmSaki/t3codeJP/releases/download/v${expected}/t3code-release.json`
                 ? metadata(expected, 42)
                 : url.pathname ===
                       `/pingdotgg/t3code/releases/download/v${expected}/t3code-release.json` ||
@@ -54,8 +54,8 @@ it.effect.each([
       const expectedUrls = [
         ...(spec === expected
           ? []
-          : ["https://api.github.com/repos/YmSaki/t3code/releases?per_page=100&page=1"]),
-        `https://github.com/YmSaki/t3code/releases/download/v${expected}/t3code-release.json`,
+          : ["https://api.github.com/repos/YmSaki/t3codeJP/releases?per_page=100&page=1"]),
+        `https://github.com/YmSaki/t3codeJP/releases/download/v${expected}/t3code-release.json`,
       ];
       expect(yield* service.get({ spec })).toEqual(expectedResult);
       expect(yield* service.get({ spec })).toEqual(expectedResult);
@@ -85,7 +85,7 @@ it.effect.each([undefined, "https://mirror.example.test/releases/?token=example"
       expect(yield* service.get({ spec: version })).toBeNull();
       expect(requested).toEqual([
         baseUrl === undefined
-          ? `https://github.com/YmSaki/t3code/releases/download/v${version}/t3code-release.json`
+          ? `https://github.com/YmSaki/t3codeJP/releases/download/v${version}/t3code-release.json`
           : `https://mirror.example.test/releases/v${version}/t3code-release.json?token=example`,
       ]);
     }),
