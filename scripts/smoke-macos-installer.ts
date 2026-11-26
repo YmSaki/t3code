@@ -127,7 +127,7 @@ NodeAssert.equal(
   hashes.upstream,
   arch === "x64"
     ? "f31c4a3fcbed88a1e9fc252f0b117c814052bb4db720ab975725a64a0894b8f9"
-    : "4613582f18d0c8ba60164e5d5d779bce4bb6cf7824b75fe94ecfe00a21f9bf",
+    : "4613582f18d0c8ba60164e5d5d779bcebe4bb6cf7824b75fe94ecfe00a21f9bf",
   "Use the pinned official v0.1.12 DMG",
 );
 
