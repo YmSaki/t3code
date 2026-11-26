@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 // @effect-diagnostics nodeBuiltinImport:off globalConsole:off
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeAssert from "node:assert/strict";
@@ -31,6 +32,9 @@ NodeFS.mkdirSync(outputDir, { recursive: true });
 
 const STEP_TIMEOUT_MS = 60_000;
 const FORK_BUNDLE_ID = "io.github.ymsaki.t3codejp";
+const FIXTURE_MESSAGE = "The release opens and shows this thread.";
+const MESSAGE_SELECTOR =
+  '[data-assistant-citation-viewport] .messages-timeline-scroll [data-timeline-row-kind="message"]';
 const runtimeFile = NodePath.join(expectedHome, "userdata/server-runtime.json");
 const databasePath = NodePath.join(expectedHome, "userdata/statev2.sqlite");
 const runtimePublished = Promise.withResolvers<{ pid: number }>();
@@ -101,6 +105,194 @@ async function mainWindow(application: ElectronApplication) {
   }
 }
 
+function observeFixtureMessage(element: Element, expected: string) {
+  let intersectionVisible = false;
+  let armed = false;
+  const ready = Promise.withResolvers<ReturnType<typeof snapshot>>();
+  // Failure diagnostics may be requested before the host awaits readiness.
+  void ready.promise.catch(() => {});
+  let invalidated: ReturnType<typeof snapshot> | null = null;
+  const box = (rect: DOMRect) => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+  function snapshot() {
+    const viewport = element.closest(".messages-timeline-scroll");
+    const viewportRect = viewport?.getBoundingClientRect();
+    const clip = {
+      left: Math.max(0, viewportRect?.left ?? 0),
+      top: Math.max(0, viewportRect?.top ?? 0),
+      right: Math.min(innerWidth, viewportRect?.right ?? 0),
+      bottom: Math.min(innerHeight, viewportRect?.bottom ?? 0),
+    };
+    const ancestors = [];
+    let opaque = true;
+    for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
+      const style = getComputedStyle(ancestor);
+      const rect = ancestor.getBoundingClientRect();
+      opaque &&=
+        Number(style.opacity) >= 0.99 &&
+        style.visibility === "visible" &&
+        style.display !== "none" &&
+        ancestor.getAttribute("aria-hidden") !== "true" &&
+        !ancestor.hasAttribute("inert");
+      if (/hidden|clip|auto|scroll/.test(style.overflowX)) {
+        clip.left = Math.max(clip.left, rect.left);
+        clip.right = Math.min(clip.right, rect.right);
+      }
+      if (/hidden|clip|auto|scroll/.test(style.overflowY)) {
+        clip.top = Math.max(clip.top, rect.top);
+        clip.bottom = Math.min(clip.bottom, rect.bottom);
+      }
+      if (ancestors.length < 24) {
+        ancestors.push({
+          tag: ancestor.tagName,
+          class: ancestor.getAttribute("class")?.slice(0, 160),
+          opacity: style.opacity,
+          visibility: style.visibility,
+          pointerEvents: style.pointerEvents,
+          bounds: box(rect),
+        });
+      }
+    }
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const textRects = [...range.getClientRects()].filter(
+      (rect) => rect.width > 0 && rect.height > 0,
+    );
+    const inViewport =
+      viewport !== null &&
+      textRects.length > 0 &&
+      textRects.every(
+        (rect) =>
+          rect.left >= clip.left - 0.5 &&
+          rect.right <= clip.right + 0.5 &&
+          rect.top >= clip.top - 0.5 &&
+          rect.bottom <= clip.bottom + 0.5,
+      );
+    const unobscured = textRects.every((rect) => {
+      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return hit !== null && element.contains(hit);
+    });
+    const syncPhases = [...document.querySelectorAll("[data-composer-sync-status]")]
+      .slice(0, 4)
+      .map((status) => status.getAttribute("data-composer-sync-status"));
+    return {
+      documentId: performance.timeOrigin,
+      visibilityState: document.visibilityState,
+      connected: element.isConnected,
+      text: element.textContent?.slice(0, 160),
+      bounds: box(element.getBoundingClientRect()),
+      viewport: viewport ? box(viewport.getBoundingClientRect()) : null,
+      textBounds: textRects.slice(0, 8).map(box),
+      opaque,
+      inViewport,
+      unobscured,
+      intersectionVisible,
+      syncPhases,
+      ancestors,
+      visible:
+        element.isConnected &&
+        element.textContent?.replace(/\s+/g, " ").trim() === expected &&
+        document.visibilityState === "visible" &&
+        opaque &&
+        inViewport &&
+        unobscured &&
+        intersectionVisible &&
+        syncPhases.length === 0,
+    };
+  }
+  const check = () => {
+    const state = snapshot();
+    if (armed && !state.visible) invalidated ??= state;
+    if (!armed && state.visible) {
+      armed = true;
+      ready.resolve(state);
+    }
+  };
+  // Visibility tracking includes opacity and occlusion; ordinary Playwright visibility does not.
+  const options = { threshold: 1, trackVisibility: true, delay: 100 };
+  const intersection = new IntersectionObserver(([entry]) => {
+    intersectionVisible =
+      entry !== undefined &&
+      entry.intersectionRatio >= 0.999 &&
+      "isVisible" in entry &&
+      entry.isVisible === true;
+    check();
+  }, options);
+  const mutations = new MutationObserver(check);
+  const resize = new ResizeObserver(check);
+  const dispose = () => {
+    intersection.disconnect();
+    mutations.disconnect();
+    resize.disconnect();
+    document.removeEventListener("scroll", check, true);
+    document.removeEventListener("visibilitychange", check);
+  };
+  intersection.observe(element);
+  mutations.observe(document.documentElement, {
+    subtree: true,
+    attributes: true,
+    childList: true,
+    characterData: true,
+  });
+  resize.observe(element);
+  document.addEventListener("scroll", check, true);
+  document.addEventListener("visibilitychange", check);
+  AbortSignal.timeout(60_000).addEventListener(
+    "abort",
+    () => {
+      dispose();
+      ready.reject(new Error("Fixture message never became visible in the real chat viewport."));
+    },
+    { once: true },
+  );
+  return { ready: ready.promise, snapshot, invalidated: () => invalidated, dispose };
+}
+
+const recordUiEvidence = async (target: Page, label: string) => {
+  const state = await target.evaluate(
+    ({ selector, expected }) => ({
+      documentId: performance.timeOrigin,
+      visibilityState: document.visibilityState,
+      syncPhases: [...document.querySelectorAll("[data-composer-sync-status]")]
+        .slice(0, 4)
+        .map((node) => node.getAttribute("data-composer-sync-status")),
+      candidates: [...document.querySelectorAll(selector)]
+        .filter((node) => node.textContent?.includes(expected))
+        .slice(0, 8)
+        .map((node) => ({
+          rowKind: node.getAttribute("data-timeline-row-kind"),
+          bounds: node.getBoundingClientRect().toJSON(),
+        })),
+    }),
+    { selector: MESSAGE_SELECTOR, expected: FIXTURE_MESSAGE },
+  );
+  const textMatches = await target
+    .getByText(FIXTURE_MESSAGE, { exact: true })
+    .evaluateAll((elements) =>
+      elements.slice(0, 8).map((element) => {
+        const ancestors = [];
+        for (
+          let node: Element | null = element;
+          node && ancestors.length < 24;
+          node = node.parentElement
+        ) {
+          const style = getComputedStyle(node);
+          ancestors.push({
+            tag: node.tagName,
+            class: node.getAttribute("class")?.slice(0, 160),
+            opacity: style.opacity,
+            visibility: style.visibility,
+            bounds: node.getBoundingClientRect().toJSON(),
+          });
+        }
+        return { ancestors };
+      }),
+    );
+  NodeFS.writeFileSync(
+    NodePath.join(outputDir, `${label}.json`),
+    JSON.stringify({ ...state, textMatches }, null, 2),
+  );
+};
+
 try {
   const previousRuntime = NodeFS.existsSync(runtimeFile)
     ? (JSON.parse(NodeFS.readFileSync(runtimeFile, "utf8")) as { pid: number })
@@ -146,9 +338,6 @@ try {
     const thread = page.locator("li[data-thread-item]", { hasText: "Release launch check" });
     await thread.waitFor({ timeout: STEP_TIMEOUT_MS });
     await thread.click();
-    await page.getByText("The release opens and shows this thread.").waitFor({
-      timeout: STEP_TIMEOUT_MS,
-    });
   }
 
   step = "checking the running app and its bundle identity";
@@ -196,7 +385,65 @@ try {
   NodeAssert.ok(NodeFS.statSync(databasePath).isFile(), "The backend must create statev2.sqlite.");
 
   step = "capturing the desktop window";
-  await page.screenshot({ path: NodePath.join(outputDir, "window.png"), timeout: 10_000 });
+  const window = await app.browserWindow(page);
+  await window.evaluate((nativeWindow) => {
+    if (nativeWindow.isMinimized()) nativeWindow.restore();
+    nativeWindow.show();
+    nativeWindow.focus();
+  });
+  await page.bringToFront();
+  if (values.fresh) {
+    await page.screenshot({ path: NodePath.join(outputDir, "window.png"), timeout: 10_000 });
+  } else {
+    step = "verifying fixture text is painted in the chat viewport throughout capture";
+    const message = page.locator(MESSAGE_SELECTOR).getByText(FIXTURE_MESSAGE, { exact: true });
+    await message.waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    const observation = await message.evaluateHandle(observeFixtureMessage, FIXTURE_MESSAGE);
+    try {
+      const before = await observation.evaluate((monitor) => monitor.ready);
+      NodeFS.writeFileSync(
+        NodePath.join(outputDir, "ui-before.json"),
+        JSON.stringify(before, null, 2),
+      );
+      await page.screenshot({ path: NodePath.join(outputDir, "window.png"), timeout: 10_000 });
+      const after = await observation.evaluate((monitor) => ({
+        current: monitor.snapshot(),
+        invalidated: monitor.invalidated(),
+      }));
+      NodeFS.writeFileSync(
+        NodePath.join(outputDir, "ui-after.json"),
+        JSON.stringify(after, null, 2),
+      );
+      NodeAssert.equal(
+        after.current.documentId,
+        before.documentId,
+        "The document reloaded during capture.",
+      );
+      NodeAssert.equal(
+        after.current.visible,
+        true,
+        "Fixture text is not visible in the captured chat viewport.",
+      );
+      NodeAssert.equal(
+        after.invalidated,
+        null,
+        "The fixture message stopped being visible during capture.",
+      );
+    } catch (error) {
+      const state = await observation.evaluate((monitor) => monitor.snapshot()).catch(() => null);
+      NodeFS.writeFileSync(
+        NodePath.join(outputDir, "ui-message-failure.json"),
+        JSON.stringify(state, null, 2),
+      );
+      throw error;
+    } finally {
+      await observation.evaluate((monitor) => monitor.dispose()).catch(() => {});
+      await observation.dispose();
+    }
+  }
   const result = {
     ...metadata,
     bundleId,
@@ -213,6 +460,7 @@ try {
   const failurePage =
     page && !page.isClosed() ? page : app?.windows().find((item) => !item.isClosed());
   if (failurePage) {
+    await recordUiEvidence(failurePage, "ui-failure").catch(() => {});
     await failurePage
       .screenshot({ path: NodePath.join(outputDir, "failure.png"), timeout: 10_000 })
       .catch(() => {});

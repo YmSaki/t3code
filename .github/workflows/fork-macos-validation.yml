@@ -55,24 +55,83 @@ jobs:
         with:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
 
+      - name: Select the macOS 26 SDK on Apple Silicon
+        if: matrix.arch == 'arm64'
+        run: |
+          export DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer
+          test -d "$DEVELOPER_DIR"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          xcrun --sdk macosx --show-sdk-version
+          xcrun swiftc --version
+
+      - name: Fingerprint product source
+        id: product
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          const verificationFiles = new Set([
+            'scripts/smoke-macos-installer.ts',
+            'scripts/verify-macos-desktop-artifact.ts',
+          ]);
+          const inputs = execFileSync('git', ['ls-tree', '-r', 'HEAD'], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+            .split('\n').filter(row => !verificationFiles.has(row.split('\t')[1])).join('\n');
+          const digest = createHash('sha256').update(process.env.GITHUB_REPOSITORY).update('\0').update(inputs).digest('hex');
+          console.log(`digest=${digest}`);
+          NODE
+
+      - name: Restore test DMGs with matching product source
+        id: dmgs
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: macos-install-dmgs-v1-${{ matrix.arch }}-${{ steps.product.outputs.digest }}
+          path: |
+            validation-1.0.0/*.dmg
+            validation-1.0.1/*.dmg
+            macos-dmg-inputs.json
+
       - name: Set up Rust
+        if: steps.dmgs.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
           targets: ${{ matrix.rust-target }}
 
       - name: Prepare Electron
+        if: steps.dmgs.outputs.cache-hit != 'true'
         run: vp run --filter @t3tools/desktop ensure:electron
 
       - name: Build two DMG versions for replacement update
+        if: steps.dmgs.outputs.cache-hit != 'true'
         env:
           TARGET_ARCH: ${{ matrix.arch }}
+          PRODUCT_INPUT_DIGEST: ${{ steps.product.outputs.digest }}
         run: |
           set -euo pipefail
           for version in 1.0.0 1.0.1; do
             node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch "$TARGET_ARCH" \
               --build-version "$version" --output-dir "validation-$version" --verbose
           done
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('macos-dmg-inputs.json', JSON.stringify({
+            productInputDigest: process.env.PRODUCT_INPUT_DIGEST,
+            builtFromCommit: process.env.GITHUB_SHA,
+            repository: process.env.GITHUB_REPOSITORY,
+            arch: process.env.TARGET_ARCH,
+            versions: ['1.0.0', '1.0.1'],
+          }, null, 2));
+          NODE
+
+      - name: Save test DMGs before runtime validation
+        if: steps.dmgs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: ${{ steps.dmgs.outputs.cache-primary-key }}
+          path: |
+            validation-1.0.0/*.dmg
+            validation-1.0.1/*.dmg
+            macos-dmg-inputs.json
 
       - name: Download pinned official installation
         env:
@@ -85,8 +144,19 @@ jobs:
       - name: Verify installed applications and preserved data
         env:
           TARGET_ARCH: ${{ matrix.arch }}
+          PRODUCT_INPUT_DIGEST: ${{ steps.product.outputs.digest }}
         run: |
           set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const provenance = JSON.parse(readFileSync('macos-dmg-inputs.json', 'utf8'));
+          assert.equal(provenance.productInputDigest, process.env.PRODUCT_INPUT_DIGEST);
+          assert.equal(provenance.repository, process.env.GITHUB_REPOSITORY);
+          assert.equal(provenance.arch, process.env.TARGET_ARCH);
+          assert.deepEqual(provenance.versions, ['1.0.0', '1.0.1']);
+          console.log(`Validating test DMGs built at ${provenance.builtFromCommit}; product source matches, excluding verification scripts.`);
+          NODE
           node scripts/smoke-macos-installer.ts \
             --baseline "$(find "$PWD/validation-1.0.0" -maxdepth 1 -name '*.dmg' -print -quit)" \
             --candidate "$(find "$PWD/validation-1.0.1" -maxdepth 1 -name '*.dmg' -print -quit)" \
@@ -107,4 +177,5 @@ jobs:
             !${{ runner.temp }}/macos-install-proof/Applications/**
             !${{ runner.temp }}/macos-install-proof/mounts/**
             ${{ runner.temp }}/macos-install-proof.log
+            macos-dmg-inputs.json
           retention-days: 7
