@@ -303,7 +303,11 @@ try {
   const data = snapshot();
   NodeAssert.equal(data.threads.length, 2);
   NodeAssert.equal(data.messages.length, 3);
-  await remote("sh -s -- update 1.0.1 --yes", "install the update over SSH", baselineRunner);
+  await remote(
+    `T3CODE_RELEASE_BASE_URL='${base}' sh -s -- update 1.0.1 --yes`,
+    "install the update over SSH",
+    baselineRunner,
+  );
   const upgraded = await remote(
     "sh -s -- --version",
     "select the updated SSH runtime",
@@ -322,6 +326,8 @@ try {
     buildRemoteT3RunnerScript({ archiveVersion: "1.0.99", releaseBaseUrl: base }),
   );
   NodeAssert.notEqual(missing.code, 0);
+  NodeAssert.match(missing.stderr, /Could not download t3 1\.0\.99\b/);
+  NodeAssert.ok(requests.includes("/releases/download/v1.0.99/SHA256SUMS"));
   NodeAssert.equal(hash(upstreamExecutable), upstreamHash);
   offline = true;
   const before = requests.length;

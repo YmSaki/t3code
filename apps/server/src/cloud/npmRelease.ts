@@ -7,6 +7,7 @@ import {
   CLI_RELEASE_BASE_URL_ENV,
   CLI_RELEASE_METADATA_FILE,
   cliReleaseAssetUrl,
+  cliReleaseIndexPageUrl,
 } from "@t3tools/shared/cliRelease";
 import * as Cache from "effect/Cache";
 import * as Config from "effect/Config";
@@ -17,7 +18,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import { FetchHttpClient, HttpClient } from "effect/http";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
 
 import { findNewestCliReleaseVersion } from "./cliReleaseIndex.ts";
 
@@ -29,6 +30,18 @@ const ReleaseMetadata = Schema.Struct({
 });
 const decodeMetadata = Schema.decodeUnknownOption(Schema.fromJsonString(ReleaseMetadata));
 const decodeInput = Schema.decodeUnknownEffect(ServerNpmReleaseInput);
+const decodeDesktopLatest = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      tag_name: Schema.String.check(
+        Schema.isPattern(/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/),
+      ),
+      draft: Schema.Literal(false),
+      prerelease: Schema.Literal(false),
+      assets: Schema.Array(Schema.Struct({ name: Schema.String })),
+    }),
+  ),
+);
 
 export class NpmRelease extends Context.Service<
   NpmRelease,
@@ -45,14 +58,34 @@ export const make = Effect.fn("NpmRelease.make")(function* () {
     yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option),
   );
   const permits = yield* Semaphore.make(2);
+  const latestDesktopVersion = Effect.fn("NpmRelease.latestDesktopVersion")(function* () {
+    const unavailable = new ServerNpmReleaseError({
+      reason: "Could not find a published desktop Stable release.",
+    });
+    const release = yield* http
+      .get(new URL("releases/latest", cliReleaseIndexPageUrl(1)).href, {
+        headers: { Accept: "application/vnd.github+json" },
+      })
+      .pipe(
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.flatMap((response) => response.text),
+        Effect.flatMap(decodeDesktopLatest),
+        Effect.timeout(Duration.seconds(15)),
+        Effect.mapError(() => unavailable),
+      );
+    if (!release.assets.some((asset) => asset.name === "latest.yml")) return yield* unavailable;
+    return release.tag_name.slice(1);
+  });
   const lookup = Effect.fn("NpmRelease.lookup")(function* (spec: string) {
     const channel = spec === "latest" ? "stable" : spec === "nightly" ? "nightly" : undefined;
     const version =
-      channel === undefined
-        ? spec
-        : yield* findNewestCliReleaseVersion(channel).pipe(
-            Effect.mapError(({ reason }) => new ServerNpmReleaseError({ reason })),
-          );
+      spec === "latest"
+        ? yield* latestDesktopVersion()
+        : channel === undefined
+          ? spec
+          : yield* findNewestCliReleaseVersion(channel).pipe(
+              Effect.mapError(({ reason }) => new ServerNpmReleaseError({ reason })),
+            );
     if (version === undefined) {
       return yield* new ServerNpmReleaseError({
         reason: `No published ${channel} release was found.`,
