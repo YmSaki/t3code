@@ -1,43 +1,40 @@
 <p align="center">
-  <a href="https://t3.codes">
-    <img src="./assets/prod/t3-black-web-icon-192x192.png" width="80" height="80" alt="T3 Codeのロゴ" />
+  <a href="https://github.com/YmSaki/t3code">
+    <img src="./assets/fork/icon.svg" width="80" height="80" alt="T3CodeJPのロゴ" />
   </a>
 </p>
 
-<h1 align="center">T3 Code</h1>
+<h1 align="center">T3CodeJP</h1>
 
 <p align="center">コーディングエージェントをまとめて操作できる、オープンソースのアプリケーション。</p>
 
 <p align="center">
-  <a href="https://t3.codes/download"><strong>ダウンロード</strong></a> ·
-  <a href="https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824">iOS</a> ·
-  <a href="https://play.google.com/store/apps/details?id=com.t3tools.t3code">Android</a> ·
-  <a href="https://app.t3.codes">Web</a> ·
+  <a href="https://github.com/YmSaki/t3code/releases"><strong>フォーク版のダウンロード</strong></a> ·
   <a href="./docs/README.md">ドキュメント</a> ·
-  <a href="https://discord.gg/jn4EGJjrvv">Discord</a>
+  <a href="https://github.com/YmSaki/t3code/issues">Issues</a>
 </p>
 
 <p align="center">
-  <a href="https://t3.codes">
-    <img src="./.github/readme/hero.webp" width="100%" alt="Claudeの作業が完了したデスクトップ画面と、Codexのコマンド承認を求めるスマートフォン画面" />
+  <a href="https://github.com/pingdotgg/t3code">
+    <img src="./.github/readme/hero.webp" width="100%" alt="上流版T3 Codeの画面例：デスクトップとスマートフォン" />
   </a>
 </p>
 
-T3 Codeは、手元のPCで動くコーディングエージェントを、共通の画面から操作できるアプリケーションです。デスクトップで始めた作業の続きを、スマートフォンから確認・承認できます。
+T3CodeJPは、手元のPCで動くコーディングエージェントを、共通の画面から操作できるアプリケーションです。デスクトップで始めた作業の続きを、スマートフォンから確認・承認できます。
 
 Claude Code、Codex、Cursor、OpenCode、Grok Build、Antigravity、Kiro、Pi、Muse Code、fx、および[ACP対応エージェント](./docs/user/providers-acp.md)に対応しています。PCにインストール・設定済みのエージェントを接続して利用します。
 
 ## このフォークについて
 
-このリポジトリは[pingdotgg/t3code](https://github.com/pingdotgg/t3code)のフォークです。セルフホストでの複数PC運用、複数リポジトリを束ねる上位プロジェクト（MetaProject）、PMによるワーカーの並列管理、双方向アーティファクト、リポジトリ監視、既存AIセッションの取り込み、稼働カレンダーなどを開発しています。
+T3CodeJPは[pingdotgg/t3code](https://github.com/pingdotgg/t3code)を元にした非公式フォークです。上流の開発者とは独立して保守しています。セルフホストでの複数PC運用、複数リポジトリを束ねる上位プロジェクト（MetaProject）、PMによるワーカーの並列管理、双方向アーティファクト、リポジトリ監視、既存AIセッションの取り込み、稼働カレンダーなどを開発しています。
 
 実装状況や残件は、このフォークの[Issues](https://github.com/YmSaki/t3code/issues)と[Pull requests](https://github.com/YmSaki/t3code/pulls)を確認してください。画面やサービスの一部は開発・検証中です。
 
-以下の公式ダウンロード、パッケージマネージャー、アプリストアの案内は上流版のものです。このフォークの変更を試す場合は、[ソースからの開発](#ソースからの開発)を参照してください。
+フォーク版の配布物は、このリポジトリの[Releases](https://github.com/YmSaki/t3code/releases)から入手できます。目的の版がまだ公開されていない場合は、[ソースからの開発](#ソースからの開発)を参照してください。
 
 ## 主な機能
 
-- **契約済みのエージェントを利用。** T3 Codeはトークンを再販売せず、すでにログインしているエージェントを操作します。
+- **契約済みのエージェントを利用。** T3CodeJPはトークンを再販売せず、すでにログインしているエージェントを操作します。
 - **複数のエージェントを一か所で管理。** スレッドの途中でモデルを切り替えたり、ClaudeからCodexへ作業を委譲したりできます。
 - **デスクトップ・Web・スマートフォンに対応。** 同じサーバーに接続すると、各クライアントから同じスレッドを確認できます。iOS・Androidアプリもあります。
 - **リモート操作。** 別のPC上でエージェントを動かし、LAN、Tailscale、[T3 Connect](./docs/user/remote-access.md)経由で接続できます。
@@ -45,43 +42,23 @@ Claude Code、Codex、Cursor、OpenCode、Grok Build、Antigravity、Kiro、Pi�
 - **パフォーマンスを重視。** 描画や通信の性能を計測し、フレーム落ちも不具合として扱っています。
 - **オープンソース。** MITライセンスで公開されており、フォークして変更できます。
 
-## インストール（上流版）
+## インストール
 
 ### デスクトップアプリ
 
-macOS・Windows・Linux向けの[T3 Codeをダウンロード](https://t3.codes/download)できます。パッケージマネージャーからのインストールにも対応しています。
-
-| プラットフォーム | コマンド・入手先                                                         |
-| ---------------- | ------------------------------------------------------------------------ |
-| macOS            | `brew install --cask t3-code`                                            |
-| Windows          | `winget install T3Tools.T3Code` または `scoop install extras/t3code`     |
-| Arch Linux       | `yay -S t3code-bin`                                                      |
-| Nix              | `nix profile add github:NixOS/nixpkgs/nixos-unstable#t3code`             |
-| Debian・Ubuntu   | [Releases](https://github.com/pingdotgg/t3code/releases)から`.deb`を取得 |
+macOS・Windows・Linux向けのフォーク版は[T3CodeJPのReleases](https://github.com/YmSaki/t3code/releases)から入手してください。StableとNightlyはリリース名で区別できます。インストール・更新の詳細は[インストールガイド](./docs/user/install.md)を参照してください。
 
 ### コマンドライン
 
-次のコマンドで`t3`をインストールできます。インストール後に`t3`を実行すると、サーバーが起動し、Webアプリが開きます。
+Releasesから目的の版の`install.sh`または`install.ps1`をダウンロードして実行してください。これらはフォーク版のCLIアーカイブを検証して導入します。インストール後は`t3`でサーバーと同梱Webクライアントを起動できます。
 
-```bash
-curl -fsSL https://t3.codes/install.sh | sh
-```
+### スマートフォン・ホスト版Web
 
-WindowsではPowerShellで実行します。
-
-```powershell
-irm https://t3.codes/install.ps1 | iex
-```
-
-インストールせずに試す場合は、`npx t3@latest`を実行してください。
-
-### スマートフォン
-
-[App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824)または[Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code)からアプリをインストールし、[リモートアクセスの手順](./docs/user/remote-access.md)に沿ってPCへ接続してください。
+フォーク版のモバイル配布は[#50](https://github.com/YmSaki/t3code/issues/50)、ホスト版Webは[#49](https://github.com/YmSaki/t3code/issues/49)で準備中です。上流のストア版や`app.t3.codes`には、このフォーク独自の変更は含まれません。
 
 ### エージェントへのログイン
 
-T3 Codeを使うには、少なくとも1つのエージェントをインストールし、ログインしておく必要があります。たとえば、[Claude Code](https://claude.com/product/claude-code)では`claude auth login`、[Codex CLI](https://developers.openai.com/codex/cli)では`codex login`を実行します。
+T3CodeJPを使うには、少なくとも1つのエージェントをインストールし、ログインしておく必要があります。たとえば、[Claude Code](https://claude.com/product/claude-code)では`claude auth login`、[Codex CLI](https://developers.openai.com/codex/cli)では`codex login`を実行します。
 
 エージェントごとの設定は[プロバイダーのセットアップ](./docs/user/install.md#providers)を参照してください。Nightly版、AppImage、WSL、NixOSについては[インストールガイド](./docs/user/install.md)で説明しています。
 
