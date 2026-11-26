@@ -160,13 +160,14 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
     }),
   );
 
-  it.effect("reports a release that lists an archive it does not serve as unpublished", () =>
+  it.effect("reports a missing fork or mirror archive without trying upstream", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-archive-missing-" });
       const checksums = yield* validChecksums;
-      const failsWith = (status: number) =>
+      const requests: string[] = [];
+      const failsWith = (status: number, releaseBaseUrl?: string) =>
         ensurePinnedRuntimeInstalled({
           baseDir,
           version,
@@ -174,23 +175,33 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
           path,
           platform: "linux",
           arch: "x64",
-          httpClient: HttpClient.make((request) =>
-            Effect.succeed(
+          httpClient: HttpClient.make((request) => {
+            requests.push(request.url);
+            return Effect.succeed(
               HttpClientResponse.fromWeb(
                 request,
                 request.url.endsWith("/SHA256SUMS")
                   ? new Response(checksums)
-                  : new Response("", { status }),
+                  : request.url.includes("/pingdotgg/t3code/")
+                    ? new Response(archiveBytes)
+                    : new Response("", { status }),
               ),
-            ),
-          ),
+            );
+          }),
           // "404" in the mirror's path must not read a server error as a missing release.
-          releaseBaseUrl: "https://updates.example.com/404/t3code",
+          releaseBaseUrl,
           runner: extractingRunner(fs, path),
           validate: () => Effect.die("must not validate a missing archive"),
         }).pipe(Effect.flip);
       assert.isTrue(isUnpublishedRelease(yield* failsWith(404)));
-      assert.isFalse(isUnpublishedRelease(yield* failsWith(403)));
+      const mirror = "https://updates.example.com/404/t3code";
+      assert.isFalse(isUnpublishedRelease(yield* failsWith(403, mirror)));
+      assert.deepEqual(requests, [
+        `https://github.com/YmSaki/t3code/releases/download/v${version}/SHA256SUMS`,
+        `https://github.com/YmSaki/t3code/releases/download/v${version}/${archiveName}`,
+        `${mirror}/v${version}/SHA256SUMS`,
+        `${mirror}/v${version}/${archiveName}`,
+      ]);
     }),
   );
 

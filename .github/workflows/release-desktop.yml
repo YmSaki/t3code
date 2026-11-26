@@ -98,6 +98,22 @@ on:
       release_channel:
         required: true
         type: string
+      update_repository:
+        required: false
+        default: ""
+        type: string
+      linux_executable_name:
+        required: false
+        default: t3code
+        type: string
+      require_signing:
+        required: false
+        default: false
+        type: boolean
+      skip_windows_signing_tools:
+        required: false
+        default: false
+        type: boolean
       # Whether a `relay-client-tracing-config` artifact from the production
       # relay state is expected. PR previews carry no tracing config.
       relay_client_tracing:
@@ -135,6 +151,7 @@ jobs:
     # "Wait for Linux CLI archive"), so it gets that wait on top of the usual 30.
     timeout-minutes: ${{ inputs.platform == 'win' && 70 || 30 }}
     env:
+      T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ inputs.update_repository }}
       T3CODE_CLERK_PUBLISHABLE_KEY: ${{ inputs.clerk_publishable_key }}
       T3CODE_CLERK_JWT_TEMPLATE: ${{ inputs.clerk_jwt_template }}
       T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ inputs.clerk_cli_oauth_client_id }}
@@ -297,7 +314,7 @@ jobs:
       # Off Windows, scripts/lib/windows-jsign.ts signs through jsign instead of
       # the TrustedSigning PowerShell module.
       - name: Install jsign
-        if: inputs.platform == 'win'
+        if: inputs.platform == 'win' && !inputs.skip_windows_signing_tools
         shell: bash
         run: |
           set -euo pipefail
@@ -644,6 +661,9 @@ jobs:
 
               echo "macOS signing enabled."
               args+=(--signed)
+            elif [[ "${{ inputs.require_signing }}" == "true" ]]; then
+              echo "::error::macOS signing is required but Apple signing secrets are missing."
+              exit 1
             else
               echo "macOS signing disabled (missing one or more Apple signing secrets)."
             fi
@@ -661,6 +681,9 @@ jobs:
               "$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME"; then
               echo "Windows signing enabled (Azure Trusted Signing)."
               args+=(--signed)
+            elif [[ "${{ inputs.require_signing }}" == "true" ]]; then
+              echo "::error::Windows signing is required but Azure Trusted Signing secrets are missing."
+              exit 1
             else
               echo "Windows signing disabled (missing one or more Azure Trusted Signing secrets)."
             fi
@@ -720,12 +743,13 @@ jobs:
           path: ${{ steps.stage_pnpm.outputs.dir }}
           key: ${{ steps.stage_pnpm_cache.outputs.cache-primary-key }}
 
-      # A build can package fine and still not open (a missing module in the
-      # backend or the bundle). This launches the app from the shipped
-      # AppImage or DMG.
-      - name: Launch check
-        if: inputs.launch_check
+      # Check the shipped artifact. electron-builder can succeed after skipping macOS signing.
+      - name: Verify packaged desktop app
+        if: inputs.launch_check || (inputs.require_signing && inputs.platform == 'mac')
         shell: bash
+        env:
+          LINUX_EXECUTABLE_NAME: ${{ inputs.linux_executable_name }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           check=(node scripts/smoke-desktop-app.ts --artifacts-dir "$RUNNER_TEMP/desktop-launch-check")
@@ -734,14 +758,26 @@ jobs:
             hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$(ls "$GITHUB_WORKSPACE"/release/*.dmg)"
             trap 'hdiutil detach "$mount" -force >/dev/null || true' EXIT
             app=$(ls -d "$mount"/*.app)
-            executable=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$app/Contents/Info.plist")
-            "${check[@]}" --executable "$app/Contents/MacOS/$executable"
+            if [[ "${{ inputs.require_signing }}" == "true" ]]; then
+              codesign --verify --deep --strict "$app"
+              signature="$(codesign --display --verbose=4 "$app" 2>&1)"
+              if ! grep -q '^Authority=Developer ID Application: ' <<< "$signature" ||
+                ! grep -Fxq -- "TeamIdentifier=$APPLE_TEAM_ID" <<< "$signature"; then
+                echo "::error::The packaged app must be signed with a Developer ID Application certificate for APPLE_TEAM_ID."
+                exit 1
+              fi
+              xcrun stapler validate "$app"
+            fi
+            if [[ "${{ inputs.launch_check }}" == "true" ]]; then
+              executable=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$app/Contents/Info.plist")
+              "${check[@]}" --executable "$app/Contents/MacOS/$executable"
+            fi
           else
             sudo apt-get install -y xvfb
             appimage=$(ls "$GITHUB_WORKSPACE"/release/*.AppImage)
             chmod +x "$appimage"
             (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract >/dev/null)
-            xvfb-run -a "${check[@]}" --executable "$RUNNER_TEMP/squashfs-root/t3code"
+            xvfb-run -a "${check[@]}" --executable "$RUNNER_TEMP/squashfs-root/$LINUX_EXECUTABLE_NAME"
           fi
 
       - name: Upload launch check output

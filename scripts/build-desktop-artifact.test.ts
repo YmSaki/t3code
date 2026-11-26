@@ -566,7 +566,41 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
 
-      assert.nestedPropertyVal(linux, "linux.desktop.entry.StartupWMClass", "com.t3tools.T3Code");
+      assert.equal(linux.appId, "io.github.ymsaki.t3codejp");
+      assert.equal(linux.productName, "T3CodeJP");
+      assert.nestedPropertyVal(linux, "linux.executableName", "t3codejp");
+      assert.nestedPropertyVal(
+        linux,
+        "linux.desktop.entry.StartupWMClass",
+        "io.github.ymsaki.t3codejp",
+      );
+      assert.deepEqual(
+        (linux.linux as { protocols: Array<{ schemes: string[] }> }).protocols[0]?.schemes,
+        ["t3codejp"],
+      );
+      const mac = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.33",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      const win = yield* createBuildConfig(
+        "win",
+        "nsis",
+        "0.0.33",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      for (const config of [mac, win]) assert.equal(config.appId, linux.appId);
+      assert.deepEqual(
+        (mac.mac as { protocols: Array<{ schemes: string[] }> }).protocols[0]?.schemes,
+        ["t3codejp"],
+      );
     }),
   );
 
@@ -1368,23 +1402,62 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
-  it.effect("rejects a Windows payload that regresses above the file-count budget", () =>
+  it.effect("counts unexpected loose files against the Windows payload budget", () =>
     Effect.scoped(
       Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
-        const error = yield* validateWindowsPackagedPayload({
+        const input = {
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
-          targetArch: "x64",
+          targetArch: "x64" as const,
           appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
-          fileLimit: 2,
+        };
+        const { fileCount: fileLimit } = yield* validateWindowsPackagedPayload(input);
+
+        const cacheDir = path.join(fixture.packagedAppDir, "resources", "server-compile-cache");
+        yield* fs.makeDirectory(cacheDir);
+        const manifestPath = path.join(cacheDir, "manifest.json");
+        const manifest = {
+          format: 1,
+          runtime: "44.10.1-v24.22.1-win32-x64-3759534073",
+          entries: [{ module: "server.asar/apps/server/dist/bin.mjs", file: "01234567" }],
+        };
+        yield* fs.writeFileString(manifestPath, JSON.stringify(manifest));
+        const missingBlobError = yield* validateWindowsPackagedPayload({
+          ...input,
+          fileLimit,
         }).pipe(Effect.flip);
+        assert.instanceOf(missingBlobError, WindowsPackagedPayloadValidationError);
+        assert.equal(missingBlobError.fileCount, fileLimit + 1);
+
+        yield* fs.writeFileString(path.join(cacheDir, "01234567"), "bytecode");
+        yield* validateWindowsPackagedPayload({ ...input, fileLimit });
+
+        const wrongArchError = yield* validateWindowsPackagedPayload({
+          ...input,
+          targetArch: "arm64",
+          fileLimit,
+        }).pipe(Effect.flip);
+        assert.instanceOf(wrongArchError, WindowsPackagedPayloadValidationError);
+        assert.equal(wrongArchError.fileCount, fileLimit + 2);
+
+        yield* fs.writeFileString(path.join(cacheDir, "89abcdef"), "unexpected loose file");
+        manifest.entries.push({
+          module: "server.asar/apps/server/dist/missing.mjs",
+          file: "89abcdef",
+        });
+        yield* fs.writeFileString(manifestPath, JSON.stringify(manifest));
+        const error = yield* validateWindowsPackagedPayload({ ...input, fileLimit }).pipe(
+          Effect.flip,
+        );
 
         assert.instanceOf(error, WindowsPackagedPayloadValidationError);
         assert.equal(error.reason, "file-limit-exceeded");
-        assert.isAbove(error.fileCount ?? 0, 2);
+        assert.equal(error.fileCount, fileLimit + 1);
       }),
-    ),
+    ).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
   it.effect("rejects a sidecar whose extracted server bundle cannot resolve", () =>
@@ -1482,6 +1555,58 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
+  it.effect("forwards fork signing credentials only to required platform builds", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workflow = yield* fs.readFileString(
+        yield* path.fromFileUrl(new URL("../.github/workflows/fork-release.yml", import.meta.url)),
+      );
+      const { jobs } = yield* Schema.decodeEffect(
+        fromYaml(
+          Schema.Struct({
+            jobs: Schema.Struct({
+              desktop: Schema.Struct({
+                uses: Schema.String,
+                secrets: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+              }),
+            }),
+          }),
+        ),
+      )(workflow);
+      const apple = [
+        "CSC_LINK",
+        "CSC_KEY_PASSWORD",
+        "APPLE_API_KEY",
+        "APPLE_API_KEY_ID",
+        "APPLE_API_ISSUER",
+        "MACOS_PROVISIONING_PROFILE",
+      ];
+      const azure = [
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_TRUSTED_SIGNING_ENDPOINT",
+        "AZURE_TRUSTED_SIGNING_ACCOUNT_NAME",
+        "AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME",
+        "AZURE_TRUSTED_SIGNING_PUBLISHER_NAME",
+      ];
+      assert.equal(jobs.desktop.uses, "./.github/workflows/release-desktop.yml");
+      assert.deepEqual(
+        jobs.desktop.secrets,
+        Object.fromEntries(
+          [...apple, ...azure].map((name) => {
+            const platform = apple.includes(name) ? "mac" : "win";
+            return [
+              name,
+              `\${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == '${platform}' && secrets.${name} || '' }}`,
+            ];
+          }),
+        ),
+      );
+    }),
+  );
+
   it.effect("rejects a macOS stage without a packaged app", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1564,7 +1689,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "io.github.ymsaki.t3codejp",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1587,7 +1712,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.io.github.ymsaki.t3codejp</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -1738,6 +1863,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.gen(function* () {
       const signedWinConfig = (hostPlatform: string) =>
         createBuildConfig("win", "nsis", "1.2.3", true, false, undefined, undefined).pipe(
+          Effect.tap((config) =>
+            Effect.sync(() => {
+              assert.notProperty(config, "afterPack");
+              assert.match(config.afterSign as string, /prepare-server-compile-cache\.cjs$/);
+            }),
+          ),
           Effect.map((config) => config.win as Record<string, unknown>),
           Effect.provideService(HostProcess.Platform, hostPlatform),
         );
@@ -1867,6 +1998,106 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 });
+
+it.live(
+  "requires a valid Developer ID signature and notarization for the expected macOS team",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const workflow = yield* fs.readFileString(
+          yield* path.fromFileUrl(
+            new URL("../.github/workflows/release-desktop.yml", import.meta.url),
+          ),
+        );
+        const { jobs } = yield* Schema.decodeEffect(
+          fromYaml(
+            Schema.Struct({
+              jobs: Schema.Struct({
+                build: Schema.Struct({
+                  steps: Schema.Array(Schema.Struct({ run: Schema.optional(Schema.String) })),
+                }),
+              }),
+            }),
+          ),
+        )(workflow);
+        const run =
+          jobs.build.steps.find(({ run }) => run?.includes("smoke-desktop-app.ts"))?.run ?? "";
+        const signatureCheck = run.match(
+          /^([ \t]*)if .*inputs\.require_signing.*\n[\s\S]*?^\1fi$/m,
+        )?.[0];
+        assert.isDefined(signatureCheck);
+        const shellOptions = run.split("\n", 1)[0];
+        const stubs = String.raw`
+app="Fixture.app"
+codesign() {
+  case "$1" in
+    --verify) return "$VERIFY_STATUS" ;;
+    --display) printf '%s\n' "$SIGNATURE" >&2 ;;
+    *) return 90 ;;
+  esac
+}
+xcrun() {
+  [[ "$1 $2" == "stapler validate" ]] || return 91
+  return "$STAPLE_STATUS"
+}
+`;
+        const team = "ABCDE12345";
+        const developerId = "Authority=Developer ID Application: Fixture";
+        const validSignature = developerId + "\nTeamIdentifier=" + team;
+        const scenarios = [
+          { name: "valid signature and ticket", exit: 0 },
+          { name: "ad hoc", signature: "Signature=adhoc\nTeamIdentifier=not set", exit: 1 },
+          {
+            name: "development certificate for the expected team",
+            signature: "Authority=Apple Development: Fixture\nTeamIdentifier=" + team,
+            exit: 1,
+          },
+          { name: "wrong team", signature: developerId + "\nTeamIdentifier=WRONG12345", exit: 1 },
+          { name: "invalid signature", verify: 42, exit: 42 },
+          { name: "missing ticket", staple: 43, exit: 43 },
+          { name: "optional signing", required: false, verify: 42, staple: 43, exit: 0 },
+        ];
+        const platform = yield* HostProcess.Platform;
+        const env = yield* HostProcess.Environment;
+        const bash = platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        for (const {
+          name,
+          signature = validSignature,
+          verify = 0,
+          staple = 0,
+          required = true,
+          exit,
+        } of scenarios) {
+          const script = [
+            shellOptions,
+            stubs,
+            signatureCheck.replace(/\$\{\{\s*inputs\.require_signing\s*\}\}/g, String(required)),
+          ].join("\n");
+          const child = yield* spawner.spawn(
+            ChildProcess.make(bash, ["--noprofile", "--norc", "-c", script], {
+              stdin: "ignore",
+              env: {
+                PATH: env.PATH,
+                SystemRoot: env.SystemRoot,
+                APPLE_TEAM_ID: team,
+                SIGNATURE: signature,
+                VERIFY_STATUS: String(verify),
+                STAPLE_STATUS: String(staple),
+              },
+            }),
+          );
+          const [exitCode, output] = yield* Effect.all(
+            [child.exitCode, child.all.pipe(Stream.decodeText, Stream.mkString)],
+            { concurrency: "unbounded" },
+          );
+          assert.equal(Number(exitCode), exit, name + "\n" + output);
+        }
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+);
 
 it("keeps the prefix of a UNC path instead of going relative", () => {
   const paths = ancestorNodeModulesPaths("\\\\server\\share\\tmp\\app", "\\");

@@ -2240,22 +2240,6 @@
   "bc8ab792af1d656f": "Run on your computer:",
   "0ba14e4e920cfa00": "Or download the desktop app",
   "0e79b7a6508a6286": "Then",
-  "363b9991fa23d36b": [
-    "Skip the install if you already have ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": "t3"
-    },
-    ". If",
-    " ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": "t3"
-    },
-    " is not found after installing, add the folder the installer names to your PATH."
-  ],
   "87b24d00c08f54bb": "Unable to open keybindings file",
   "0ee16208cbfcdbf4": "Unknown error opening file.",
   "9e20856550715c74": [

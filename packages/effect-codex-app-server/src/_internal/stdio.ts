@@ -92,16 +92,16 @@ export const stderrExcerpt = (tail: string): string | undefined => {
 };
 
 interface StderrLineState {
-  readonly utf8Decoder: TextDecoder;
-  readonly fallbackDecoder: TextDecoder;
+  readonly utf8Decoder: NodeUtil.TextDecoder;
+  readonly fallbackDecoder: NodeUtil.TextDecoder;
   utf8Valid: boolean;
   utf8Tail: string;
   fallbackTail: string;
 }
 
 const makeStderrLineState = (platform: NodeJS.Platform): StderrLineState => ({
-  utf8Decoder: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }),
-  fallbackDecoder: new TextDecoder(platform === "win32" ? "shift_jis" : "utf-8", {
+  utf8Decoder: new NodeUtil.TextDecoder("utf-8", { fatal: true, ignoreBOM: true }),
+  fallbackDecoder: new NodeUtil.TextDecoder(platform === "win32" ? "shift_jis" : "utf-8", {
     ignoreBOM: true,
   }),
   utf8Valid: true,

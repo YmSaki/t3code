@@ -1,4 +1,5 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { CLI_INSTALL_BIN_DIRNAME, cliInstallCommand } from "@t3tools/shared/cliRelease";
 import { pathSetupCommand, resolveCommandPath } from "@t3tools/shared/shell";
 import * as Console from "effect/Console";
 import * as Duration from "effect/Duration";
@@ -53,9 +54,7 @@ export const installCli = Effect.fn("cli.install.install")(function* () {
   const runtime = yield* standaloneRuntime;
   const windows = platform === "win32";
   if (Option.isNone(runtime)) {
-    const script = windows
-      ? "irm https://t3.codes/install.ps1 | iex"
-      : "curl -fsSL https://t3.codes/install.sh | sh";
+    const script = cliInstallCommand(packageJson.version, windows ? "powershell" : "sh");
     return yield* new CliInstallError({
       reason: `Only the standalone t3 can install itself. Use \`${script}\`, or Settings in the desktop app.`,
     });
@@ -64,12 +63,13 @@ export const installCli = Effect.fn("cli.install.install")(function* () {
   // cmd.exe expands `%` and reads the shim in the OEM code page, so such a path would not run.
   if (windows && /[%\u0080-\uffff]/.test(executable)) {
     return yield* new CliInstallError({
-      reason: `A t3.cmd cannot run ${executable}, because the path has % or non-ASCII characters. Keep using npx t3.`,
+      reason: `A t3.cmd cannot run ${executable}, because the path has % or non-ASCII characters. Run the executable directly.`,
     });
   }
   // Absolute, so the PATH hint never adds a folder that changes with the working directory.
   const binDir = path.resolve(
-    environment.T3CODE_INSTALL_BIN_DIR?.trim() || path.join(home, ".local", "bin"),
+    environment.T3CODE_INSTALL_BIN_DIR?.trim() ||
+      path.join(path.dirname(runtimeDir), CLI_INSTALL_BIN_DIRNAME),
   );
   const name = windows ? "t3.cmd" : "t3";
   const link = path.join(binDir, name);
@@ -142,7 +142,7 @@ export const installCli = Effect.fn("cli.install.install")(function* () {
     ),
   );
 
-  // resolve() drops trailing separators, so `~/.local/bin/` on PATH still matches.
+  // resolve() drops trailing separators from PATH entries.
   const normalize = (value: string) =>
     windows ? path.resolve(value).toLowerCase() : path.resolve(value);
   const same = (entry: string) => entry !== "" && normalize(entry) === normalize(binDir);
@@ -318,12 +318,15 @@ export const offerCliInstall = Effect.fn("cli.install.offer")(function* <E, R, E
   // Runners put their own cache's node_modules/.bin on PATH, so skip those.
   const windows = platform === "win32";
   const names = windows ? ["t3.cmd", "t3.exe"] : ["t3"];
+  const launcherName = windows ? "t3.cmd" : "t3";
+  const baseDir = path.dirname(runtimeDir);
   const launchers = yield* fs
     .readFileString(path.join(runtimeDir, "launchers"))
     .pipe(Effect.orElseSucceed(() => ""));
   const candidates = [
     ...launchers.split(/\r?\n/).filter(Boolean),
-    path.join(path.dirname(runtimeDir), "bin", windows ? "t3.cmd" : "t3"),
+    path.join(baseDir, CLI_INSTALL_BIN_DIRNAME, launcherName),
+    path.join(baseDir, "bin", launcherName),
     ...(environment.PATH ?? environment.Path ?? "")
       .split(windows ? ";" : ":")
       .filter(

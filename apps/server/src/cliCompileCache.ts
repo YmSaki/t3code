@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Runs before the CLI's Effect runtime loads.
+import { PRODUCT_SLUG } from "@t3tools/shared/productIdentity";
 import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
 import * as NodeOS from "node:os";
@@ -13,7 +14,7 @@ export function enableCliCompileCache(): void {
       process.env.XDG_CACHE_HOME ||
       // oxlint-disable-next-line t3code/no-global-process-runtime -- Runs before the CLI's Effect runtime loads.
       (process.platform === "linux" ? NodePath.join(NodeOS.homedir(), ".cache") : NodeOS.tmpdir());
-    const directory = NodePath.join(cacheRoot, "t3code", "compile-cache");
+    const directory = NodePath.join(cacheRoot, PRODUCT_SLUG, "compile-cache");
     if (process.env.APPIMAGE) {
       // AppImage paths change each launch. Older shims cached anyway, filling Node's engine folders.
       for (const entry of NodeFS.readdirSync(directory, { withFileTypes: true })) {

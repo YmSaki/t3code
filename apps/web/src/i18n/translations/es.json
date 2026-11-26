@@ -2240,22 +2240,6 @@
   "bc8ab792af1d656f": "Ejecuta en tu equipo:",
   "0ba14e4e920cfa00": "O descarga la app de escritorio",
   "0e79b7a6508a6286": "Después",
-  "363b9991fa23d36b": [
-    "Omite la instalación si ya tienes ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": "t3"
-    },
-    ". Si no se encuentra",
-    " ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": "t3"
-    },
-    " después de instalarlo, añade a tu PATH la carpeta que indique el instalador."
-  ],
   "87b24d00c08f54bb": "No se puede abrir el archivo de atajos de teclado",
   "0ee16208cbfcdbf4": "Error desconocido al abrir el archivo.",
   "9e20856550715c74": [

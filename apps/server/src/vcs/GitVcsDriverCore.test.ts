@@ -523,10 +523,7 @@ it.effect("lists refs without logging remote lookup stderr", () => {
       stderrLength: stderr.length,
     });
     assert.notInclude(JSON.stringify(messages), secret);
-  }).pipe(
-    Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
-    Effect.provide(layerTest),
-  );
+  }).pipe(Effect.provide([layerTest, Logger.layer([logger], { mergeWithExisting: false })]));
 });
 
 it.effect(

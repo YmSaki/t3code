@@ -339,6 +339,7 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
     Option.getOrUndefined(
       resolveOptionPrecedence(explicitBaseDir, Option.fromUndefinedOr(bootstrap?.t3Home)),
     ),
+    devUrl !== undefined,
   );
   const rawCwd = Option.getOrElse(normalizedFlags.cwd, () => process.cwd());
   const cwd = path.resolve(yield* expandHomePath(rawCwd.trim()));

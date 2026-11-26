@@ -5,6 +5,7 @@ import {
   ORCHESTRATION_PROTOCOL_VERSION,
   PortSchema,
 } from "@t3tools/contracts";
+import { CLI_RELEASES_PAGE_URL } from "@t3tools/shared/cliRelease";
 import { resolveWorktreeT3Home } from "@t3tools/shared/devHome";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { formatHostForUrl, isWildcardHost } from "@t3tools/shared/hostClassification";
@@ -31,6 +32,7 @@ import { Command, Flag, GlobalFlag } from "effect/cli";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import { isExactServiceVersion } from "../cloud/serviceProtocol.ts";
 import * as ServerConfig from "../config.ts";
 import * as ManagedLimits from "../policy/managedLimits.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
@@ -91,9 +93,12 @@ export class IncompatibleServerProtocolError extends Schema.TaggedError<Incompat
   },
 ) {
   override get message(): string {
+    const releaseUrl = isExactServiceVersion(this.serverVersion)
+      ? `${CLI_RELEASES_PAGE_URL}/tag/v${this.serverVersion}`
+      : CLI_RELEASES_PAGE_URL;
     return [
       `The running T3 Code server (${this.serverVersion}) speaks orchestration protocol ${String(this.serverProtocolVersion)}, but this CLI speaks protocol ${String(ORCHESTRATION_PROTOCOL_VERSION)}.`,
-      `Pair with the matching CLI instead: \`${this.pairCommand}\`.`,
+      `Download and unpack the matching CLI from ${releaseUrl}. From the unpacked folder, run \`${this.pairCommand}\`.`,
     ].join("\n");
   }
 }
@@ -272,11 +277,12 @@ interface DiscoveredPairTarget {
 const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
   explicitBaseDir: string | undefined,
 ) {
-  const bases: Array<string> = [];
+  let base: string;
+  let defaultDevBase: string | undefined;
   let inLinkedWorktree = false;
   const hasExplicitBaseDir = explicitBaseDir !== undefined && explicitBaseDir.trim().length > 0;
   if (hasExplicitBaseDir) {
-    bases.push(yield* resolveBaseDir(explicitBaseDir));
+    base = yield* resolveBaseDir(explicitBaseDir);
   } else {
     // Same precedence as dev-runner: inside a linked worktree only its own
     // `.t3` counts. Minting opens the target database with this checkout's
@@ -284,43 +290,44 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
     // install with unreleased schema.
     const worktreeHome = yield* resolveWorktreeT3Home(yield* HostProcess.WorkingDirectory);
     if (worktreeHome !== undefined) {
-      bases.push(worktreeHome);
+      base = worktreeHome;
       inLinkedWorktree = true;
     } else {
       const envHome = yield* Config.String("T3CODE_HOME").pipe(Config.option);
-      bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome)));
+      const configured = Option.getOrUndefined(envHome);
+      base = yield* resolveBaseDir(configured);
+      if (!configured?.trim()) defaultDevBase = yield* resolveBaseDir(undefined, true);
     }
   }
 
   const checkedStatePaths: Array<string> = [];
-  for (const baseDir of new Set(bases)) {
-    for (const variant of ["userdata", "dev"] as const) {
-      const derivedPaths = yield* ServerConfig.deriveServerPaths(
-        baseDir,
-        variant === "dev" ? DEV_VARIANT_PLACEHOLDER_URL : undefined,
-        {},
-      );
-      const statePath = derivedPaths.serverRuntimeStatePath;
-      checkedStatePaths.push(statePath);
-      const state = yield* readPersistedServerRuntimeState(statePath);
-      if (Option.isNone(state)) {
-        continue;
-      }
-      // A dead server's port may be reused; do not mint tokens in its old database for another server.
-      if (!isProcessAlive(state.value.pid)) {
-        continue;
-      }
-      const probed = yield* probeEnvironmentDescriptor(state.value.origin);
-      if (probed._tag !== "descriptor") {
-        continue;
-      }
-      return {
-        baseDir,
-        variant,
-        state: state.value,
-        descriptor: probed.descriptor,
-      } satisfies DiscoveredPairTarget;
+  for (const variant of ["userdata", "dev"] as const) {
+    const baseDir = variant === "dev" ? (defaultDevBase ?? base) : base;
+    const derivedPaths = yield* ServerConfig.deriveServerPaths(
+      baseDir,
+      variant === "dev" ? DEV_VARIANT_PLACEHOLDER_URL : undefined,
+      {},
+    );
+    const statePath = derivedPaths.serverRuntimeStatePath;
+    checkedStatePaths.push(statePath);
+    const state = yield* readPersistedServerRuntimeState(statePath);
+    if (Option.isNone(state)) {
+      continue;
     }
+    // A dead server's port may be reused; do not mint tokens in its old database for another server.
+    if (!isProcessAlive(state.value.pid)) {
+      continue;
+    }
+    const probed = yield* probeEnvironmentDescriptor(state.value.origin);
+    if (probed._tag !== "descriptor") {
+      continue;
+    }
+    return {
+      baseDir,
+      variant,
+      state: state.value,
+      descriptor: probed.descriptor,
+    } satisfies DiscoveredPairTarget;
   }
   const baseDirArgs = hasExplicitBaseDir ? ["--base-dir", explicitBaseDir] : [];
   return yield* new NoRunningServerError({
@@ -552,14 +559,11 @@ export const pairCommand = Command.make("pair", {
       const serverProtocolVersion = target.descriptor.orchestrationProtocolVersion ?? 1;
       if (serverProtocolVersion !== ORCHESTRATION_PROTOCOL_VERSION) {
         const platform = yield* HostProcess.Platform;
-        const baseDirArgs =
-          explicitBaseDir !== undefined && explicitBaseDir.trim().length > 0
-            ? ` --base-dir ${hostShellWord(platform, explicitBaseDir)}`
-            : "";
+        const executable = platform === "win32" ? ".\\t3.exe" : "./t3";
         return yield* new IncompatibleServerProtocolError({
           serverVersion: target.descriptor.serverVersion,
           serverProtocolVersion,
-          pairCommand: `npx t3@${target.descriptor.serverVersion} pair${baseDirArgs}`,
+          pairCommand: `${executable} pair --base-dir ${hostShellWord(platform, target.baseDir)}`,
         });
       }
 

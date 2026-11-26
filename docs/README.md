@@ -1,8 +1,8 @@
-# T3 Code docs
+# T3CodeJP docs
 
-## Using T3 Code
+## Using T3CodeJP
 
-- [Install T3 Code](./user/install.md)
+- [Install T3CodeJP](./user/install.md)
 - [Messages and context](./user/composer.md)
 - [Working with threads](./user/thread-sidebar.md)
 - [Permission modes](./user/permission-modes.md)

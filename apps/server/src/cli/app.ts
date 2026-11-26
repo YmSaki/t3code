@@ -218,9 +218,9 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     Option.getOrUndefined(flags.workspaceRoot) ?? (yield* HostProcess.WorkingDirectory);
   const workspaceRoot = path.resolve(yield* expandHomePath(rawWorkspaceRoot));
   const userId = yield* HostProcess.UserId;
-  const resolveAddress = (stateSubdirectory: "userdata" | "dev") =>
+  const resolveAddress = (root: string, stateSubdirectory: "userdata" | "dev") =>
     resolveDesktopAppControlAddress({
-      stateDir: path.join(baseDir, stateSubdirectory),
+      stateDir: path.join(root, stateSubdirectory),
       platform: hostPlatform,
       tempDir: NodeOS.tmpdir(),
       userId,
@@ -235,8 +235,10 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     workspaceRoot,
     platform: hostPlatform,
   };
-  const address = resolveAddress("userdata");
-  const fallbackAddress = allowDevFallback ? resolveAddress("dev") : undefined;
+  const address = resolveAddress(baseDir, "userdata");
+  const fallbackAddress = allowDevFallback
+    ? resolveAddress(yield* resolveBaseDir(undefined, true), "dev")
+    : undefined;
 
   const response = yield* Effect.tryPromise({
     try: () =>

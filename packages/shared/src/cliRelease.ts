@@ -3,9 +3,13 @@ import * as Schema from "effect/Schema";
 
 import { compareSemverVersions } from "./semver.ts";
 
-const CLI_RELEASE_REPOSITORY = "pingdotgg/t3code";
+const CLI_RELEASE_REPOSITORY = "YmSaki/t3code";
+export const CLI_INSTALL_SH_FILE = "install.sh";
+const CLI_INSTALL_PS1_FILE = "install.ps1";
+export const CLI_INSTALL_BIN_DIRNAME = "cli-bin";
 export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
 export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
+export const CLI_RELEASE_METADATA_FILE = "t3code-release.json";
 export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";
 
 // Keep archive keys aligned with the Linux matrix, Windows ARM64 build, and cli_archive rows in release.yml,
@@ -44,13 +48,6 @@ export function cliArchiveFileName(version: string, platformKey: CliArchivePlatf
 
 const CLI_RELEASE_DEFAULT_BASE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases/download`;
 
-export function cliReleaseDownloadBaseUrl(
-  version: string,
-  baseUrl: string | undefined = CLI_RELEASE_DEFAULT_BASE_URL,
-): string {
-  return `${(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL).replace(/\/+$/, "")}/v${version}`;
-}
-
 /** `segments` added to `baseUrl`'s path, keeping its query, such as a signed mirror URL's token. */
 export function releaseAssetUrl(baseUrl: string, ...segments: ReadonlyArray<string>): string {
   const url = new URL(baseUrl);
@@ -65,6 +62,18 @@ export function cliReleaseAssetUrl(
   baseUrl: string | undefined = CLI_RELEASE_DEFAULT_BASE_URL,
 ): string {
   return releaseAssetUrl(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL, `v${version}`, fileName);
+}
+
+export function cliInstallCommand(version: string, shell: "sh" | "powershell"): string {
+  if (shell === "powershell") {
+    const quote = (value: string) =>
+      "'" + value.replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&") + "'";
+    const url = cliReleaseAssetUrl(version, CLI_INSTALL_PS1_FILE);
+    return `& { $previousT3CodeVersion = $env:T3CODE_VERSION; try { $env:T3CODE_VERSION = ${quote(version)}; irm ${quote(url)} | iex } finally { $env:T3CODE_VERSION = $previousT3CodeVersion } }`;
+  }
+  const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+  const url = cliReleaseAssetUrl(version, CLI_INSTALL_SH_FILE);
+  return `curl -fsSL ${quote(url)} | T3CODE_VERSION=${quote(version)} sh`;
 }
 
 export function parseChecksums(text: string): ReadonlyMap<string, string> {

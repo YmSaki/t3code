@@ -1,4 +1,5 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
+import { CLI_RELEASES_PAGE_URL } from "@t3tools/shared/cliRelease";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -6,6 +7,7 @@ import * as Ref from "effect/Ref";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as HttpClient from "effect/http/HttpClient";
 import type * as Electron from "electron";
 import { msg } from "gt-i18n";
 
@@ -20,7 +22,6 @@ import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopObservability from "./DesktopObservability.ts";
 import * as DesktopState from "./DesktopState.ts";
 
-const RELEASES_URL = "https://github.com/pingdotgg/t3code/releases";
 const LAST_STARTED_VERSION_FILE = "desktop-last-started-version";
 // Buttons are plain links to this host; will-navigate cancels them and runs the action.
 const ACTION_ORIGIN = "https://startup-recovery.invalid";
@@ -182,6 +183,7 @@ export const listen: Effect.Effect<
   | ElectronTheme.ElectronTheme
   | ElectronWindow.ElectronWindow
   | FileSystem.FileSystem
+  | HttpClient.HttpClient
   | Scope.Scope
 > = Effect.gen(function* () {
   const { primaryBackendStartup, quitting } = yield* DesktopState.DesktopState;
@@ -192,6 +194,7 @@ export const listen: Effect.Effect<
   const electronTheme = yield* ElectronTheme.ElectronTheme;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const fileSystem = yield* FileSystem.FileSystem;
+  const httpClient = yield* HttpClient.HttpClient;
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
 
   const lastStartedVersionPath = environment.path.join(
@@ -257,11 +260,19 @@ export const listen: Effect.Effect<
       }
       case "reinstall":
         if (current._tag === "Reinstall") {
-          yield* electronShell.openExternal(`${RELEASES_URL}/tag/v${current.version}`);
+          const releaseUrl = `${CLI_RELEASES_PAGE_URL}/tag/v${encodeURIComponent(current.version)}`;
+          const destination = yield* httpClient.head(releaseUrl).pipe(
+            Effect.map((response) =>
+              response.status === 200 ? releaseUrl : CLI_RELEASES_PAGE_URL,
+            ),
+            Effect.timeout("3 seconds"),
+            Effect.orElseSucceed(() => CLI_RELEASES_PAGE_URL),
+          );
+          yield* electronShell.openExternal(destination);
         }
         return;
       case "releases":
-        yield* electronShell.openExternal(RELEASES_URL);
+        yield* electronShell.openExternal(CLI_RELEASES_PAGE_URL);
         return;
       case "copy": {
         const failure = yield* Ref.get(failureRef);

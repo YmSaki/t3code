@@ -8,6 +8,10 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as TestClock from "effect/testing/TestClock";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -139,6 +143,10 @@ it.effect.each([
       yield* listen.pipe(
         Effect.provide(
           Layer.mergeAll(
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make(() => Effect.die("unexpected recovery HTTP request")),
+            ),
             FileSystem.layerNoop({
               readFileString: () => Effect.succeed("0.1.2"),
               writeFileString: () => Deferred.succeed(remembered, undefined).pipe(Effect.asVoid),
@@ -212,74 +220,124 @@ it.effect.each([
   ).pipe(Effect.provide(DesktopState.layer)),
 );
 
-it.effect("installs the build the update action downloaded, not the one it offered", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const installed = yield* Deferred.make<string>();
-      const shown = yield* Deferred.make<void>();
-      let navigate: ((event: { preventDefault: () => void }, url: string) => void) | undefined;
-      const recovery = {
-        isDestroyed: () => false,
-        loadURL: () => Promise.resolve(),
-        once: () => {},
-        webContents: {
-          setWindowOpenHandler: () => {},
-          on: (_event: string, listener: typeof navigate) => {
-            navigate = listener;
-            Deferred.doneUnsafe(shown, Effect.void);
+it.effect.each([
+  { action: "update", status: 200, expected: "0.1.5" },
+  {
+    action: "reinstall",
+    status: 200,
+    expected: "https://github.com/YmSaki/t3code/releases/tag/v0.1.2",
+  },
+  { action: "reinstall", status: 404, expected: "https://github.com/YmSaki/t3code/releases" },
+  { action: "reinstall", status: 503, expected: "https://github.com/YmSaki/t3code/releases" },
+  { action: "reinstall", status: "offline", expected: "https://github.com/YmSaki/t3code/releases" },
+  { action: "reinstall", status: "timeout", expected: "https://github.com/YmSaki/t3code/releases" },
+  { action: "releases", status: 200, expected: "https://github.com/YmSaki/t3code/releases" },
+] as const)(
+  "resolves the $action recovery action with HTTP $status",
+  ({ action, status, expected }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const target = yield* Deferred.make<string>();
+        const shown = yield* Deferred.make<void>();
+        const requestStarted = yield* Deferred.make<void>();
+        const requestStopped = yield* Deferred.make<void>();
+        let navigate: ((event: { preventDefault: () => void }, url: string) => void) | undefined;
+        const recovery = {
+          isDestroyed: () => false,
+          loadURL: () => Promise.resolve(),
+          once: () => {},
+          webContents: {
+            setWindowOpenHandler: () => {},
+            on: (_event: string, listener: typeof navigate) => {
+              navigate = listener;
+              Deferred.doneUnsafe(shown, Effect.void);
+            },
           },
-        },
-      } as unknown as Electron.BrowserWindow;
-      const offered = updateState({ status: "available", availableVersion: "0.1.4" });
-      const state = yield* DesktopState.DesktopState;
-      yield* listen.pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            FileSystem.layerNoop({ readFileString: () => Effect.succeed("0.1.3") }),
-            Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
-              appVersion: "0.1.3",
-              stateDir: "/task/state",
-              logDir: "/task/logs",
-              path: { join: (...parts: string[]) => parts.join("/") },
-            } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]),
-            Layer.succeed(ElectronApp.ElectronApp, {
-              on: () => Effect.void,
-            } as unknown as ElectronApp.ElectronApp["Service"]),
-            Layer.succeed(
-              ElectronShell.ElectronShell,
-              {} as ElectronShell.ElectronShell["Service"],
-            ),
-            Layer.succeed(ElectronTheme.ElectronTheme, {
-              shouldUseDarkColors: Effect.succeed(false),
-            } as ElectronTheme.ElectronTheme["Service"]),
-            Layer.succeed(ElectronWindow.ElectronWindow, {
-              main: Effect.succeedNone,
-              create: () => Effect.succeed(recovery),
-            } as unknown as ElectronWindow.ElectronWindow["Service"]),
-            Layer.succeed(DesktopUpdates.DesktopUpdates, {
-              subscribe: Effect.succeed({ latest: offered, changes: Stream.empty }),
-              check: () => Effect.void,
-              getState: Effect.succeed(offered),
-              // A release published since the offer: the download fetches it instead.
-              download: Effect.succeed({
-                accepted: true,
-                completed: true,
-                state: updateState({ status: "downloaded", downloadedVersion: "0.1.5" }),
+        } as unknown as Electron.BrowserWindow;
+        const offered = updateState(
+          action === "update"
+            ? { status: "available", availableVersion: "0.1.4" }
+            : { status: "up-to-date" },
+        );
+        const state = yield* DesktopState.DesktopState;
+        yield* listen.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              Layer.succeed(
+                HttpClient.HttpClient,
+                HttpClient.make((request) =>
+                  Effect.gen(function* () {
+                    expect(action).toBe("reinstall");
+                    expect(request.method).toBe("HEAD");
+                    expect(request.url).toBe(
+                      "https://github.com/YmSaki/t3code/releases/tag/v0.1.2",
+                    );
+                    if (status === "offline") {
+                      return yield* new HttpClientError.HttpClientError({
+                        reason: new HttpClientError.TransportError({ request }),
+                      });
+                    }
+                    if (status === "timeout") {
+                      yield* Deferred.succeed(requestStarted, undefined);
+                      return yield* Effect.never.pipe(
+                        Effect.onInterrupt(() => Deferred.succeed(requestStopped, undefined)),
+                      );
+                    }
+                    return HttpClientResponse.fromWeb(request, new Response(null, { status }));
+                  }),
+                ),
+              ),
+              FileSystem.layerNoop({
+                readFileString: () => Effect.succeed(action === "reinstall" ? "0.1.2" : "0.1.3"),
               }),
-              installPrepared: (version: string) => Deferred.succeed(installed, version),
-            } as unknown as DesktopUpdates.DesktopUpdates["Service"]),
+              Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
+                appVersion: "0.1.3",
+                stateDir: "/task/state",
+                logDir: "/task/logs",
+                path: { join: (...parts: string[]) => parts.join("/") },
+              } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]),
+              Layer.succeed(ElectronApp.ElectronApp, {
+                on: () => Effect.void,
+              } as unknown as ElectronApp.ElectronApp["Service"]),
+              Layer.succeed(ElectronShell.ElectronShell, {
+                openExternal: (url: string) => Deferred.succeed(target, url),
+              } as unknown as ElectronShell.ElectronShell["Service"]),
+              Layer.succeed(ElectronTheme.ElectronTheme, {
+                shouldUseDarkColors: Effect.succeed(false),
+              } as ElectronTheme.ElectronTheme["Service"]),
+              Layer.succeed(ElectronWindow.ElectronWindow, {
+                main: Effect.succeedNone,
+                create: () => Effect.succeed(recovery),
+              } as unknown as ElectronWindow.ElectronWindow["Service"]),
+              Layer.succeed(DesktopUpdates.DesktopUpdates, {
+                subscribe: Effect.succeed({ latest: offered, changes: Stream.empty }),
+                check: () => Effect.void,
+                getState: Effect.succeed(offered),
+                // A release published since the offer: the download fetches it instead.
+                download: Effect.succeed({
+                  accepted: true,
+                  completed: true,
+                  state: updateState({ status: "downloaded", downloadedVersion: "0.1.5" }),
+                }),
+                installPrepared: (version: string) => Deferred.succeed(target, version),
+              } as unknown as DesktopUpdates.DesktopUpdates["Service"]),
+            ),
           ),
-        ),
-      );
-      yield* SubscriptionRef.set(state.primaryBackendStartup, {
-        _tag: "Failing",
-        reason: "Server failed before readiness",
-        managedPolicy: false,
-        output: "Failure details",
-      });
-      yield* Deferred.await(shown);
-      navigate!({ preventDefault: () => {} }, "https://startup-recovery.invalid/update");
-      expect(yield* Deferred.await(installed)).toBe("0.1.5");
-    }),
-  ).pipe(Effect.provide(DesktopState.layer)),
+        );
+        yield* SubscriptionRef.set(state.primaryBackendStartup, {
+          _tag: "Failing",
+          reason: "Server failed before readiness",
+          managedPolicy: false,
+          output: "Failure details",
+        });
+        yield* Deferred.await(shown);
+        navigate!({ preventDefault: () => {} }, `https://startup-recovery.invalid/${action}`);
+        if (status === "timeout") {
+          yield* Deferred.await(requestStarted);
+          yield* TestClock.adjust("3 seconds");
+          yield* Deferred.await(requestStopped);
+        }
+        expect(yield* Deferred.await(target)).toBe(expected);
+      }),
+    ).pipe(Effect.provide(DesktopState.layer)),
 );

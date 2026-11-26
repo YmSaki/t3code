@@ -13,6 +13,7 @@ import {
 import { useGT } from "gt-react";
 import { useState } from "react";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
+import { randomUUID } from "../../lib/utils";
 import {
   getDefaultProviderInstanceModel,
   isProviderInstancePickerVisible,
@@ -96,31 +97,31 @@ export function ThreadHandoffDialog({
       const result = await runHandoff({
         environmentId: threadRef.environmentId,
         input: {
-          commandId: CommandId.make(`handoff-${Date.now()}`),
+          commandId: CommandId.make(`handoff-${randomUUID()}`),
           threadId: threadRef.threadId,
           modelSelection,
           mode,
         },
       });
-      if (result._tag !== "Success") {
-        if (!isAtomCommandInterrupted(result)) {
-          setErrorMessage(String(squashAtomCommandFailure(result)));
-        }
-        return;
+      if (result._tag === "Success") {
+        toastManager.add({
+          type: "success",
+          title: gt("Thread handed off"),
+          description: gt("Started a new thread on {provider} ({model}).", {
+            provider: activeProviderEntry?.displayName ?? provider,
+            model: trimmedModel,
+          }),
+        });
+        onOpenChange(false);
+        onHandoffSuccess?.(result.value.threadId);
+      } else if (!isAtomCommandInterrupted(result)) {
+        setErrorMessage(String(squashAtomCommandFailure(result)));
       }
-      toastManager.add({
-        type: "success",
-        title: gt("Thread handed off"),
-        description: gt("Started a new thread on {provider} ({model}).", {
-          provider: activeProviderEntry?.displayName ?? provider,
-          model: trimmedModel,
-        }),
-      });
-      onOpenChange(false);
-      onHandoffSuccess?.(result.value.threadId);
-    } finally {
+    } catch (error) {
       setSubmitting(false);
+      throw error;
     }
+    setSubmitting(false);
   };
 
   return (

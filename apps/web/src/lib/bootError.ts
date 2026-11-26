@@ -1,8 +1,12 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
+import type * as CliRelease from "@t3tools/shared/cliRelease";
+import { DEFAULT_HOME_DIRECTORY } from "@t3tools/shared/productIdentity";
 
-const FALLBACK_TRIAGE_COMMAND = "npx t3 triage";
-const DOWNLOAD_URL = "https://t3.codes/download";
-const ISSUE_URL = "https://github.com/pingdotgg/t3code/issues/new";
+// Bootstrap must still render recovery when the application dependency chunks fail to load.
+const releasesPage: typeof CliRelease.CLI_RELEASES_PAGE_URL =
+  "https://github.com/YmSaki/t3code/releases";
+const cliBin: typeof CliRelease.CLI_INSTALL_BIN_DIRNAME = "cli-bin";
+const FALLBACK_TRIAGE_COMMAND = `~/${DEFAULT_HOME_DIRECTORY}/${cliBin}/t3 triage`;
 const LAST_FAILURE_KEY = "t3code:boot-failed-at";
 const REPEAT_FAILURE_MS = 5 * 60_000;
 const MAX_CAUSES = 3;
@@ -23,13 +27,12 @@ function launcherCommand(launcherPath: string) {
     : `'${launcherPath.replaceAll("'", `'"'"'`)}'`;
 }
 
-/** Desktop can run its bundled launcher without Node; everything else falls back to npx. */
 export async function resolveTriageCommand(bridge: DesktopBridge | undefined) {
   try {
     const state = await bridge?.cliCommand.getState();
     // Windows reports onPath from its PATH entry alone; only an existing launcher proves it runs.
     if (state?.launcherPath) {
-      return state.onPath ? "t3 triage" : `${launcherCommand(state.launcherPath)} triage`;
+      return `${launcherCommand(state.launcherPath)} triage`;
     }
   } catch (error) {
     console.warn("Could not read the desktop CLI state.", error);
@@ -254,6 +257,20 @@ function mountUpdateButton(
   }
 }
 
+export function bootRecoveryLinks(environment: BootErrorEnvironment) {
+  const issue = new URL("issues/new", releasesPage);
+  issue.searchParams.set("template", "bug_report.yml");
+  issue.searchParams.set("title", "T3 Code failed to start");
+  issue.searchParams.set("area", "apps/web");
+  issue.searchParams.set("version", `${environment.version} (${environment.channel})`);
+  issue.searchParams.set("environment", `${environment.surface}, ${environment.platform}`);
+  return {
+    issue: issue.href,
+    download:
+      environment.channel === "nightly" ? `${releasesPage}?q=nightly` : `${releasesPage}/latest`,
+  };
+}
+
 export function showBootError(error: unknown) {
   console.error("T3 Code failed to start.", error);
   const bootShell = document.getElementById("boot-shell");
@@ -347,12 +364,7 @@ export function showBootError(error: unknown) {
     ),
   );
 
-  const issue = new URL(ISSUE_URL);
-  issue.searchParams.set("template", "bug_report.yml");
-  issue.searchParams.set("title", "T3 Code failed to start");
-  issue.searchParams.set("area", "apps/web");
-  issue.searchParams.set("version", `${environment.version} (${environment.channel})`);
-  issue.searchParams.set("environment", `${environment.surface}, ${environment.platform}`);
+  const links = bootRecoveryLinks(environment);
   const link = (href: string, textContent: string) =>
     element("a", { href, textContent, target: "_blank", rel: "noreferrer" });
   const nightly = environment.channel === "nightly";
@@ -362,7 +374,7 @@ export function showBootError(error: unknown) {
     ...(bridge
       ? [
           link(
-            nightly ? `${DOWNLOAD_URL}?channel=nightly` : DOWNLOAD_URL,
+            links.download,
             nightly
               ? "Download and reinstall the latest nightly build"
               : "Download and reinstall T3 Code",
@@ -383,7 +395,7 @@ export function showBootError(error: unknown) {
       }),
       element("div", { id: "boot-error-report" }, [
         copyDetails,
-        link(issue.href, "File a bug report on GitHub"),
+        link(links.issue, "File a bug report on GitHub"),
       ]),
     ]),
   ]);

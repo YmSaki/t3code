@@ -51,6 +51,8 @@ const spawnHook = vi.hoisted(() => ({
   current: undefined as ((child: NodeChildProcess.ChildProcess) => void) | undefined,
 }));
 
+const windowsFixtureScripts = vi.hoisted(() => new Map<string, string>());
+
 const failRm = vi.hoisted(() => ({ path: undefined as string | undefined }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -65,7 +67,12 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof NodeChildProcess>();
   const spawn = (...args: Parameters<typeof actual.spawn>) => {
-    const child = actual.spawn(...args);
+    // Windows cannot execute a shebang. Interpret only the fixture executables registered below.
+    const script = windowsFixtureScripts.get(args[0]);
+    const child =
+      script === undefined
+        ? actual.spawn(...args)
+        : actual.spawn(process.execPath, [script, ...(args[1] ?? [])], args[2]);
     spawnedChildren.push(child);
     spawnHook.current?.(child);
     return child;
@@ -143,10 +150,10 @@ it("rejects contradictory service state", () => {
 });
 
 const unitPlan = (root: string, version: string) => ({
-  program: [`${root}/runtime/versions/${version}/t3`, "__service-launcher"],
+  program: [`${root.replaceAll("\\", "/")}/runtime/versions/${version}/t3`, "__service-launcher"],
   baseDir: root,
   logPath: `${root}/logs/boot-service.log`,
-  unitPath: `${root}/unit/t3code.service`,
+  unitPath: `${root}/unit/t3codejp.service`,
 });
 
 const writeFakeRuntime = (
@@ -156,10 +163,33 @@ const writeFakeRuntime = (
   childSource: string,
 ) =>
   Effect.gen(function* () {
-    const entryPath = path.join(versionDir, "t3");
+    const windows = (yield* HostProcess.Platform) === "win32";
+    const entryPath = path.join(versionDir, windows ? "t3.exe" : "t3");
     yield* fs.makeDirectory(versionDir, { recursive: true });
-    yield* fs.writeFileString(entryPath, `#!${process.execPath}\n${childSource}`);
-    yield* fs.chmod(entryPath, 0o755);
+    if (windows) {
+      const script = path.join(versionDir, "fixture.js");
+      // The real Windows server handles IPC stop; the fixture's finalizers use the SIGTERM event.
+      yield* fs.writeFileString(
+        script,
+        `
+process.once("disconnect", () => process.exit(0));
+${childSource}
+process.on("message", (message) => {
+  if (message?.type === "stop" && !process.emit("SIGTERM")) process.exit(0);
+});
+`,
+      );
+      yield* fs.writeFileString(entryPath, "");
+      windowsFixtureScripts.set(entryPath, script);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          windowsFixtureScripts.delete(entryPath);
+        }),
+      );
+    } else {
+      yield* fs.writeFileString(entryPath, `#!${process.execPath}\n${childSource}`);
+      yield* fs.chmod(entryPath, 0o755);
+    }
     yield* fs.writeFileString(
       path.join(versionDir, ".install-complete"),
       `${path.basename(versionDir)}\n`,
@@ -460,7 +490,7 @@ setInterval(() => {}, 1_000);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-task-" });
-      const unitPath = path.join(root, "t3code-task.xml");
+      const unitPath = path.join(root, "t3codejp-task.xml");
       const unit = renderBootServiceTask(unitPlan(root, "1.1.0"), {
         userId: "PC\\theo",
         homeDir: "C:\\Users\\theo",
@@ -474,12 +504,12 @@ setInterval(() => {}, 1_000);
         return { stdout: task };
       };
 
-      yield* Effect.promise(() => registerServiceTask(unitPath, "t3code-PC-theo", schtasks));
+      yield* Effect.promise(() => registerServiceTask(unitPath, "t3codejp-PC-theo", schtasks));
       assert.equal(task, disabledServiceTask(unit));
-      assert.deepEqual(yield* fs.readDirectory(root), ["t3code-task.xml"]);
+      assert.deepEqual(yield* fs.readDirectory(root), ["t3codejp-task.xml"]);
 
       task = unit.replace("1.1.0", "1.0.0");
-      yield* Effect.promise(() => registerServiceTask(unitPath, "t3code-PC-theo", schtasks));
+      yield* Effect.promise(() => registerServiceTask(unitPath, "t3codejp-PC-theo", schtasks));
       assert.equal(task, unit);
     }),
   );
@@ -490,7 +520,12 @@ setInterval(() => {}, 1_000);
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-unit-" });
       const home = path.join(root, "home");
-      const unitPath = path.join(home, "Library", "LaunchAgents", "t3code.plist");
+      const unitPath = path.join(
+        home,
+        "Library",
+        "LaunchAgents",
+        "io.github.ymsaki.t3codejp.service.plist",
+      );
       const render = (version: string) =>
         renderBootServicePlist(unitPlan(root, version), { homeDir: home, environmentPath: "" });
       yield* fs.makeDirectory(path.dirname(unitPath), { recursive: true });
@@ -516,7 +551,7 @@ setInterval(() => {}, 1_000);
         }),
       );
       vi.stubEnv("HOME", home);
-      vi.stubEnv("T3_BOOT_SERVICE_UNIT", "t3code.plist");
+      vi.stubEnv("T3_BOOT_SERVICE_UNIT", "io.github.ymsaki.t3codejp.service.plist");
 
       yield* Effect.promise(() =>
         expect(runLauncher(root)).rejects.toThrow("Active child exited unexpectedly (0)."),
@@ -535,7 +570,7 @@ setInterval(() => {}, 1_000);
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-xdg-" });
         const home = path.join(root, "home");
         const managerUnitDir = path.join(home, ".config", "systemd", "user");
-        const unitPath = path.join(managerUnitDir, "t3code.service");
+        const unitPath = path.join(managerUnitDir, "t3codejp.service");
         const render = (version: string) =>
           renderBootServiceUnit({ ...unitPlan(root, version), unitPath });
         yield* fs.makeDirectory(managerUnitDir, { recursive: true });
@@ -579,7 +614,7 @@ setInterval(() => {}, 1_000);
         vi.stubEnv("HOME", home);
         // environment.d changes what services inherit, not where the manager reads units.
         vi.stubEnv("XDG_CONFIG_HOME", path.join(home, "service-config"));
-        vi.stubEnv("T3_BOOT_SERVICE_UNIT", "t3code.service");
+        vi.stubEnv("T3_BOOT_SERVICE_UNIT", "t3codejp.service");
 
         yield* Effect.promise(() =>
           expect(runLauncher(root)).rejects.toThrow("Active child exited unexpectedly (0)."),
@@ -596,7 +631,12 @@ setInterval(() => {}, 1_000);
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-log-" });
       const home = path.join(root, "home");
-      const unitPath = path.join(home, "Library", "LaunchAgents", "t3code.plist");
+      const unitPath = path.join(
+        home,
+        "Library",
+        "LaunchAgents",
+        "io.github.ymsaki.t3codejp.service.plist",
+      );
       const plan = unitPlan(root, "1.0.0");
       yield* fs.makeDirectory(path.dirname(unitPath), { recursive: true });
       yield* fs.writeFileString(
@@ -620,7 +660,7 @@ setInterval(() => {}, 1_000);
         }),
       );
       vi.stubEnv("HOME", home);
-      vi.stubEnv("T3_BOOT_SERVICE_UNIT", "t3code.plist");
+      vi.stubEnv("T3_BOOT_SERVICE_UNIT", "io.github.ymsaki.t3codejp.service.plist");
 
       yield* Effect.promise(() =>
         expect(runLauncher(root)).rejects.toThrow("Active child exited unexpectedly (0)."),

@@ -108,10 +108,14 @@ describe("electron development launcher", () => {
     const launcherPath = NodePath.join(directory, "launcher");
     try {
       writeDevelopmentLauncherScript(launcherPath, "/runtime/Electron");
-      NodeFS.chmodSync(launcherPath, 0o644);
+      // Read back 0755 because Windows only represents the read-only bit.
+      NodeFS.chmodSync(launcherPath, 0o755);
+      const executableMode = NodeFS.statSync(launcherPath).mode & 0o777;
+      NodeFS.chmodSync(launcherPath, 0o444);
+      assert.notEqual(NodeFS.statSync(launcherPath).mode & 0o777, executableMode);
 
       assert.isFalse(writeDevelopmentLauncherScript(launcherPath, "/runtime/Electron"));
-      assert.equal(NodeFS.statSync(launcherPath).mode & 0o777, 0o755);
+      assert.equal(NodeFS.statSync(launcherPath).mode & 0o777, executableMode);
     } finally {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }

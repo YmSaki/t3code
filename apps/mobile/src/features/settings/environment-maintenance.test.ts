@@ -56,9 +56,11 @@ describe("environment maintenance access", () => {
 
 describe("environment release checks", () => {
   const signal = new AbortController().signal;
-  const feed = (...tags: ReadonlyArray<string>) =>
+  const forkReleases = "https://github.com/YmSaki/t3code/releases";
+  const forkIndex = "https://api.github.com/repos/YmSaki/t3code/releases?per_page=100";
+  const feed = (releasePage: string, ...tags: ReadonlyArray<string>) =>
     new Response(
-      `<feed><id>tag:github.com,2008:https://github.com/pingdotgg/t3code/releases</id>${tags
+      `<feed><id>tag:github.com,2008:${releasePage}</id>${tags
         .map((tag) => `<entry><id>tag:github.com,2008:Repository/1/${tag}</id></entry>`)
         .join("")}</feed>`,
     );
@@ -67,8 +69,9 @@ describe("environment release checks", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) =>
-        url === "https://github.com/pingdotgg/t3code/releases.atom"
+        url === `${forkReleases}.atom`
           ? feed(
+              forkReleases,
               "desktop-preview",
               "v1.0.0-preview.20260924.3",
               "v1.0.0-nightly.20260924.2",
@@ -93,11 +96,11 @@ describe("environment release checks", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
-        if (url === "https://github.com/pingdotgg/t3code/releases.atom") return feed(...nightlies);
-        if (url === "https://api.github.com/repos/pingdotgg/t3code/releases?per_page=100&page=1") {
+        if (url === `${forkReleases}.atom`) return feed(forkReleases, ...nightlies);
+        if (url === `${forkIndex}&page=1`) {
           return Response.json(Array.from({ length: 100 }, () => ({ tag_name: "v2.0.0" })));
         }
-        if (url === "https://api.github.com/repos/pingdotgg/t3code/releases?per_page=100&page=2") {
+        if (url === `${forkIndex}&page=2`) {
           return Response.json([
             { tag_name: "v1.0.0-preview.20260925.1", draft: true },
             { tag_name: "v1.0.0-preview.20260924.3" },
@@ -116,15 +119,36 @@ describe("environment release checks", () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status })));
       await expect(findEnvironmentUpdate("1.0.0", signal)).rejects.toThrow(String(status));
     }
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) =>
-        url.endsWith(".atom") ? feed("v1.0.0") : Response.json([{ tag_name: "v1.0.0" }]),
-      ),
-    );
+    const upstreamReleases = "https://github.com/pingdotgg/t3code/releases";
+    const upstreamNightly = "v1.0.0-nightly.20260924.2";
+    const fetchRelease = vi.fn(async (url: string) => {
+      switch (url) {
+        case `${forkReleases}/latest`:
+          return new Response(null, { status: 404 });
+        case `${forkReleases}.atom`:
+          return feed(forkReleases, "v1.0.0");
+        case `${forkIndex}&page=1`:
+          return Response.json([{ tag_name: "v1.0.0" }]);
+        case `${upstreamReleases}/latest`:
+          return Response.json({ tag_name: "v2.0.0" });
+        case `${upstreamReleases}.atom`:
+          return feed(upstreamReleases, upstreamNightly);
+        case "https://api.github.com/repos/pingdotgg/t3code/releases?per_page=100&page=1":
+          return Response.json([{ tag_name: upstreamNightly }]);
+        default:
+          throw new Error(`Unexpected release request: ${url}`);
+      }
+    });
+    vi.stubGlobal("fetch", fetchRelease);
+    await expect(findEnvironmentUpdate("1.0.0", signal)).rejects.toThrow("404");
     await expect(findEnvironmentUpdate("1.0.0-nightly.20260923.1", signal)).rejects.toThrow(
       "No nightly release",
     );
+    expect(fetchRelease.mock.calls.map(([url]) => url)).toEqual([
+      `${forkReleases}/latest`,
+      `${forkReleases}.atom`,
+      `${forkIndex}&page=1`,
+    ]);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ error: "invalid" })));
     await expect(findEnvironmentUpdate("1.0.0", signal)).rejects.toThrow();
   });

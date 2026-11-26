@@ -1,6 +1,7 @@
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import { buildPairingAppLink } from "@t3tools/shared/remote";
 import { AsyncResult, type Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 
@@ -141,7 +142,7 @@ const pullRequestView = {
 };
 
 const pairingUrl = "https://vps.example.com/pair#token=ABC123";
-const pairLink = `t3code://pair?pairingUrl=${encodeURIComponent(pairingUrl)}`;
+const pairLink = buildPairingAppLink(pairingUrl);
 
 function setup() {
   vi.clearAllMocks();
@@ -293,10 +294,7 @@ it("does not spend the pairing token when the user declines", async () => {
   setup();
   const otherPairingUrl = "https://other.example.com/pair#token=XYZ789";
   state.confirm.mockResolvedValueOnce(false);
-  await using _coordinator = await mount(
-    pairLink,
-    `t3code://pair?pairingUrl=${encodeURIComponent(otherPairingUrl)}`,
-  );
+  await using _coordinator = await mount(pairLink, buildPairingAppLink(otherPairingUrl));
   await vi.waitFor(() => expect(state.connectPairing).toHaveBeenCalled());
   expect(state.confirm).toHaveBeenCalledTimes(2);
   expect(state.connectPairing).toHaveBeenCalledExactlyOnceWith({ pairingUrl: otherPairingUrl });
@@ -305,11 +303,7 @@ it("does not spend the pairing token when the user declines", async () => {
 it("skips a repeat of a pairing link that already paired", async () => {
   setup();
   const otherPairingUrl = "https://other.example.com/pair#token=XYZ789";
-  await using _coordinator = await mount(
-    pairLink,
-    pairLink,
-    `t3code://pair?pairingUrl=${encodeURIComponent(otherPairingUrl)}`,
-  );
+  await using _coordinator = await mount(pairLink, pairLink, buildPairingAppLink(otherPairingUrl));
   await vi.waitFor(() =>
     expect(state.connectPairing).toHaveBeenLastCalledWith({ pairingUrl: otherPairingUrl }),
   );

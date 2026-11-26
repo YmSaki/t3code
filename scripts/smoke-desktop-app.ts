@@ -7,6 +7,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeTimersPromises from "node:timers/promises";
 import * as NodeUtil from "node:util";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { _electron, type ElectronApplication } from "playwright-core";
 
 // A snapshot from an older build on purpose: the packaged server must migrate it forward, as it
@@ -30,14 +31,41 @@ if (!executable)
     "Usage: smoke-desktop-app.ts --executable <app> [--app <dir>] [--artifacts-dir <dir>]",
   );
 const artifactsDir = NodePath.resolve(values["artifacts-dir"] ?? "desktop-launch-check");
+NodeFS.mkdirSync(artifactsDir, { recursive: true });
 
 const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-desktop-launch-"));
 const t3Home = NodePath.join(home, "t3");
-NodeFS.mkdirSync(NodePath.join(t3Home, "userdata"), { recursive: true });
-NodeFS.copyFileSync(FIXTURE_DB, NodePath.join(t3Home, "userdata/statev2.sqlite"));
+const stateDir = NodePath.join(t3Home, "userdata");
+NodeFS.mkdirSync(stateDir, { recursive: true });
+NodeFS.copyFileSync(FIXTURE_DB, NodePath.join(stateDir, "statev2.sqlite"));
+// Model an upgrade so first launch does not register the fixture launcher on the user's PATH.
+NodeFS.writeFileSync(NodePath.join(stateDir, "desktop-settings.json"), "{}\n");
 
 let step = "launching the app";
 let app: ElectronApplication | undefined;
+const stdout: Buffer[] = [];
+const stderr: Buffer[] = [];
+
+function writeFailureArtifacts(error: unknown) {
+  const failure = `Desktop launch check failed while ${step}.`;
+  console.error(failure);
+  console.error(error instanceof Error ? error.message : error);
+  NodeFS.writeFileSync(
+    NodePath.join(artifactsDir, "failure.txt"),
+    `${failure}\n${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
+  NodeFS.writeFileSync(
+    NodePath.join(artifactsDir, "electron-main.stdout.log"),
+    Buffer.concat(stdout),
+  );
+  NodeFS.writeFileSync(
+    NodePath.join(artifactsDir, "electron-main.stderr.log"),
+    Buffer.concat(stderr),
+  );
+}
+
+// Playwright can reject an internal promise before returning a launch error.
+process.once("uncaughtExceptionMonitor", writeFailureArtifacts);
 try {
   app = await _electron.launch({
     executablePath: executable,
@@ -47,6 +75,12 @@ try {
     // main process on a keychain dialog. macOS keeps its Electron profile in the runner's HOME.
     env: {
       ...process.env,
+      ...(HostProcess.Platform.defaultValue() === "win32"
+        ? {
+            APPDATA: NodePath.join(home, "AppData", "Roaming"),
+            LOCALAPPDATA: NodePath.join(home, "AppData", "Local"),
+          }
+        : {}),
       XDG_CONFIG_HOME: NodePath.join(home, ".config"),
       XDG_DATA_HOME: NodePath.join(home, ".local/share"),
       T3CODE_HOME: t3Home,
@@ -55,6 +89,9 @@ try {
     },
     timeout: STEP_TIMEOUT_MS,
   });
+  const child = app.process();
+  child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
+  child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
   // A backend that never starts leaves no window, or only the "could not start" window, so the
   // thread wait below fails either way and its screenshot shows the startup error.
   step = "waiting for the first window";
@@ -67,17 +104,15 @@ try {
     await thread.click();
     await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
   } catch (error) {
-    NodeFS.mkdirSync(artifactsDir, { recursive: true });
     await page
       .screenshot({ path: NodePath.join(artifactsDir, "window.png"), timeout: 10_000 })
       .catch(() => {});
     throw error;
   }
   console.log("Desktop launch check passed: the app opened and showed the seeded thread.");
+  await page.screenshot({ path: NodePath.join(artifactsDir, "window.png") });
 } catch (error) {
-  console.error(`Desktop launch check failed while ${step}.`);
-  NodeFS.mkdirSync(artifactsDir, { recursive: true });
-  console.error(error instanceof Error ? error.message : error);
+  writeFailureArtifacts(error);
   const logs = NodePath.join(t3Home, "userdata/logs");
   if (NodeFS.existsSync(logs)) {
     NodeFS.cpSync(logs, NodePath.join(artifactsDir, "logs"), { recursive: true });
@@ -89,6 +124,7 @@ try {
   }
   process.exitCode = 1;
 } finally {
+  process.off("uncaughtExceptionMonitor", writeFailureArtifacts);
   if (app) {
     // A hung app never finishes closing; kill it so the job does not wait for its timeout.
     // Playwright drops the process handle once the app closes, so read it first.

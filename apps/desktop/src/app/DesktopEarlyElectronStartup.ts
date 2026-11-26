@@ -1,3 +1,4 @@
+import { DESKTOP_APP_ID } from "@t3tools/shared/productIdentity";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -31,7 +32,7 @@ export interface EarlyLinuxElectronOptions {
 }
 
 export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
-  isDevelopment ? "com.t3tools.T3Code.Development.desktop" : "com.t3tools.T3Code.desktop";
+  `${DESKTOP_APP_ID}${isDevelopment ? ".dev" : ""}.desktop`;
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();
@@ -55,6 +56,7 @@ function resolveEarlyDesktopSettingsPath(input: {
 }): string {
   const t3Home = Option.fromUndefinedOr(input.env.T3CODE_HOME);
   const baseDir = resolveDesktopBaseDir({
+    isDevelopment: isDevelopmentEnvironment(input.env),
     homeDirectory: input.homeDirectory,
     joinPath: input.joinPath,
     t3Home,
