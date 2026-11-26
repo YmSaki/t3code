@@ -574,6 +574,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "linux.desktop.entry.StartupWMClass",
         "io.github.ymsaki.t3codejp",
       );
+      assert.nestedPropertyVal(linux, "linux.syncDesktopName", true);
+      assert.nestedPropertyVal(
+        linux,
+        "extraMetadata.desktopName",
+        "io.github.ymsaki.t3codejp.desktop",
+      );
       assert.deepEqual(
         (linux.linux as { protocols: Array<{ schemes: string[] }> }).protocols[0]?.schemes,
         ["t3codejp"],
