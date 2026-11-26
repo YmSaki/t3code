@@ -7,6 +7,7 @@ import * as Ref from "effect/Ref";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as HttpClient from "effect/http/HttpClient";
 import type * as Electron from "electron";
 import { msg } from "gt-i18n";
 
@@ -182,6 +183,7 @@ export const listen: Effect.Effect<
   | ElectronTheme.ElectronTheme
   | ElectronWindow.ElectronWindow
   | FileSystem.FileSystem
+  | HttpClient.HttpClient
   | Scope.Scope
 > = Effect.gen(function* () {
   const { primaryBackendStartup, quitting } = yield* DesktopState.DesktopState;
@@ -192,6 +194,7 @@ export const listen: Effect.Effect<
   const electronTheme = yield* ElectronTheme.ElectronTheme;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const fileSystem = yield* FileSystem.FileSystem;
+  const httpClient = yield* HttpClient.HttpClient;
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
 
   const lastStartedVersionPath = environment.path.join(
@@ -257,9 +260,15 @@ export const listen: Effect.Effect<
       }
       case "reinstall":
         if (current._tag === "Reinstall") {
-          yield* electronShell.openExternal(
-            `${CLI_RELEASES_PAGE_URL}/tag/v${encodeURIComponent(current.version)}`,
+          const releaseUrl = `${CLI_RELEASES_PAGE_URL}/tag/v${encodeURIComponent(current.version)}`;
+          const destination = yield* httpClient.head(releaseUrl).pipe(
+            Effect.map((response) =>
+              response.status === 200 ? releaseUrl : CLI_RELEASES_PAGE_URL,
+            ),
+            Effect.timeout("3 seconds"),
+            Effect.orElseSucceed(() => CLI_RELEASES_PAGE_URL),
           );
+          yield* electronShell.openExternal(destination);
         }
         return;
       case "releases":
