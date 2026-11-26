@@ -451,9 +451,11 @@ try {
   NodeAssert.notEqual(oldApp.bundleId, official.bundleId);
   NodeAssert.ok(oldApp.schemes.includes("t3codejp"));
   NodeAssert.deepEqual(
-    oldApp.schemes.filter((scheme) => official.schemes.includes(scheme)),
+    oldApp.schemes.filter(
+      (scheme) => scheme !== "http" && scheme !== "https" && official.schemes.includes(scheme),
+    ),
     [],
-    "Official and fork protocol schemes must not overlap",
+    "Official and fork custom protocol schemes must not overlap",
   );
   const fresh = native("fresh", oldApp, forkHome, ["--fresh"]);
   NodeAssert.notEqual(fresh.profile, officialResult.profile);
@@ -530,7 +532,7 @@ try {
     upstreamPreserved: true,
     defaultHomesSeparated: true,
     profilesSeparated: true,
-    protocolSchemesSeparated: true,
+    customProtocolSchemesSeparated: true,
     migrationPreserved: true,
     dmgReplacementPreserved: true,
     customHomePreserved: true,
