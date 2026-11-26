@@ -2998,6 +2998,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "win") {
+    // Windows locks the executable while generating bytecode; edit its resources first.
+    buildConfig.afterSign = buildConfig.afterPack;
+    delete buildConfig.afterPack;
     buildConfig.npmRebuild = false;
     buildConfig.nsis = {
       differentialPackage: true,
