@@ -114,7 +114,11 @@ const recordTwentyEvents = Effect.gen(function* () {
   }
 });
 
-const analyticsLayerWith = (client: HttpClient.HttpClient, policy?: ManagedPolicyDocument) =>
+const analyticsLayerWith = (
+  client: HttpClient.HttpClient,
+  policy?: ManagedPolicyDocument,
+  env?: Readonly<Record<string, string>>,
+) =>
   AnalyticsService.layer.pipe(
     Layer.provideMerge(
       ServerConfig.ServerConfig.layerTest(process.cwd(), { prefix: "t3-telemetry-retry-" }),
@@ -125,6 +129,7 @@ const analyticsLayerWith = (client: HttpClient.HttpClient, policy?: ManagedPolic
           T3CODE_TELEMETRY_ENABLED: true,
           T3CODE_POSTHOG_KEY: "phc_test_key",
           T3CODE_POSTHOG_HOST: "http://localhost",
+          ...env,
         }),
       ),
     ),
@@ -269,6 +274,30 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
         });
         assert.deepEqual(denied, []);
       }),
+  );
+
+  it.effect("reports WSL as a boolean without the user-defined distro name", () =>
+    Effect.gen(function* () {
+      const bodies: Array<string> = [];
+      const client = HttpClient.make((request) => {
+        if (request.body._tag === "Uint8Array") {
+          bodies.push(new TextDecoder().decode(request.body.body));
+        }
+        return respondWithStatus(204)(request);
+      });
+      yield* Effect.gen(function* () {
+        const analytics = yield* AnalyticsService.AnalyticsService;
+        yield* analytics.record("test.wsl");
+        yield* analytics.flush;
+      }).pipe(
+        Effect.provide(
+          analyticsLayerWith(client, undefined, { WSL_DISTRO_NAME: "acme-secret-distro" }),
+        ),
+      );
+      assert.equal(bodies.length, 1);
+      assert.notInclude(bodies[0], "acme-secret-distro");
+      assert.include(bodies[0], '"wsl":true');
+    }),
   );
 
   it.effect("drops a batch the endpoint rejects without sending it again", () =>

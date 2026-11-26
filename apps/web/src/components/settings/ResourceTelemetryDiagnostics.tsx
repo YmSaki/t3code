@@ -83,13 +83,6 @@ function formatDurationMicros(value: number): string {
   return `${(value / 1_000_000).toFixed(2).replace(/\.0+$/, "")} s`;
 }
 
-function formatProcessName(process: Pick<ResourceTelemetryProcess, "command" | "name">): string {
-  if (process.name.trim()) return process.name;
-  const firstToken = process.command.trim().split(/\s+/)[0] ?? process.command;
-  const normalized = firstToken.replace(/^['"]|['"]$/g, "");
-  return normalized.split(/[\\/]/).findLast((segment) => segment.length > 0) ?? normalized;
-}
-
 function categoryLabel(
   category: ResourceTelemetryProcessCategory,
   resolve: MessageResolver = m,
@@ -482,7 +475,7 @@ function ProcessTreeName({
   onToggle: (process: ResourceTelemetryProcess) => void;
 }) {
   const gt = useGT();
-  const name = formatProcessName(process);
+  const name = process.name;
   const hasChildren = process.childPids.length > 0;
   return (
     <div
@@ -511,7 +504,7 @@ function ProcessTreeName({
           render={<span className="min-w-0 truncate font-medium text-foreground">{name}</span>}
         />
         <TooltipPopup side="top" variant="code">
-          {process.command || process.name}
+          {process.command}
         </TooltipPopup>
       </Tooltip>
     </div>
@@ -773,12 +766,12 @@ function HistoryProcessTable({
                     <TooltipTrigger
                       render={
                         <span className="block truncate font-medium text-foreground">
-                          {process.name || process.command}
+                          {process.name}
                         </span>
                       }
                     />
                     <TooltipPopup side="top" variant="code">
-                      {process.command || process.name}
+                      {process.command}
                     </TooltipPopup>
                   </Tooltip>
                 </td>

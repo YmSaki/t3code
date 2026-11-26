@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::ffi::{OsStr, OsString};
 use std::io::{self, BufRead, BufWriter, Write};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
@@ -8,7 +9,7 @@ use sysinfo::{
     MINIMUM_CPU_UPDATE_INTERVAL, Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind,
 };
 
-const PROTOCOL_VERSION: u32 = 3;
+const PROTOCOL_VERSION: u32 = 4;
 const MIN_SAMPLE_INTERVAL_MS: u64 = 250;
 const MAX_SAMPLE_INTERVAL_MS: u64 = 60_000;
 const PROCESS_START_TIME_PRECISION_MS: u64 = 1_000;
@@ -18,7 +19,6 @@ const INPUT_QUEUE_CAPACITY: usize = 64;
 const MAX_HISTORY_RETAINED_ENTRIES: usize = 20_000;
 const MAX_HISTORY_RETAINED_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PROCESS_NAME_BYTES: usize = 1_024;
-const MAX_PROCESS_COMMAND_BYTES: usize = 16 * 1_024;
 const MAX_PROCESS_STATUS_BYTES: usize = 256;
 const HISTORY_CHUNK_SNAPSHOTS: usize = 32;
 const TWO_STAGE_PROCESS_REFRESH: bool = cfg!(any(target_os = "linux", target_os = "macos"));
@@ -133,6 +133,25 @@ enum IoSemantics {
     AllIo,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ElectronType {
+    Renderer,
+    GpuProcess,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProviderHint {
+    Codex,
+    Claude,
+    Cursor,
+    Opencode,
+    Grok,
+    Antigravity,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ProcessSample {
@@ -140,8 +159,9 @@ struct ProcessSample {
     ppid: u32,
     start_time_ms: u64,
     run_time_ms: u64,
-    name: String,
-    command: String,
+    executable_name: Option<String>,
+    electron_type: Option<ElectronType>,
+    provider_hint: Option<ProviderHint>,
     status: String,
     cpu_percent: f32,
     cpu_time_ms: u64,
@@ -173,8 +193,7 @@ struct ProcessTableEvent<'a> {
 impl ProcessSample {
     fn estimated_history_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
-            .saturating_add(self.name.len())
-            .saturating_add(self.command.len())
+            .saturating_add(self.executable_name.as_ref().map_or(0, String::len))
             .saturating_add(self.status.len())
     }
 }
@@ -490,7 +509,7 @@ impl Collector {
             if !tracked.contains(&monitor_pid.as_u32()) {
                 detail_pids.push(monitor_pid);
             }
-            // Detail fields need no baseline. Drop command data and OS handles after each sample.
+            // Detail fields need no baseline. Drop arguments and OS handles after each sample.
             let mut details = System::new();
             details.refresh_processes_specifics(
                 ProcessesToUpdate::Some(&detail_pids),
@@ -527,27 +546,20 @@ impl Collector {
                     return None;
                 }
                 let disk_usage = details.disk_usage();
-                let command = if details.cmd().is_empty() {
-                    process.name().to_string_lossy().into_owned()
-                } else {
-                    details
-                        .cmd()
-                        .iter()
-                        .map(|part| part.to_string_lossy())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                };
+                #[cfg(target_os = "macos")]
+                let executable_name = macos_executable_name(pid);
+                #[cfg(not(target_os = "macos"))]
+                let executable_name = executable_name(details);
+                let provider_hint = provider_hint(executable_name.as_deref(), details.cmd());
 
                 Some(ProcessSample {
                     pid,
                     ppid: process.parent().map(Pid::as_u32).unwrap_or(0),
                     start_time_ms: process.start_time().saturating_mul(1_000),
                     run_time_ms: process.run_time().saturating_mul(1_000),
-                    name: truncate_utf8(
-                        process.name().to_string_lossy().into_owned(),
-                        MAX_PROCESS_NAME_BYTES,
-                    ),
-                    command: truncate_utf8(command, MAX_PROCESS_COMMAND_BYTES),
+                    executable_name,
+                    electron_type: electron_type(details.cmd()),
+                    provider_hint,
                     status: truncate_utf8(
                         format!("{:?}", process.status()),
                         MAX_PROCESS_STATUS_BYTES,
@@ -585,6 +597,98 @@ impl Collector {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn macos_executable_name(pid: u32) -> Option<String> {
+    use std::ffi::{c_int, c_void};
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::Path;
+
+    // sysinfo's KERN_PROCARGS2 path comes from the user stack; proc_pidpath queries the kernel image path.
+    #[link(name = "proc")]
+    unsafe extern "C" {
+        fn proc_pidpath(pid: c_int, buffer: *mut c_void, buffersize: u32) -> c_int;
+    }
+
+    const PROC_PIDPATHINFO_MAXSIZE: usize = 4096;
+    let mut path = [0u8; PROC_PIDPATHINFO_MAXSIZE];
+    let pid = c_int::try_from(pid).ok()?;
+    // SAFETY: the buffer is writable for the supplied size and lives through the call.
+    let len = unsafe { proc_pidpath(pid, path.as_mut_ptr().cast(), path.len() as u32) };
+    let bytes = path.get(..usize::try_from(len).ok()?)?;
+    let name = Path::new(OsStr::from_bytes(bytes)).file_name()?;
+    valid_executable_name(name).map(str::to_owned)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn executable_name(process: &sysinfo::Process) -> Option<String> {
+    #[cfg(windows)]
+    let name = process.name(); // sysinfo takes this from Toolhelp's szExeFile.
+    #[cfg(not(windows))]
+    let name = process.exe()?.file_name()?;
+    valid_executable_name(name).map(str::to_owned)
+}
+
+fn valid_executable_name(name: &OsStr) -> Option<&str> {
+    let name = name.to_str()?;
+    (!name.trim().is_empty()
+        && !matches!(name, "." | "..")
+        && name.len() <= MAX_PROCESS_NAME_BYTES
+        && !name.contains(['/', '\\'])
+        && !name.chars().any(char::is_control))
+    .then_some(name)
+}
+
+fn electron_type(arguments: &[OsString]) -> Option<ElectronType> {
+    let mut detected = None;
+    for argument in arguments.iter().skip(1) {
+        let argument = argument.as_encoded_bytes();
+        if argument.eq_ignore_ascii_case(b"--type=renderer") {
+            return Some(ElectronType::Renderer);
+        }
+        if argument.eq_ignore_ascii_case(b"--type=gpu-process") {
+            detected = Some(ElectronType::GpuProcess);
+        } else if detected.is_none()
+            && argument.len() > b"--type=".len()
+            && argument[..b"--type=".len()].eq_ignore_ascii_case(b"--type=")
+        {
+            detected = Some(ElectronType::Other);
+        }
+    }
+    detected
+}
+
+fn provider_hint(executable_name: Option<&str>, arguments: &[OsString]) -> Option<ProviderHint> {
+    const MARKERS: &[(&[u8], ProviderHint)] = &[
+        (b"codex", ProviderHint::Codex),
+        (b"claude", ProviderHint::Claude),
+        (b"cursor", ProviderHint::Cursor),
+        (b"opencode", ProviderHint::Opencode),
+        (b"grok", ProviderHint::Grok),
+        (b"antigravity", ProviderHint::Antigravity),
+        (b"gemini", ProviderHint::Antigravity),
+    ];
+    let name = executable_name?;
+    let script_runtime = ["node", "node.exe", "bun", "bun.exe", "deno", "deno.exe"]
+        .iter()
+        .any(|runtime| name.eq_ignore_ascii_case(runtime));
+    let contains_marker = |value: &[u8], marker: &[u8]| {
+        value
+            .windows(marker.len())
+            .any(|part| part.eq_ignore_ascii_case(marker))
+    };
+    MARKERS.iter().find_map(|&(marker, provider)| {
+        let matches = if script_runtime {
+            arguments
+                .iter()
+                .skip(1)
+                .any(|argument| contains_marker(argument.as_encoded_bytes(), marker))
+        } else {
+            contains_marker(name.as_bytes(), marker)
+        };
+        matches.then_some(provider)
+    })
+}
+
 // Keep CPU baselines separate. Even a metadata refresh resets Linux process times.
 fn process_discovery_refresh_kind() -> ProcessRefreshKind {
     if TWO_STAGE_PROCESS_REFRESH {
@@ -595,12 +699,15 @@ fn process_discovery_refresh_kind() -> ProcessRefreshKind {
 }
 
 fn process_refresh_kind() -> ProcessRefreshKind {
-    ProcessRefreshKind::nothing()
+    let kind = ProcessRefreshKind::nothing()
         .with_memory()
         .with_cpu()
         .with_disk_usage()
         .with_cmd(UpdateKind::Always)
-        .without_tasks()
+        .without_tasks();
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let kind = kind.with_exe(UpdateKind::Always);
+    kind
 }
 
 /// Name and parent pid from `/proc/<pid>/stat`: `pid (comm) state ppid ...`.
@@ -1010,6 +1117,175 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sample_and_history_omit_positional_arguments() {
+        use std::process::{Command as SpawnCommand, Stdio};
+
+        const MARKER: &str = "T3_TEST_POSITIONAL_SECRET_34";
+        const CHILD_MODE: &str = "T3_RESOURCE_MONITOR_ARGUMENT_FIXTURE";
+        if std::env::var_os(CHILD_MODE).is_some() {
+            eprintln!("fixture-ready");
+            let _ = io::stdin().lock().read_line(&mut String::new());
+            return;
+        }
+
+        let mut child = SpawnCommand::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "tests::sample_and_history_omit_positional_arguments",
+                "--nocapture",
+                "--skip",
+                MARKER,
+            ])
+            .env(CHILD_MODE, "1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("start argument fixture");
+        let stdin = child.stdin.take().expect("fixture stdin");
+        let mut stderr = io::BufReader::new(child.stderr.take().expect("fixture stderr"));
+        let mut ready = String::new();
+        if stderr.read_line(&mut ready).is_err() || !ready.trim_end().ends_with("fixture-ready") {
+            drop(stdin);
+            let _ = child.wait();
+            panic!("argument fixture did not start");
+        }
+
+        let config = CollectorConfig {
+            root_pid: child.id(),
+            sample_interval: None,
+            external_processes: HashMap::new(),
+        };
+        let snapshot = Collector::new().sample(&config, Some("sample".to_owned()));
+        drop(stdin);
+        assert!(child.wait().expect("reap argument fixture").success());
+        assert_eq!(snapshot.processes.len(), 1);
+
+        let mut history = HistoryRecorder::default();
+        history.record(&snapshot);
+        let mut stdout = Vec::new();
+        write_event(&mut stdout, &snapshot).expect("write snapshot");
+        assert!(
+            !String::from_utf8_lossy(&stdout).contains(MARKER),
+            "snapshot exposed a positional argument"
+        );
+        let sample: serde_json::Value = serde_json::from_slice(&stdout).expect("snapshot JSON");
+        let row = &sample["processes"][0];
+        assert!(row["executableName"].is_string());
+        assert!(
+            row.get("electronType")
+                .is_some_and(serde_json::Value::is_null)
+        );
+        assert!(
+            row.get("providerHint")
+                .is_some_and(serde_json::Value::is_null)
+        );
+        assert!(row.get("name").is_none());
+        assert!(row.get("command").is_none());
+        stdout.clear();
+        write_history(
+            &mut stdout,
+            "history",
+            &history.read(60_000, snapshot.sampled_at_unix_ms),
+        )
+        .expect("write history");
+        assert!(
+            !String::from_utf8_lossy(&stdout).contains(MARKER),
+            "history exposed a positional argument"
+        );
+    }
+
+    #[test]
+    fn validates_executable_basenames() {
+        let long_name = "é".repeat(MAX_PROCESS_NAME_BYTES / 2 + 1);
+        for invalid in ["", " ", ".", "..", "a/b", "a\\b", "a\nb", &long_name] {
+            assert_eq!(valid_executable_name(OsStr::new(invalid)), None);
+        }
+        assert_eq!(
+            valid_executable_name(OsStr::new("T3 Code.exe")),
+            Some("T3 Code.exe")
+        );
+        #[cfg(target_os = "macos")]
+        {
+            let current = std::env::current_exe().expect("test executable");
+            assert_eq!(
+                macos_executable_name(std::process::id()).as_deref(),
+                current.file_name().and_then(OsStr::to_str)
+            );
+            assert_eq!(macos_executable_name(i32::MAX as u32), None);
+        }
+    }
+
+    #[test]
+    fn classifies_arguments_as_fixed_hints() {
+        let arguments = |parts: &[&str]| {
+            parts
+                .iter()
+                .copied()
+                .map(OsString::from)
+                .collect::<Vec<_>>()
+        };
+        for (name, parts, expected) in [
+            (
+                Some("NODE.EXE"),
+                &["codex", "@anthropic-ai/CLAUDE-code/cli.js"][..],
+                Some(ProviderHint::Claude),
+            ),
+            (
+                Some("bun"),
+                &["bun", "cursor", "codex"],
+                Some(ProviderHint::Codex),
+            ),
+            (
+                Some("deno"),
+                &["deno", "opencode"],
+                Some(ProviderHint::Opencode),
+            ),
+            (Some("node"), &["node", "grok"], Some(ProviderHint::Grok)),
+            (
+                Some("node"),
+                &["node", "gemini"],
+                Some(ProviderHint::Antigravity),
+            ),
+            (
+                Some("cursor-agent.exe"),
+                &["cursor-agent.exe", "codex"],
+                Some(ProviderHint::Cursor),
+            ),
+            (
+                Some("GEMINI.EXE"),
+                &["gemini.exe", "claude"],
+                Some(ProviderHint::Antigravity),
+            ),
+            (Some("git"), &["git", "claude"], None),
+            (Some("node"), &["claude"], None),
+            (None, &["node", "claude"], None),
+        ] {
+            assert_eq!(provider_hint(name, &arguments(parts)), expected);
+        }
+        for (parts, expected) in [
+            (
+                &["electron", "--type=gpu-process", "--type=renderer"][..],
+                Some(ElectronType::Renderer),
+            ),
+            (
+                &["electron", "--type=utility", "--TYPE=GPU-PROCESS"],
+                Some(ElectronType::GpuProcess),
+            ),
+            (
+                &["electron", "--type=renderer-suffix"],
+                Some(ElectronType::Other),
+            ),
+            (
+                &["--type=renderer", "text --type=renderer", "--type="],
+                None,
+            ),
+        ] {
+            assert_eq!(electron_type(&arguments(parts)), expected);
+        }
+    }
+
+    #[test]
     fn selects_roots_and_all_descendants() {
         let rows = vec![
             (10, 1, 1_000),
@@ -1080,7 +1356,7 @@ mod tests {
             .find(|process| process.pid == config.root_pid)
             .expect("selected process");
 
-        assert!(!process.command.is_empty());
+        assert!(process.executable_name.is_some());
         assert!(process.resident_bytes > 0);
         assert!(process.cpu_percent.is_finite());
     }
@@ -1099,6 +1375,7 @@ mod tests {
         let pid = Pid::from_u32(std::process::id());
         let unselected = collector.system.process(pid).expect("discovered process");
         assert!(unselected.cmd().is_empty());
+        assert!(unselected.exe().is_none());
         assert_eq!(unselected.memory(), 0);
         assert_eq!(unselected.virtual_memory(), 0);
 
@@ -1115,7 +1392,7 @@ mod tests {
             .iter()
             .find(|process| process.pid == pid.as_u32())
             .expect("external process details");
-        assert!(!selected.command.is_empty());
+        assert!(selected.executable_name.is_some());
         assert!(selected.resident_bytes > 0);
         assert!(selected.start_time_ms > 0);
         assert_eq!(
@@ -1145,6 +1422,7 @@ mod tests {
             .process(pid)
             .expect("retained CPU baseline");
         assert!(retained.cmd().is_empty());
+        assert!(retained.exe().is_none());
         assert_eq!(retained.memory(), 0);
         assert_eq!(retained.virtual_memory(), 0);
     }
@@ -1162,9 +1440,10 @@ mod tests {
     #[test]
     fn decodes_protocol_commands() {
         let configure = serde_json::from_str::<Command>(
-            r#"{"version":3,"type":"configure","rootPid":42,"sampleIntervalMs":1000,"externalProcesses":[{"pid":7}]}"#,
+            r#"{"version":4,"type":"configure","rootPid":42,"sampleIntervalMs":1000,"externalProcesses":[{"pid":7}]}"#,
         )
         .expect("configure command");
+        assert_eq!(configure.version(), PROTOCOL_VERSION);
 
         match configure {
             Command::Configure {
@@ -1182,7 +1461,7 @@ mod tests {
         }
 
         let read_history = serde_json::from_str::<Command>(
-            r#"{"version":3,"type":"readHistory","requestId":"history-1","windowMs":60000}"#,
+            r#"{"version":4,"type":"readHistory","requestId":"history-1","windowMs":60000}"#,
         )
         .expect("read history command");
         assert!(matches!(
@@ -1195,7 +1474,7 @@ mod tests {
         ));
 
         let process_table = serde_json::from_str::<Command>(
-            r#"{"version":3,"type":"processTable","requestId":"processes-1"}"#,
+            r#"{"version":4,"type":"processTable","requestId":"processes-1"}"#,
         )
         .expect("process table command");
         assert!(matches!(
@@ -1312,14 +1591,14 @@ mod tests {
     #[test]
     fn bounds_history_by_estimated_process_bytes() {
         let mut history = HistoryRecorder::default();
-        let command = "x".repeat(128);
         let process = ProcessSample {
             pid: 1,
             ppid: 0,
             start_time_ms: 0,
             run_time_ms: 0,
-            name: "process".to_owned(),
-            command,
+            executable_name: Some("x".repeat(128)),
+            electron_type: None,
+            provider_hint: None,
             status: "Run".to_owned(),
             cpu_percent: 0.0,
             cpu_time_ms: 0,
@@ -1462,6 +1741,10 @@ mod tests {
         let refresh_kind = process_refresh_kind();
 
         assert_eq!(refresh_kind.cmd(), UpdateKind::Always);
+        #[cfg(not(any(windows, target_os = "macos")))]
+        assert_eq!(refresh_kind.exe(), UpdateKind::Always);
+        #[cfg(target_os = "macos")]
+        assert_eq!(refresh_kind.exe(), UpdateKind::Never);
         assert!(!refresh_kind.tasks());
         assert!(refresh_kind.cpu());
         assert!(refresh_kind.memory());

@@ -1,4 +1,5 @@
 import {
+  RESOURCE_MONITOR_PROTOCOL_VERSION,
   type DesktopElectronProcessMetric,
   type DesktopHostTelemetrySnapshot,
   type ResourceMonitorProcessSample,
@@ -19,8 +20,9 @@ function processSample(
 ): ResourceMonitorProcessSample {
   return {
     runTimeMs: 1_000,
-    name: `process-${input.pid}`,
-    command: `process-${input.pid}`,
+    executableName: `process-${input.pid}`,
+    electronType: null,
+    providerHint: null,
     status: "Running",
     cpuPercent: 0,
     cpuTimeMs: 0,
@@ -39,7 +41,7 @@ function nativeSnapshot(
   sequence = 1,
 ): ResourceMonitorSnapshotEvent {
   return {
-    version: 3,
+    version: RESOURCE_MONITOR_PROTOCOL_VERSION,
     type: "snapshot",
     sequence,
     sampledAtUnixMs,
@@ -139,13 +141,48 @@ describe("resource telemetry process model", () => {
     expect(result.groups.allT3.processStarts).toBe(5);
   });
 
+  it("keeps executable names with spaces and uses unknown for invalid basenames", () => {
+    const basenames = ["T3 Code.exe", null, "", "  ", "..", "a/b", "a\\b", "a\nb", "é".repeat(513)];
+    const result = merge({
+      native: nativeSnapshot(
+        BASE_TIME_MS,
+        basenames.map((executableName, index) =>
+          processSample({ pid: SERVER_PID + index, ppid: 1, startTimeMs: 1_000, executableName }),
+        ),
+      ),
+    });
+    expect(result.processes.map(({ name, command }) => [name, command])).toEqual([
+      ["T3 Code.exe", "T3 Code.exe"],
+      ...basenames.slice(1).map(() => ["unknown", "unknown"]),
+    ]);
+  });
+
   it("deduplicates Electron metrics and classifies Electron descendants", () => {
     const electronStart = 10_000;
     const result = merge({
       native: nativeSnapshot(BASE_TIME_MS, [
         processSample({ pid: SERVER_PID, ppid: 1, startTimeMs: 1_000 }),
         processSample({ pid: 300, ppid: 1, startTimeMs: electronStart }),
-        processSample({ pid: 301, ppid: 300, startTimeMs: electronStart + 1 }),
+        processSample({
+          pid: 301,
+          ppid: 300,
+          startTimeMs: electronStart + 1,
+          electronType: "renderer",
+        }),
+        processSample({
+          pid: 302,
+          ppid: 300,
+          startTimeMs: electronStart + 1,
+          executableName: "node.exe",
+          electronType: "renderer",
+          providerHint: "claude",
+        }),
+        processSample({
+          pid: 303,
+          ppid: 300,
+          startTimeMs: electronStart + 1,
+          electronType: "gpu-process",
+        }),
       ]),
       desktop: desktopSnapshot(BASE_TIME_MS, [
         electronMetric({
@@ -171,14 +208,27 @@ describe("resource telemetry process model", () => {
       "electron-utility",
     );
     expect(result.processes.find((process) => process.identity.pid === 301)?.depth).toBe(1);
-    expect(result.groups.electron.processCount).toBe(2);
+    expect(result.processes.find((process) => process.identity.pid === 302)).toMatchObject({
+      category: "electron-renderer",
+      command: "node.exe [renderer] [claude]",
+    });
+    expect(result.processes.find((process) => process.identity.pid === 303)?.category).toBe(
+      "electron-gpu",
+    );
+    expect(result.groups.electron.processCount).toBe(4);
   });
 
   it("keeps backend descendants out of desktop totals when Electron launches the server", () => {
     const samples = [
       processSample({ pid: 300, ppid: 1, startTimeMs: 1_000, cpuPercent: 2 }),
       processSample({ pid: SERVER_PID, ppid: 300, startTimeMs: 2_000, cpuPercent: 5 }),
-      processSample({ pid: 200, ppid: SERVER_PID, startTimeMs: 3_000, cpuPercent: 400 }),
+      processSample({
+        pid: 200,
+        ppid: SERVER_PID,
+        startTimeMs: 3_000,
+        cpuPercent: 400,
+        electronType: "renderer",
+      }),
       processSample({ pid: 201, ppid: 200, startTimeMs: 4_000, cpuPercent: 100 }),
       processSample({ pid: 301, ppid: 300, startTimeMs: 3_000, cpuPercent: 3 }),
       processSample({ pid: 900, ppid: SERVER_PID, startTimeMs: 3_000, cpuPercent: 1 }),
@@ -207,9 +257,10 @@ describe("resource telemetry process model", () => {
       desktop,
     });
 
-    expect(result.processes.find((process) => process.identity.pid === 200)?.category).toBe(
-      "server-child",
-    );
+    expect(result.processes.find((process) => process.identity.pid === 200)).toMatchObject({
+      category: "server-child",
+      command: "process-200",
+    });
     expect(result.processes.find((process) => process.identity.pid === 201)?.category).toBe(
       "server-child",
     );
@@ -268,6 +319,8 @@ describe("resource telemetry process model", () => {
           creationTimeMs: 10_000,
           type: "Browser",
           cpuPercent: 50,
+          name: "synthetic metric name",
+          serviceName: "synthetic metric service",
         }),
       ]),
     });
@@ -288,6 +341,10 @@ describe("resource telemetry process model", () => {
       ]),
     });
 
+    expect(first.processes.find((process) => process.identity.pid === 300)).toMatchObject({
+      name: "unknown",
+      command: "unknown [main]",
+    });
     expect(second.processes.find((process) => process.identity.pid === 300)?.cpuTimeMs).toBe(500);
     expect(second.groups.electron.cpuTimeMs).toBe(500);
   });

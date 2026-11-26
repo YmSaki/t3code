@@ -1,14 +1,20 @@
 import { assert, describe, it } from "@effect/vitest";
-import type { ResourceTelemetryProcess, ResourceTelemetrySnapshot } from "@t3tools/contracts";
+import {
+  RESOURCE_MONITOR_PROTOCOL_VERSION,
+  type ResourceTelemetryProcess,
+  type ResourceTelemetrySnapshot,
+} from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Option from "effect/Option";
 import * as References from "effect/References";
 import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "../config.ts";
+import { emptyTelemetryCounters, mergeProcesses } from "./Model.ts";
 import * as ProcessGroupMetrics from "./ProcessGroupMetrics.ts";
 import * as ResourceTelemetry from "./ResourceTelemetry.ts";
 
@@ -33,6 +39,51 @@ const process = (
 
 describe("groupProcesses", () => {
   it("sums each direct child of the server with its whole subtree", () => {
+    const { processes: scriptProcesses } = mergeProcesses({
+      serverPid: 10,
+      sidecarPid: Option.none(),
+      fallbackSampledAtMs: 1_000,
+      nativeSnapshot: Option.some({
+        version: RESOURCE_MONITOR_PROTOCOL_VERSION,
+        type: "snapshot",
+        sequence: 1,
+        sampledAtUnixMs: 1_000,
+        collectionDurationMicros: 250,
+        scannedProcessCount: 2,
+        retainedProcessCount: 2,
+        inaccessibleProcessCount: 0,
+        processes: (
+          [
+            [80, "claude"],
+            [90, null],
+          ] as const
+        ).map(([pid, providerHint]) => ({
+          pid,
+          ppid: 10,
+          startTimeMs: 1,
+          runTimeMs: 999,
+          executableName: "node.exe",
+          electronType: null,
+          providerHint,
+          status: "Running",
+          residentBytes: pid * 1_000,
+          virtualBytes: 0,
+          cpuPercent: pid,
+          cpuTimeMs: 0,
+          ioReadBytes: 0,
+          ioWriteBytes: 0,
+          ioSemantics: "storage",
+        })),
+      }),
+      desktopSnapshot: Option.none(),
+      previous: new Map(),
+      counters: emptyTelemetryCounters(),
+      updatePrevious: true,
+    });
+    assert.deepStrictEqual(
+      scriptProcesses.map((process) => process.command),
+      ["node.exe [claude]", "node.exe"],
+    );
     const totals = groupProcesses([
       process(10, 1, "node", "server"),
       process(11, 10, "t3-resource-mon", "resource-monitor"),
@@ -44,15 +95,8 @@ describe("groupProcesses", () => {
       process(50, 10, "chrome-headless"),
       process(60, 10, "git", "server-child", "git checkout claude/fix"),
       process(70, 99, "orphan"),
-      // An older Claude package runs as a script under node.
-      process(
-        80,
-        10,
-        "node",
-        "server-child",
-        "node /opt/node_modules/@anthropic-ai/claude-code/cli.js",
-      ),
-      process(90, 10, "node", "server-child", "node /srv/tools/report.js"),
+      ...scriptProcesses,
+      process(100, 10, "node", "server-child", "node [claude] report.js"),
     ]);
 
     assert.deepStrictEqual(Object.fromEntries(totals), {
@@ -63,8 +107,7 @@ describe("groupProcesses", () => {
       codex: { residentBytes: 30_000, cpuPercent: 30, count: 1 },
       terminal: { residentBytes: 40_000, cpuPercent: 40, count: 1 },
       browser: { residentBytes: 50_000, cpuPercent: 50, count: 1 },
-      // `git` whose arguments mention claude, a parentless process, and a node script.
-      other: { residentBytes: 220_000, cpuPercent: 220, count: 3 },
+      other: { residentBytes: 320_000, cpuPercent: 320, count: 4 },
     });
   });
 });

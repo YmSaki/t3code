@@ -3291,12 +3291,16 @@
                   "hours": 4,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[PR #78 レビュー待ち] native/resource-monitor v4 固定分類化。",
+                  "note": "[完了] PR #78 マージ済み。native/resource-monitor v4 固定分類化 (#34)。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#34",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
                   }
                 },
                 {
@@ -3321,12 +3325,16 @@
                   "hours": 1,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[PR #45 レビュー待ち] CLEARED_TABLES へ追加。",
+                  "note": "[完了] PR #45 マージ済み。migrate-dev-db Web Push 除外 (#43)。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#43",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
                   }
                 },
                 {
@@ -3594,6 +3602,25 @@
                     "start": "2026-11-25",
                     "end": "2026-12-05"
                   }
+                },
+                {
+                  "id": "9.4.4",
+                  "name": "Windows Codex起動エラー日本語stderr文字化け修正 (#85)",
+                  "qty": 1,
+                  "hours": 3,
+                  "assignee": "AI",
+                  "_deps": [],
+                  "note": "[完了] PR #89 マージ済み (follow-up: P2 BOM)。makeStderrTail で行単位の UTF-8/CP932 デュアルデコード実装 (#85)。",
+                  "_archLayer": "imperative-shell-io",
+                  "_req": "#85",
+                  "plan": {
+                    "start": "2026-11-26",
+                    "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
+                  }
                 }
               ]
             },
@@ -3653,12 +3680,16 @@
                   "hours": 2,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[未着手] イベントサニタイズ。",
+                  "note": "[完了] PR #86 マージ済み。委譲タスク・agent tool のモデル名判定を catalogModelLabel に統一し非公開 Codex モデル名を除外 (#55)。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#55",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
                   }
                 },
                 {
@@ -3668,12 +3699,16 @@
                   "hours": 2,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[未着手] WSL名除去。",
+                  "note": "[完了] PR #87 マージ済み。AnalyticsService の wsl を boolean 化し serverWslDistro を削除 (#56)。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#56",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
                   }
                 },
                 {
@@ -3728,12 +3763,16 @@
                   "hours": 2,
                   "assignee": "AI",
                   "_deps": [],
-                  "note": "[未着手] 例外サニタイズ。",
+                  "note": "[完了] PR #88 マージ済み (follow-up: #90)。traceSafeError でフレーム除去＋型名バリデーション (#60)。",
                   "_archLayer": "imperative-shell-io",
                   "_req": "#60",
                   "plan": {
                     "start": "2026-11-25",
                     "end": "2026-12-05"
+                  },
+                  "actual": {
+                    "start": "2026-11-26",
+                    "end": "2026-11-26"
                   }
                 },
                 {

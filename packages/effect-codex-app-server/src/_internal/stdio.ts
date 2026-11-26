@@ -1,5 +1,6 @@
 import * as NodeUtil from "node:util";
 
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Fiber from "effect/Fiber";
 import * as Effect from "effect/Effect";
@@ -90,18 +91,85 @@ export const stderrExcerpt = (tail: string): string | undefined => {
     : `${excerpt.slice(0, STDERR_EXCERPT_MAX_CHARS - 1)}…`;
 };
 
+interface StderrLineState {
+  readonly utf8Decoder: TextDecoder;
+  readonly fallbackDecoder: TextDecoder;
+  utf8Valid: boolean;
+  utf8Tail: string;
+  fallbackTail: string;
+}
+
+const makeStderrLineState = (platform: NodeJS.Platform): StderrLineState => ({
+  utf8Decoder: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }),
+  fallbackDecoder: new TextDecoder(platform === "win32" ? "shift_jis" : "utf-8", {
+    ignoreBOM: true,
+  }),
+  utf8Valid: true,
+  utf8Tail: "",
+  fallbackTail: "",
+});
+
+const feedStderrLine = (line: StderrLineState, segment: Uint8Array, stream: boolean): void => {
+  if (line.utf8Valid) {
+    try {
+      const decoded = line.utf8Decoder.decode(segment, { stream });
+      if (decoded.length > 0) {
+        line.utf8Tail = appendStderrTail(line.utf8Tail, decoded);
+      }
+    } catch {
+      line.utf8Valid = false;
+    }
+  }
+  const fallbackDecoded = line.fallbackDecoder.decode(segment, { stream });
+  if (fallbackDecoded.length > 0) {
+    line.fallbackTail = appendStderrTail(line.fallbackTail, fallbackDecoded);
+  }
+};
+
 export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
   stderr: ChildProcessSpawner.ChildProcessHandle["stderr"],
 ) {
-  const tail = yield* Ref.make("");
+  const platform = yield* HostProcess.Platform;
+  // Stream each line through dual decoders so output is independent of chunk boundaries.
+  const tail = yield* Ref.make({ text: "", line: makeStderrLineState(platform) });
   const drain = yield* stderr.pipe(
-    Stream.decodeText(),
-    Stream.runForEach((chunk) => Ref.update(tail, (current) => appendStderrTail(current, chunk))),
+    Stream.runForEach((chunk) =>
+      Ref.update(tail, ({ text, line }) => {
+        let start = 0;
+        let currentLine = line;
+        for (let end = chunk.indexOf(0x0a); end !== -1; end = chunk.indexOf(0x0a, start)) {
+          feedStderrLine(currentLine, chunk.subarray(start, end + 1), false);
+          text = appendStderrTail(
+            text,
+            currentLine.utf8Valid ? currentLine.utf8Tail : currentLine.fallbackTail,
+          );
+          currentLine = makeStderrLineState(platform);
+          start = end + 1;
+        }
+        if (start < chunk.length) {
+          feedStderrLine(currentLine, chunk.subarray(start), true);
+        }
+        return { text, line: currentLine };
+      }),
+    ),
+    Effect.andThen(
+      Ref.update(tail, ({ text, line }) => {
+        feedStderrLine(line, new Uint8Array(0), false);
+        return {
+          text: appendStderrTail(text, line.utf8Valid ? line.utf8Tail : line.fallbackTail),
+          line: makeStderrLineState(platform),
+        };
+      }),
+    ),
     Effect.ignore,
     Effect.forkScoped,
   );
   return {
-    read: Ref.get(tail),
+    read: Ref.get(tail).pipe(
+      Effect.map(({ text, line }) =>
+        appendStderrTail(text, line.utf8Valid ? line.utf8Tail : line.fallbackTail),
+      ),
+    ),
     awaitDrained: Fiber.join(drain).pipe(Effect.timeout("250 millis"), Effect.ignore),
   };
 });
