@@ -184,7 +184,8 @@ jobs:
         run: |
           (
             set +e
-            vpr typecheck
+            # Fork runners share their smaller memory budget with the desktop build.
+            vp run -r --cache --concurrency-limit ${{ github.repository == 'pingdotgg/t3code' && 4 || 2 }} typecheck
             status=$?
             if [[ "$status" != 0 ]]; then vp run --last-details; fi
             echo "$status" > "$RUNNER_TEMP/typecheck-status"
