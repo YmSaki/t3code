@@ -19,8 +19,15 @@ on:
           - stable
           - nightly
       version:
-        description: Stable promotion version override (for example 1.2.3)
+        description: Stable version override (for example 1.2.3)
         type: string
+      distribution:
+        description: Build all desktop and CLI targets, or standalone CLI archives only
+        type: choice
+        default: all
+        options:
+          - all
+          - cli
       validate_signing:
         description: Validate signing on a Nightly run from main and keep Actions artifacts only
         type: boolean
@@ -58,6 +65,7 @@ jobs:
       has_update_feed: ${{ steps.plan.outputs.has_update_feed }}
       publish: ${{ steps.plan.outputs.publish }}
       require_signing: ${{ steps.plan.outputs.require_signing }}
+      distribution: ${{ steps.plan.outputs.distribution }}
     steps:
       # actions/checkout's credential cleanup enumerates orphaned submodules in .repos.
       - name: Checkout
@@ -81,6 +89,8 @@ jobs:
           DISPATCH_VERSION: ${{ inputs.version }}
           PAUSE_NIGHTLY: ${{ vars.PAUSE_NIGHTLY }}
           PUBLISH_ENABLED: ${{ vars.T3CODEJP_RELEASE_PUBLISH }}
+          CLI_PUBLISH_ENABLED: ${{ vars.T3CODEJP_CLI_RELEASE_PUBLISH }}
+          DISTRIBUTION: ${{ inputs.distribution || 'all' }}
           VALIDATE_SIGNING: ${{ inputs.validate_signing }}
         with:
           retries: 3
@@ -92,8 +102,10 @@ jobs:
               dispatchChannel: process.env.DISPATCH_CHANNEL || 'preview',
               dispatchVersion: process.env.DISPATCH_VERSION,
               pauseNightly: process.env.PAUSE_NIGHTLY === 'true',
-              publishEnabled: process.env.PUBLISH_ENABLED === 'true',
+              publishEnabled: (process.env.DISTRIBUTION === 'cli'
+                ? process.env.CLI_PUBLISH_ENABLED : process.env.PUBLISH_ENABLED) === 'true',
               validateSigning: process.env.VALIDATE_SIGNING === 'true',
+              distribution: process.env.DISTRIBUTION,
             });
 
             core.setOutput('should_build', plan.shouldBuild);
@@ -114,6 +126,7 @@ jobs:
               has_update_feed: plan.hasUpdateFeed,
               publish: plan.publish,
               require_signing: plan.requireSigning,
+              distribution: plan.distribution,
             })) {
               core.setOutput(key, value);
             }
@@ -299,7 +312,7 @@ jobs:
   desktop:
     name: Desktop ${{ matrix.label }}
     needs: [preflight, build_bundle]
-    if: needs.preflight.outputs.should_build == 'true'
+    if: needs.preflight.outputs.should_build == 'true' && needs.preflight.outputs.distribution == 'all'
     strategy:
       fail-fast: false
       matrix:
@@ -399,14 +412,53 @@ jobs:
       clerk_cli_oauth_client_id: ""
       relay_url: ""
 
+  cli:
+    name: CLI ${{ matrix.platform }} ${{ matrix.arch }}
+    needs: [preflight, build_bundle]
+    if: needs.preflight.outputs.should_build == 'true' && needs.preflight.outputs.distribution == 'cli'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: mac
+            arch: arm64
+            rust_target: aarch64-apple-darwin
+          - runner: ubuntu-24.04
+            platform: linux
+            arch: x64
+            rust_target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            rust_target: aarch64-unknown-linux-gnu
+          - runner: windows-2025
+            platform: win
+            arch: x64
+            rust_target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            platform: win
+            arch: arm64
+            rust_target: aarch64-pc-windows-msvc
+    uses: ./.github/workflows/release-cli.yml
+    with:
+      runner: ${{ matrix.runner }}
+      platform: ${{ matrix.platform }}
+      arch: ${{ matrix.arch }}
+      rust_target: ${{ matrix.rust_target }}
+      ref: ${{ needs.preflight.outputs.ref }}
+      version: ${{ needs.preflight.outputs.version }}
+
   collect:
     name: Validate fork release assets
-    needs: [preflight, build_bundle, quality, desktop]
+    needs: [preflight, build_bundle, quality, desktop, cli]
     if: >-
+      always() && !cancelled() &&
       needs.preflight.outputs.should_build == 'true' &&
       needs.build_bundle.result == 'success' &&
       needs.quality.result == 'success' &&
-      needs.desktop.result == 'success'
+      ((needs.preflight.outputs.distribution == 'all' && needs.desktop.result == 'success') ||
+       (needs.preflight.outputs.distribution == 'cli' && needs.cli.result == 'success'))
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -428,6 +480,7 @@ jobs:
           install-args: --filter=@t3tools/scripts...
 
       - name: Download desktop artifacts separately
+        if: needs.preflight.outputs.distribution == 'all'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: desktop-*
@@ -444,7 +497,8 @@ jobs:
           CHANNEL: ${{ needs.preflight.outputs.release_channel }}
           VERSION: ${{ needs.preflight.outputs.version }}
           DATABASE_MIGRATION: ${{ needs.build_bundle.outputs.database_migration }}
-        run: node .github/scripts/fork-release-assets.cjs release-inputs release-assets "$CHANNEL" "$VERSION" "$DATABASE_MIGRATION"
+          DISTRIBUTION: ${{ needs.preflight.outputs.distribution }}
+        run: node .github/scripts/fork-release-assets.cjs release-inputs release-assets "$CHANNEL" "$VERSION" "$DATABASE_MIGRATION" "$DISTRIBUTION"
 
       - name: Merge desktop updater manifests
         if: needs.preflight.outputs.has_update_feed == 'true'
@@ -520,6 +574,7 @@ jobs:
       github.repository == 'YmSaki/t3codeJP' &&
       needs.preflight.outputs.publish == 'true' &&
       needs.preflight.outputs.release_channel == 'nightly' &&
+      needs.preflight.outputs.has_update_feed == 'true' &&
       needs.publish.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

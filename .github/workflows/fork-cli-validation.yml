@@ -1,0 +1,94 @@
+name: T3CodeJP CLI distribution validation
+
+on:
+  push:
+    branches: [codex/cli-distribution]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-cli-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cli:
+    name: Install and update ${{ matrix.platform }} ${{ matrix.arch }}
+    if: github.repository_id == '1467336330' && github.ref_type == 'branch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: mac
+            arch: arm64
+            rust_target: aarch64-apple-darwin
+          - runner: ubuntu-24.04
+            platform: linux
+            arch: x64
+            rust_target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            rust_target: aarch64-unknown-linux-gnu
+          - runner: windows-2025
+            platform: win
+            arch: x64
+            rust_target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            platform: win
+            arch: arm64
+            rust_target: aarch64-pc-windows-msvc
+    uses: ./.github/workflows/release-cli.yml
+    with:
+      runner: ${{ matrix.runner }}
+      platform: ${{ matrix.platform }}
+      arch: ${{ matrix.arch }}
+      rust_target: ${{ matrix.rust_target }}
+      ref: ${{ github.sha }}
+      version: 1.0.0
+      validate_update: true
+
+  collect:
+    name: Validate complete CLI release
+    needs: cli
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout verified source
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=@t3tools/scripts...
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: cli-*
+          path: release-inputs
+
+      - name: Stage the same complete asset set used by publication
+        shell: bash
+        run: |
+          migration="$(node --input-type=module -e 'import { BUILD_MIGRATION_HEAD } from "./apps/server/src/persistence/databaseMigrationHead.ts"; console.log(BUILD_MIGRATION_HEAD)')"
+          node .github/scripts/fork-release-assets.cjs release-inputs release-assets stable 1.0.1 "$migration" cli
+          (cd release-assets && sha256sum -c SHA256SUMS)
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-release-validation-assets
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

@@ -187,25 +187,35 @@ channel="${T3CODE_CHANNEL:-stable}"
 version="${T3CODE_VERSION:-}"
 if [ -z "$version" ]; then
   case "$channel" in
-    stable) tag_pattern='v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)' ;;
-    nightly | preview) tag_pattern="v\([0-9][^\"]*-${channel}\.[0-9]*\.[0-9]*\)" ;;
+    stable) tag_pattern='^v[0-9]+[.][0-9]+[.][0-9]+$' ;;
+    nightly | preview) tag_pattern="^v[0-9]+[.][0-9]+[.][0-9]+-${channel}[.][0-9]+[.][0-9]+$" ;;
     *) fail "T3CODE_CHANNEL must be stable, nightly, or preview" ;;
   esac
   tmp_index="$(mktemp)"
-  if [ "$channel" = stable ]; then
-    # release.yml marks only plain stable releases latest. This is a github.com
-    # page, so it is not cut off by a page of newer nightlies or the API quota.
-    fetch "https://github.com/${repo}/releases/latest" "$tmp_index" application/json
-    version="$(sed -n "s/.*\"tag_name\": *\"${tag_pattern}\".*/\1/p" "$tmp_index" | head -n 1)"
-  else
-    page=1
-    while [ -z "$version" ] && [ "$page" -le 10 ]; do
-      fetch "https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}" "$tmp_index"
-      version="$(sed -n "s/.*\"tag_name\": *\"${tag_pattern}\".*/\1/p" "$tmp_index" | head -n 1)"
-      grep -q '"tag_name"' "$tmp_index" || break
-      page=$((page + 1))
-    done
-  fi
+  page=1
+  while [ -z "$version" ] && [ "$page" -le 10 ]; do
+    fetch "https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}" "$tmp_index"
+    # GitHub pretty-prints JSON; track release objects so nested fields cannot override them.
+    version="$(awk -v pattern="$tag_pattern" '
+      {
+        if (depth == 1 && $0 ~ /^[[:space:]]*"tag_name"[[:space:]]*:/) {
+          tag = $0
+          sub(/^[^:]*:[[:space:]]*"/, "", tag)
+          sub(/".*$/, "", tag)
+        }
+        if (depth == 1 && $0 ~ /^[[:space:]]*"draft"[[:space:]]*:/) draft = ($0 ~ /:[[:space:]]*true/)
+        line = $0
+        gsub(/"([^"\\]|\\.)*"/, "", line)
+        depth += gsub(/[{]/, "", line) - gsub(/[}]/, "", line)
+        if (depth == 0 && tag != "") {
+          if (!draft && tag ~ pattern) { sub(/^v/, "", tag); print tag; exit }
+          tag = ""; draft = 0
+        }
+      }
+    ' "$tmp_index")"
+    grep -q '"tag_name"' "$tmp_index" || break
+    page=$((page + 1))
+  done
   rm -f "$tmp_index"
   [ -n "$version" ] || fail "could not find a ${channel} release; set T3CODE_VERSION"
 fi

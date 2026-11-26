@@ -137,32 +137,32 @@ test("Nightly stays unsigned and artifact-only when publication is disabled", as
 });
 
 test("CLI-only publication keeps desktop feeds and signing validation separate", async () => {
-  for (const dispatchChannel of ["nightly", "stable"]) {
-    const plan = await fixture({
-      distribution: "cli",
-      dispatchChannel,
-      publishEnabled: true,
-      pages: [[release("v1.0.0-nightly.20261124.10")]],
-    }).run();
-    assert.equal(plan.distribution, "cli");
-    assert.equal(plan.publish, true);
-    assert.equal(plan.requireSigning, false);
-    assert.equal(plan.hasUpdateFeed, false);
-    assert.equal(plan.makeLatest, false);
-    assert.match(plan.name, /^T3CodeJP CLI /);
-  }
+  const plan = await fixture({
+    distribution: "cli",
+    dispatchChannel: "stable",
+    publishEnabled: true,
+  }).run();
+  assert.equal(plan.distribution, "cli");
+  assert.equal(plan.publish, true);
+  assert.equal(plan.requireSigning, false);
+  assert.equal(plan.hasUpdateFeed, false);
+  assert.equal(plan.makeLatest, false);
+  assert.match(plan.name, /^T3CodeJP CLI /);
+  assert.equal(plan.ref, candidate);
+  assert.equal(plan.version, "1.0.0");
   for (const options of [
     { distribution: "unknown" },
     { distribution: "cli", context: { eventName: "schedule" } },
     { distribution: "cli", dispatchChannel: "nightly", validateSigning: true },
-    { distribution: "cli", dispatchChannel: "nightly", context: { ref: "refs/heads/feature" } },
+    { distribution: "cli", dispatchChannel: "nightly" },
+    { distribution: "cli", dispatchChannel: "stable", context: { ref: "refs/heads/feature" } },
   ]) {
     const { run, reads } = fixture(options);
     await assert.rejects(run, /distribution|CLI-only|must be dispatched from main/);
     assert.deepEqual(reads, []);
   }
   assert.equal(
-    (await fixture({ distribution: "cli", dispatchChannel: "nightly" }).run()).publish,
+    (await fixture({ distribution: "cli", dispatchChannel: "stable" }).run()).publish,
     false,
   );
 });

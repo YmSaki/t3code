@@ -83,74 +83,106 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer home
 });
 
 // regression: #22490
-describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer channel lookup", () => {
-  it.each([
-    // regression: #32897
-    ["stable", "1.2.3", 1],
-    ["preview", "1.2.4-preview.20261019.50", 0],
-  ])("finds %s %s behind nightlies and %i HTTP 504s", async (channel, version, failures) => {
-    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-index-"));
-    const target = NodePath.join(root, "home/runtime/versions", version);
-    const server = NodeHttp.createServer((request, response) => {
-      if (failures-- > 0) return response.writeHead(504).end();
-      const url = new URL(request.url ?? "/", "http://fixture");
-      const body =
-        url.pathname === "/YmSaki/t3codeJP/releases/latest" &&
-        request.headers.accept === "application/json"
-          ? { tag_name: "v1.2.3" }
-          : url.pathname === "/repos/YmSaki/t3codeJP/releases"
-            ? { "1": nightlies, "2": [{ tag_name: `v${version}` }, { tag_name: "v1.2.3" }] }[
-                url.searchParams.get("page") ?? ""
-              ]
-            : undefined;
-      if (body === undefined) response.statusCode = 404;
-      // The API pretty-prints and the installer reads it line by line.
-      response.end(JSON.stringify(body ?? [], null, 2));
+describe.skipIf(!["linux", "win32"].includes(HostProcess.Platform.defaultValue()))(
+  "installer channel lookup",
+  () => {
+    it.each([
+      // regression: #32897
+      ["stable", "1.2.4", 1],
+      ["nightly", "1.2.4-nightly.20261020.201", 0],
+      ["preview", "1.2.4-preview.20261019.50", 0],
+    ])("finds %s %s behind other channels and %i HTTP 504s", async (channel, version, failures) => {
+      const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-index-"));
+      const target = NodePath.join(root, "home/runtime/versions", version);
+      const requests: string[] = [];
+      const server = NodeHttp.createServer((request, response) => {
+        if (failures-- > 0) return response.writeHead(504).end();
+        const url = new URL(request.url ?? "/", "http://fixture");
+        requests.push(request.url ?? "");
+        const body =
+          url.pathname === "/YmSaki/t3codeJP/releases/latest" &&
+          request.headers.accept === "application/json"
+            ? { tag_name: "v1.2.3" }
+            : url.pathname === "/repos/YmSaki/t3codeJP/releases"
+              ? {
+                  "1":
+                    channel === "nightly"
+                      ? nightlies.map((release) => ({
+                          tag_name: release.tag_name.replace("nightly", "preview"),
+                        }))
+                      : nightlies,
+                  "2": [
+                    { tag_name: `v${version.replace("1.2.4", "1.2.5")}`, draft: true },
+                    { tag_name: `v${version}`, draft: false, prerelease: channel !== "stable" },
+                    { tag_name: "v1.2.3" },
+                  ],
+                }[url.searchParams.get("page") ?? ""]
+              : undefined;
+        if (body === undefined) response.statusCode = 404;
+        // The API pretty-prints and the installer reads it line by line.
+        response.end(JSON.stringify(body ?? [], null, 2));
+      });
+      try {
+        // An existing completed install isolates release resolution from archive downloads.
+        await NodeFSP.mkdir(target, { recursive: true });
+        await NodeFSP.writeFile(NodePath.join(target, ".install-complete"), `${version}\n`);
+        await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+        const address = server.address();
+        if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
+        const origin = `http://127.0.0.1:${address.port}`;
+        const script =
+          HostProcess.Platform.defaultValue() === "win32" ? "install.ps1" : "install.sh";
+        const source = await NodeFSP.readFile(
+          NodePath.resolve(import.meta.dirname, script),
+          "utf8",
+        );
+        const installer = NodePath.join(root, script);
+        await NodeFSP.writeFile(
+          installer,
+          source.replace(/https:\/\/(api\.)?github\.com/g, origin),
+        );
+        const { code, output } = await new Promise<{ code: number | null; output: string }>(
+          (resolve, reject) => {
+            const [command, args] =
+              script === "install.sh"
+                ? ["sh", [installer]]
+                : [
+                    "powershell.exe",
+                    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer],
+                  ];
+            const child = NodeChildProcess.spawn(command, args, {
+              env: {
+                ...process.env,
+                T3CODE_VERSION: "",
+                T3CODE_CHANNEL: channel,
+                T3CODE_HOME: NodePath.join(root, "home"),
+                T3CODE_INSTALL_BIN_DIR: NodePath.join(root, "bin"),
+                // A wrong version must fail here instead of downloading a real release.
+                T3CODE_RELEASE_BASE_URL: origin,
+              },
+              stdio: ["ignore", "pipe", "pipe"],
+            });
+            let output = "";
+            child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
+            child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
+            child.on("error", reject);
+            child.on("close", (code) => resolve({ code, output }));
+          },
+        );
+        expect(code, output).toBe(0);
+        expect(output).toContain(`Installed T3CodeJP ${version}`);
+        expect(requests).toEqual([
+          "/repos/YmSaki/t3codeJP/releases?per_page=100&page=1",
+          "/repos/YmSaki/t3codeJP/releases?per_page=100&page=2",
+        ]);
+      } finally {
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        await NodeFSP.rm(root, { recursive: true, force: true });
+      }
     });
-    try {
-      // An existing completed install isolates release resolution from archive downloads.
-      await NodeFSP.mkdir(target, { recursive: true });
-      await NodeFSP.writeFile(NodePath.join(target, ".install-complete"), `${version}\n`);
-      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-      const address = server.address();
-      if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
-      const origin = `http://127.0.0.1:${address.port}`;
-      const source = await NodeFSP.readFile(
-        NodePath.resolve(import.meta.dirname, "install.sh"),
-        "utf8",
-      );
-      const installer = NodePath.join(root, "install.sh");
-      await NodeFSP.writeFile(installer, source.replace(/https:\/\/(api\.)?github\.com/g, origin));
-      const { code, output } = await new Promise<{ code: number | null; output: string }>(
-        (resolve, reject) => {
-          const child = NodeChildProcess.spawn("sh", [installer], {
-            env: {
-              ...process.env,
-              T3CODE_VERSION: "",
-              T3CODE_CHANNEL: channel,
-              T3CODE_HOME: NodePath.join(root, "home"),
-              T3CODE_INSTALL_BIN_DIR: NodePath.join(root, "bin"),
-              // A wrong version must fail here instead of downloading a real release.
-              T3CODE_RELEASE_BASE_URL: origin,
-            },
-            stdio: ["ignore", "pipe", "pipe"],
-          });
-          let output = "";
-          child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
-          child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
-          child.on("error", reject);
-          child.on("close", (code) => resolve({ code, output }));
-        },
-      );
-      expect(code, output).toBe(0);
-      expect(output).toContain(`Installed T3CodeJP ${version}`);
-    } finally {
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-      await NodeFSP.rm(root, { recursive: true, force: true });
-    }
-  });
-});
+  },
+);
 
 describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
   "installer archive download",

@@ -165,7 +165,9 @@ async function stageForkReleaseAssets({
   channel,
   version,
   databaseMigration,
+  distribution = "all",
 }) {
+  if (!["all", "cli"].includes(distribution)) throw new Error("Invalid release distribution.");
   if (!["stable", "nightly", "preview"].includes(channel))
     throw new Error("Invalid release channel.");
   const base = "[1-9]\\d*\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)";
@@ -175,6 +177,15 @@ async function stageForkReleaseAssets({
   if (!Number.isSafeInteger(databaseMigration) || databaseMigration < 0) {
     throw new Error("Expected a non-negative database migration ID.");
   }
+  if (distribution === "cli") {
+    const artifacts = new Set(
+      TARGETS.filter((target) => target.cliKey).map((target) => "cli-" + target.platform),
+    );
+    for (const name of readdirSync(inputDir)) {
+      if (!artifacts.has(name))
+        throw new Error("Unexpected artifact " + name + " in cli distribution.");
+    }
+  }
 
   const files = new Map();
   const cliArchives = [];
@@ -183,8 +194,10 @@ async function stageForkReleaseAssets({
     files.set(name, join(inputDir, artifact, name));
   };
   for (const target of TARGETS) {
-    for (const name of await desktopFiles(inputDir, target, version, channel)) {
-      add("desktop-" + target.platform, name);
+    if (distribution === "all") {
+      for (const name of await desktopFiles(inputDir, target, version, channel)) {
+        add("desktop-" + target.platform, name);
+      }
     }
     if (target.cliKey) {
       const artifact = "cli-" + target.platform;
@@ -211,10 +224,10 @@ async function stageForkReleaseAssets({
 }
 
 if (require.main === module) {
-  const [, , inputDir, outputDir, channel, version, migration] = process.argv;
+  const [, , inputDir, outputDir, channel, version, migration, distribution = "all"] = process.argv;
   if (!inputDir || !outputDir || !channel || !version || !/^\d+$/.test(migration)) {
     console.error(
-      "Usage: fork-release-assets.cjs <input-dir> <output-dir> <channel> <version> <database-migration>",
+      "Usage: fork-release-assets.cjs <input-dir> <output-dir> <channel> <version> <database-migration> [all|cli]",
     );
     process.exitCode = 1;
   } else {
@@ -224,6 +237,7 @@ if (require.main === module) {
       channel,
       version,
       databaseMigration: Number(migration),
+      distribution,
     }).catch((error) => {
       console.error(error.message);
       process.exitCode = 1;

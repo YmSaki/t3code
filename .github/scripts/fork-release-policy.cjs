@@ -170,6 +170,11 @@ async function planForkRelease({
   }
 
   const channel = releaseChannel(context.eventName, dispatchChannel);
+  if (cliOnly && channel === "nightly") {
+    throw new Error(
+      "CLI-only Nightly publication would overlap the desktop Nightly feed; use Stable or Preview.",
+    );
+  }
   const scheduled = context.eventName === "schedule";
   if (validateSigning && (context.eventName !== "workflow_dispatch" || channel !== "nightly")) {
     throw new Error("Signing validation requires a manual Nightly run from main.");
@@ -205,7 +210,9 @@ async function planForkRelease({
   let version;
   if (channel === "stable") {
     let target = requestedStable;
-    if (!pushedTag) {
+    if (cliOnly) {
+      target ??= requireStableVersion(nextStableVersion(latestStable));
+    } else if (!pushedTag) {
       if (!latestNightly) throw new Error("No published fork Nightly is available to promote.");
       target ??= requireStableVersion(latestNightly.version);
       const { data } = await github.rest.repos.getCommit({
