@@ -29,7 +29,6 @@ case "$t3_home" in
     ;;
 esac
 bin_dir="${T3CODE_INSTALL_BIN_DIR:-$t3_home/cli-bin}"
-while [ "${base_url%/}" != "$base_url" ]; do base_url="${base_url%/}"; done
 # Trailing slashes would put `//` in the paths the t3 command guard compares.
 while [ "${t3_home%/}" != "$t3_home" ] && [ "$t3_home" != / ]; do t3_home="${t3_home%/}"; done
 while [ "${bin_dir%/}" != "$bin_dir" ] && [ "$bin_dir" != / ]; do bin_dir="${bin_dir%/}"; done
@@ -39,6 +38,13 @@ case "$bin_dir" in /*) ;; *) bin_dir="$PWD/$bin_dir" ;; esac
 fail() {
   printf '\nt3 install: %s\n' "$1" >&2
   exit 1
+}
+
+release_asset_url() {
+  asset_base=${base_url%%[?#]*}
+  asset_suffix=${base_url#"$asset_base"}
+  while [ "${asset_base%/}" != "$asset_base" ]; do asset_base=${asset_base%/}; done
+  printf '%s/v%s/%s%s' "$asset_base" "$version" "$1" "$asset_suffix"
 }
 
 # ANSI stays on stderr, so `curl ... | sh` still gets progress.
@@ -241,7 +247,7 @@ else
   printf '  %sInstalling%s T3 Code %s%s%s\n\n' "$muted" "$reset" "$bold" "$version" "$reset" >&2
   step "Downloading..."
   fetch_status=0
-  fetch "${base_url}/v${version}/SHA256SUMS" "${staging}/SHA256SUMS" || fetch_status=$?
+  fetch "$(release_asset_url SHA256SUMS)" "${staging}/SHA256SUMS" || fetch_status=$?
   if [ "$fetch_status" -eq 44 ]; then
     fail "t3 ${version} has no release archive for ${platform}-${arch}"
   elif [ "$fetch_status" -ne 0 ]; then
@@ -249,7 +255,7 @@ else
   fi
   expected="$(grep " \*\{0,1\}${archive}\$" "${staging}/SHA256SUMS" | cut -d' ' -f1)"
   [ -n "$expected" ] || fail "t3 ${version} has no release archive for ${platform}-${arch}"
-  download "${base_url}/v${version}/${archive}" "${staging}/${archive}" || fail "could not download ${archive}"
+  download "$(release_asset_url "$archive")" "${staging}/${archive}" || fail "could not download ${archive}"
 
   step "Verifying the download..."
   actual="$(checksum "${staging}/${archive}")"
