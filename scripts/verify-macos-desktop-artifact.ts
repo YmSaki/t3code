@@ -7,7 +7,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeTimersPromises from "node:timers/promises";
 import * as NodeUtil from "node:util";
-import { _electron, type ElectronApplication, type Page } from "playwright-core";
+import { _electron, type ElectronApplication, type Locator, type Page } from "playwright-core";
 
 const { values } = NodeUtil.parseArgs({
   options: {
@@ -105,7 +105,10 @@ async function mainWindow(application: ElectronApplication) {
   }
 }
 
-function observeFixtureMessage(element: Element, expected: string) {
+function observePaintedContent(
+  element: Element,
+  { expected, viewportSelector }: { expected: string; viewportSelector: string },
+) {
   let intersectionVisible = false;
   let armed = false;
   const ready = Promise.withResolvers<ReturnType<typeof snapshot>>();
@@ -114,7 +117,7 @@ function observeFixtureMessage(element: Element, expected: string) {
   let invalidated: ReturnType<typeof snapshot> | null = null;
   const box = (rect: DOMRect) => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
   function snapshot() {
-    const viewport = element.closest(".messages-timeline-scroll");
+    const viewport = element.closest(viewportSelector);
     const viewportRect = viewport?.getBoundingClientRect();
     const clip = {
       left: Math.max(0, viewportRect?.left ?? 0),
@@ -240,18 +243,78 @@ function observeFixtureMessage(element: Element, expected: string) {
     "abort",
     () => {
       dispose();
-      ready.reject(new Error("Fixture message never became visible in the real chat viewport."));
+      ready.reject(new Error("Expected UI content never became visible in its viewport."));
     },
     { once: true },
   );
   return { ready: ready.promise, snapshot, invalidated: () => invalidated, dispose };
 }
 
+const capturePaintedContent = async (
+  target: Page,
+  content: Locator,
+  expected: string,
+  viewportSelector: string,
+  failureLabel: string,
+) => {
+  await target.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  const observation = await content.evaluateHandle(observePaintedContent, {
+    expected,
+    viewportSelector,
+  });
+  try {
+    const before = await observation.evaluate((monitor) => monitor.ready);
+    NodeFS.writeFileSync(
+      NodePath.join(outputDir, "ui-before.json"),
+      JSON.stringify(before, null, 2),
+    );
+    await target.screenshot({ path: NodePath.join(outputDir, "window.png"), timeout: 10_000 });
+    const after = await observation.evaluate((monitor) => ({
+      current: monitor.snapshot(),
+      invalidated: monitor.invalidated(),
+    }));
+    NodeFS.writeFileSync(NodePath.join(outputDir, "ui-after.json"), JSON.stringify(after, null, 2));
+    NodeAssert.equal(
+      after.current.documentId,
+      before.documentId,
+      "The document reloaded during capture.",
+    );
+    NodeAssert.equal(
+      after.current.visible,
+      true,
+      "Expected UI content is not visible in the captured viewport.",
+    );
+    NodeAssert.equal(
+      after.invalidated,
+      null,
+      "Expected UI content stopped being visible during capture.",
+    );
+  } catch (error) {
+    const state = await observation.evaluate((monitor) => monitor.snapshot()).catch(() => null);
+    NodeFS.writeFileSync(
+      NodePath.join(outputDir, `${failureLabel}.json`),
+      JSON.stringify(state, null, 2),
+    );
+    throw error;
+  } finally {
+    await observation.evaluate((monitor) => monitor.dispose()).catch(() => {});
+    await observation.dispose();
+  }
+};
+
 const recordUiEvidence = async (target: Page, label: string) => {
   const state = await target.evaluate(
     ({ selector, expected }) => ({
       documentId: performance.timeOrigin,
       visibilityState: document.visibilityState,
+      headings: [...document.querySelectorAll('main h1, [role="main"] h1')]
+        .slice(0, 4)
+        .map((node) => ({
+          text: node.textContent?.slice(0, 160),
+          bounds: node.getBoundingClientRect().toJSON(),
+        })),
       syncPhases: [...document.querySelectorAll("[data-composer-sync-status]")]
         .slice(0, 4)
         .map((node) => node.getAttribute("data-composer-sync-status")),
@@ -393,7 +456,26 @@ try {
   });
   await page.bringToFront();
   if (values.fresh) {
-    await page.screenshot({ path: NodePath.join(outputDir, "window.png"), timeout: 10_000 });
+    step = "waiting for the fresh-install welcome page and agent setup control";
+    const welcome = page.getByRole("main");
+    const heading = welcome.getByRole("heading", {
+      level: 1,
+      name: /^(?:Welcome to T3 Code|T3 Code へようこそ)$/,
+    });
+    await heading.waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+    await welcome
+      .getByRole("button", {
+        name: /^(?:Set up an agent|Add more agents|エージェントをセットアップ|エージェントを追加)$/,
+      })
+      .waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+    step = "verifying fresh-install welcome content is painted throughout capture";
+    await capturePaintedContent(
+      page,
+      heading,
+      await heading.innerText(),
+      '[data-workspace-area="home"]',
+      "ui-fresh-failure",
+    );
   } else {
     step = "waiting for the synthetic fixture message";
     const message = page.locator(MESSAGE_SELECTOR).getByText(FIXTURE_MESSAGE, { exact: true });
@@ -418,51 +500,13 @@ try {
       JSON.stringify({ ...bannerEvidence, dismissed: true }, null, 2),
     );
     step = "verifying fixture text is painted in the chat viewport throughout capture";
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-    });
-    const observation = await message.evaluateHandle(observeFixtureMessage, FIXTURE_MESSAGE);
-    try {
-      const before = await observation.evaluate((monitor) => monitor.ready);
-      NodeFS.writeFileSync(
-        NodePath.join(outputDir, "ui-before.json"),
-        JSON.stringify(before, null, 2),
-      );
-      await page.screenshot({ path: NodePath.join(outputDir, "window.png"), timeout: 10_000 });
-      const after = await observation.evaluate((monitor) => ({
-        current: monitor.snapshot(),
-        invalidated: monitor.invalidated(),
-      }));
-      NodeFS.writeFileSync(
-        NodePath.join(outputDir, "ui-after.json"),
-        JSON.stringify(after, null, 2),
-      );
-      NodeAssert.equal(
-        after.current.documentId,
-        before.documentId,
-        "The document reloaded during capture.",
-      );
-      NodeAssert.equal(
-        after.current.visible,
-        true,
-        "Fixture text is not visible in the captured chat viewport.",
-      );
-      NodeAssert.equal(
-        after.invalidated,
-        null,
-        "The fixture message stopped being visible during capture.",
-      );
-    } catch (error) {
-      const state = await observation.evaluate((monitor) => monitor.snapshot()).catch(() => null);
-      NodeFS.writeFileSync(
-        NodePath.join(outputDir, "ui-message-failure.json"),
-        JSON.stringify(state, null, 2),
-      );
-      throw error;
-    } finally {
-      await observation.evaluate((monitor) => monitor.dispose()).catch(() => {});
-      await observation.dispose();
-    }
+    await capturePaintedContent(
+      page,
+      message,
+      FIXTURE_MESSAGE,
+      ".messages-timeline-scroll",
+      "ui-message-failure",
+    );
   }
   const result = {
     ...metadata,
