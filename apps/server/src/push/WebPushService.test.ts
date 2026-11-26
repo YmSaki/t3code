@@ -1,5 +1,9 @@
 import { expect, it } from "@effect/vitest";
-import { WebPushSubscriptionId, type WebPushSubscriptionKeys } from "@t3tools/contracts";
+import {
+  WebPushError,
+  WebPushSubscriptionId,
+  type WebPushSubscriptionKeys,
+} from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -27,6 +31,14 @@ sqliteLayer("WebPushService", (it) => {
         const serviceLayer = WebPushService.layerWithOptions({
           vapidSubject: "mailto:hub@example.com",
           transport: ({ subscription, payload }) => {
+            if (subscription.id === "sub-0-blocked") {
+              return Effect.fail(
+                new WebPushError({
+                  reason: "delivery_failed",
+                  message: "Push endpoint did not resolve to a public address.",
+                }),
+              );
+            }
             if (subscription.endpoint.includes("gone")) {
               return Effect.succeed({ status: "gone", statusCode: 410 });
             }
@@ -58,13 +70,19 @@ sqliteLayer("WebPushService", (it) => {
           enabled: true,
         };
         const activeKeys = { p256dh: "p256-a", auth: "auth-a" };
+        const blocked = {
+          ...active,
+          id: WebPushSubscriptionId.make("sub-0-blocked"),
+          endpoint: "https://blocked.example/sub",
+        };
+        yield* service.subscribe({ ...blocked, keys: activeKeys });
         yield* service.subscribe({ ...active, keys: activeKeys });
         yield* service.subscribe({
           ...gone,
           keys: { p256dh: "p256-g", auth: "auth-g" },
         });
 
-        expect(yield* service.listSubscriptions).toStrictEqual([active, gone]);
+        expect(yield* service.listSubscriptions).toStrictEqual([blocked, active, gone]);
 
         const firstDispatch = yield* service.notifyEvent({
           kind: "approval_requested",
@@ -79,7 +97,7 @@ sqliteLayer("WebPushService", (it) => {
 
         expect(firstDispatch.decision.shouldSend).toBe(true);
         expect(firstDispatch.deliveredCount).toBe(1);
-        expect(firstDispatch.failedCount).toBe(1);
+        expect(firstDispatch.failedCount).toBe(2);
         expect(firstDispatch.prunedSubscriptionIds).toEqual([
           WebPushSubscriptionId.make("sub-gone"),
         ]);
@@ -88,7 +106,7 @@ sqliteLayer("WebPushService", (it) => {
         expect(deliveries[0]?.title).toContain("[cl]");
 
         const remaining = yield* service.listSubscriptions;
-        expect(remaining.map((sub) => sub.id)).toEqual([WebPushSubscriptionId.make("sub-active")]);
+        expect(remaining.map((sub) => sub.id)).toEqual([blocked.id, active.id]);
 
         const duplicateDispatch = yield* service.notifyEvent({
           kind: "approval_requested",

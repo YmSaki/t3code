@@ -19,6 +19,8 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlSchema from "effect/sql/SqlSchema";
 
+import { parseWebPushEndpoint } from "./webPushEndpoint.ts";
+
 const DEFAULT_VAPID_KEY_ID = "default";
 const DEFAULT_VAPID_SUBJECT = "mailto:selfhost@t3.codes";
 
@@ -185,12 +187,7 @@ export const make = Effect.gen(function* () {
     "WebPushStore.upsertSubscription",
   )(function* (input) {
     const endpoint = input.endpoint.trim();
-    if (endpoint.length === 0) {
-      return yield* new WebPushError({
-        reason: "invalid_subscription",
-        message: "Web Push subscription endpoint must not be empty.",
-      });
-    }
+    yield* parseWebPushEndpoint(endpoint);
 
     const nowIso = DateTime.formatIso(yield* DateTime.now);
     const existing = yield* findSubscriptionByEndpoint(endpoint).pipe(
