@@ -395,9 +395,29 @@ try {
   if (values.fresh) {
     await page.screenshot({ path: NodePath.join(outputDir, "window.png"), timeout: 10_000 });
   } else {
-    step = "verifying fixture text is painted in the chat viewport throughout capture";
+    step = "waiting for the synthetic fixture message";
     const message = page.locator(MESSAGE_SELECTOR).getByText(FIXTURE_MESSAGE, { exact: true });
     await message.waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+    step = "dismissing the expected missing-Codex provider banner";
+    const providerBanner = page
+      .getByRole("alert")
+      .filter({ hasText: "Could not start Codex CLI (`codex`)." });
+    const dismissProviderBanner = providerBanner.getByRole("button", {
+      name: /^(?:Codex プロバイダーのエラーを閉じる|Dismiss Codex provider error)$/,
+    });
+    await dismissProviderBanner.waitFor({ state: "visible", timeout: 10_000 });
+    const bannerEvidence = {
+      reason: "Codex CLI is intentionally absent on the native validation runner.",
+      button: await dismissProviderBanner.getAttribute("aria-label"),
+      bounds: await providerBanner.boundingBox(),
+    };
+    await dismissProviderBanner.click({ timeout: 10_000 });
+    await providerBanner.waitFor({ state: "hidden", timeout: 10_000 });
+    NodeFS.writeFileSync(
+      NodePath.join(outputDir, "ui-provider-banner.json"),
+      JSON.stringify({ ...bannerEvidence, dismissed: true }, null, 2),
+    );
+    step = "verifying fixture text is painted in the chat viewport throughout capture";
     await page.evaluate(async () => {
       await document.fonts.ready;
     });
