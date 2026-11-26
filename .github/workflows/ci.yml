@@ -101,6 +101,9 @@ jobs:
         run: vp run --filter @t3tools/desktop ensure:electron
 
       # Files/dependencies are repo-wide; export checks cover clean workspaces only.
+      - name: Check fork icon exports
+        run: vp run icons:check
+
       - name: Check unused code
         run: vp run knip:check
 

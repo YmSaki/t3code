@@ -1,4 +1,16 @@
-# Brand icons
+# T3CodeJP icons
+
+`fork/icon.svg` is the source for this fork's desktop and web icons. Run
+`vp run icons:export` to generate PNG and ICO renditions for Stable, Nightly,
+and development, including the development web public assets. Run
+`vp run icons:check` to verify the generated files without modifying them.
+The macOS rendition uses a 1024px transparent canvas with an 824px icon body.
+These exports use Sharp and run on Windows, Linux, and macOS.
+
+## Upstream mobile artwork
+
+The original Icon Composer projects below remain available for the upstream
+mobile assets. Fork mobile distribution is tracked in #50.
 
 The three Icon Composer projects are the source of truth for full application icons:
 
@@ -8,7 +20,7 @@ The three Icon Composer projects are the source of truth for full application ic
 
 Each project uses `text.svg` for the T3 mark and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
 
-Run `vp run icons:export` from the repository root to regenerate the tracked iOS, Linux, Windows, and web assets. The development web exports are also copied to `apps/web/public` for the browser favicon, web app manifest icons, and splash screen. Run `vp run icons:check` to verify that the generated assets and public copies match their sources without changing files.
+Run `vp run icons:export:upstream` from the repository root to regenerate the tracked iOS, Linux, Windows, and web assets. The development web exports are also copied to `apps/web/public` for the browser favicon, web app manifest icons, and splash screen. Run `vp run icons:check:upstream` to verify that the generated assets and public copies match their sources without changing files.
 
 Exporting requires Icon Composer 2 or newer on macOS. The script selects the newest compatible exporter from Xcode or a standalone Icon Composer installation and pins design generation 26. Set `ICON_COMPOSER_TOOL` to the full path of `Icon Composer.app/Contents/Executables/ictool` to override automatic discovery.
 

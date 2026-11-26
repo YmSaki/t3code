@@ -1,4 +1,4 @@
-# Installs the T3 Code CLI from a GitHub Release archive on Windows. Needs
+# Installs the T3CodeJP CLI from a GitHub Release archive on Windows. Needs
 # only PowerShell 5.1+; no Node, npm, or compiler.
 #
 # Release assets are published at https://github.com/YmSaki/t3code/releases.
@@ -125,21 +125,8 @@ function Fetch([string] $uri, [string] $destination, [switch] $progress) {
   }
 }
 if ($interactive) {
-  # Block characters are constructed so this file also loads correctly in PowerShell 5.1.
-  $mark = @(
-    "########## ######## ",
-    "    ###       _##^  ",
-    "    ###       ####_ ",
-    "    ###    _     ###",
-    "    ###    #######^ "
-  )
-  [Console]::Error.WriteLine()
-  for ($i = 0; $i -lt $mark.Length; $i++) {
-    $row = $mark[$i].Replace('#', [char]0x2588).Replace('^', [char]0x2580).Replace('_', [char]0x2584)
-    $label = if ($i -eq 1) { "     ${bold}T3 Code$reset" } elseif ($i -eq 2) { "     ${muted}CLI installer$reset" } else { "" }
-    [Console]::Error.WriteLine("  $bold$row$reset$label")
-  }
-  [Console]::Error.WriteLine()
+  [Console]::Error.WriteLine("`n  ${bold}T3CodeJP$reset")
+  [Console]::Error.WriteLine("  ${muted}CLI installer$reset`n")
 }
 Step "Finding your release..."
 
@@ -197,7 +184,7 @@ if ((Test-Path -LiteralPath $marker) -and ((Get-Content -LiteralPath $marker -Ra
   New-Item -ItemType Directory -Path $staging | Out-Null
   try {
     if ($interactive) { [Console]::Error.Write("`r$esc[2K") }
-    [Console]::Error.WriteLine("  ${muted}Installing$reset T3 Code $bold$version$reset`n")
+    [Console]::Error.WriteLine("  ${muted}Installing$reset T3CodeJP $bold$version$reset`n")
     Step "Downloading..."
     try {
       Fetch "$baseUrl/v$version/SHA256SUMS" (Join-Path $staging "SHA256SUMS")
@@ -218,7 +205,7 @@ if ((Test-Path -LiteralPath $marker) -and ((Get-Content -LiteralPath $marker -Ra
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $staging $archive)).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { Fail "checksum mismatch for $archive" }
 
-    Step "Extracting T3 Code..."
+    Step "Extracting T3CodeJP..."
     # Expand-Archive expands DestinationPath wildcards even with LiteralPath on PowerShell 5.1.
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $staging $archive), $staging)
@@ -267,7 +254,7 @@ if (-not ((Test-Path -LiteralPath $launchers) -and ((Get-Content -LiteralPath $l
   [System.IO.File]::AppendAllText($launchers, "$shimPath`r`n", (New-Object System.Text.UTF8Encoding $false))
 }
 if ($interactive) { [Console]::Error.Write("`r$esc[2K") }
-[Console]::Error.WriteLine("  ${green}Installed T3 Code $version$reset`n")
+[Console]::Error.WriteLine("  ${green}Installed T3CodeJP $version$reset`n")
 if ($binDir.Contains(";")) {
   # PATH would split the folder at the `;`, so name the command in full instead.
   Write-Host "  Run ${bold}& '$($shim.Replace("'", "''"))'$reset to get started.`n"
@@ -284,6 +271,6 @@ if ($binDir.Contains(";")) {
   } elseif ($added) {
     Write-Host "  Run ${bold}t3$reset to get started. For new windows, add $binDir to your PATH.`n"
   } else {
-    Write-Host "  Run ${bold}t3$reset to use T3 Code here, or ${bold}t3 up$reset to use it from your other devices.`n"
+    Write-Host "  Run ${bold}t3$reset to use T3CodeJP here, or ${bold}t3 up$reset to use it from your other devices.`n"
   }
 }

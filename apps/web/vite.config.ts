@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "@t3tools/shared/productIdentity";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Vite config runs before any Effect runtime.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeZlib from "node:zlib";
@@ -18,6 +19,7 @@ import {
   DEV_PROXIED_PATH_PREFIXES,
 } from "@t3tools/shared/devProxy";
 
+import { resolveWebIconOverrides } from "../../scripts/lib/brand-assets";
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-version";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
@@ -270,20 +272,35 @@ function bundledDevStableNamesPlugin(): Plugin {
 // Stamps index.html's title with the name branding.ts resolves once the app
 // loads, so a tab opens on the right channel instead of flashing another's.
 // Desktop swaps in its injected branding from an inline script in index.html.
-function bootstrapTitlePlugin(): Plugin {
+function bootstrapBrandingPlugin(): Plugin {
   let development = false;
   return {
-    name: "t3code:bootstrap-title",
+    name: "t3code:bootstrap-branding",
     configResolved(config) {
       // The same flag Vite exposes to the app as import.meta.env.DEV.
       development = !config.isProduction;
+    },
+    async generateBundle() {
+      const brand =
+        configuredHostedAppChannel === "nightly" || configuredReleaseChannel === "nightly"
+          ? "nightly"
+          : "production";
+      for (const icon of resolveWebIconOverrides(brand, "")) {
+        this.emitFile({
+          type: "asset",
+          fileName: icon.targetRelativePath.slice(1),
+          source: await NodeFSP.readFile(
+            new URL(`../../${icon.sourceRelativePath}`, import.meta.url),
+          ),
+        });
+      }
     },
     transformIndexHtml(html) {
       const stageLabel = resolveWebAppStageLabel({
         hostedAppChannel: configuredHostedAppChannel,
         development,
       });
-      const title = formatAppDisplayName({ baseName: "T3 Code", stageLabel });
+      const title = formatAppDisplayName({ baseName: PRODUCT_NAME, stageLabel });
       return html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
     },
   };
@@ -316,7 +333,7 @@ export default defineConfig(({ command }) => {
     },
     assetsInclude: ["**/*.wasm"],
     plugins: [
-      bootstrapTitlePlugin(),
+      bootstrapBrandingPlugin(),
       devCompressionPlugin(),
       chunkCycleGuardPlugin(),
       builtDev
