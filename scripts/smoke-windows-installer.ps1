@@ -150,7 +150,7 @@ function Assert-CandidatePayload {
     if ($updateConfig -cnotmatch '(?m)^provider: github\r?$' -or
         $updateConfig -cnotmatch '(?m)^owner: YmSaki\r?$' -or
         $updateConfig -cnotmatch '(?m)^repo: t3code\r?$') {
-        throw 'Installed updater configuration does not point to YmSaki/t3code.'
+        throw 'Installed updater configuration does not point to YmSaki/t3codeJP.'
     }
 }
 

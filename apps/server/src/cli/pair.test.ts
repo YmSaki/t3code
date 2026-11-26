@@ -504,7 +504,7 @@ describe("t3 pair", () => {
             assert.isTrue(Exit.isFailure(exit));
             if (Exit.isFailure(exit)) {
               const message = String(Cause.squash(exit.cause));
-              assert.include(message, "https://github.com/YmSaki/t3code/releases/tag/v0.0.45");
+              assert.include(message, "https://github.com/YmSaki/t3codeJP/releases/tag/v0.0.45");
               assert.include(
                 message,
                 platform === "win32"

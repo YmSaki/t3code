@@ -1,6 +1,6 @@
 const { assertCommitOnDefaultBranch, assertReleaseSource } = require("./check-nightly-release.cjs");
 
-const FORK_REPOSITORY = "YmSaki/t3code";
+const FORK_REPOSITORY = "YmSaki/t3codeJP";
 const INITIAL_STABLE_VERSION = "1.0.0";
 const MINIMUM_NIGHTLY_GAP_MS = 6 * 60 * 60 * 1000;
 const CORE_VERSION = /^(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}$/;

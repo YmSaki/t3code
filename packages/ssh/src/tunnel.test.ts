@@ -366,7 +366,7 @@ describe("ssh tunnel scripts", () => {
           // A bare curl error does not tell the user that t3 itself could not be downloaded.
           assert.include(result.stderr, ARCHIVE.archiveVersion);
           const base =
-            releaseBaseUrl?.split("?")[0] ?? "https://github.com/YmSaki/t3code/releases/download";
+            releaseBaseUrl?.split("?")[0] ?? "https://github.com/YmSaki/t3codeJP/releases/download";
           const query = releaseBaseUrl === undefined ? "" : "?fixture=issue67";
           assert.include(result.stderr, `${base}/v${ARCHIVE.archiveVersion}/SHA256SUMS${query}`);
           assert.include(

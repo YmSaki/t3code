@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 
 import { compareSemverVersions } from "./semver.ts";
 
-const CLI_RELEASE_REPOSITORY = "YmSaki/t3code";
+const CLI_RELEASE_REPOSITORY = "YmSaki/t3codeJP";
 export const CLI_INSTALL_SH_FILE = "install.sh";
 const CLI_INSTALL_PS1_FILE = "install.ps1";
 export const CLI_INSTALL_BIN_DIRNAME = "cli-bin";

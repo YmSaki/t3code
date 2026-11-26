@@ -4,7 +4,7 @@ import { DEFAULT_HOME_DIRECTORY } from "@t3tools/shared/productIdentity";
 
 // Bootstrap must still render recovery when the application dependency chunks fail to load.
 const releasesPage: typeof CliRelease.CLI_RELEASES_PAGE_URL =
-  "https://github.com/YmSaki/t3code/releases";
+  "https://github.com/YmSaki/t3codeJP/releases";
 const cliBin: typeof CliRelease.CLI_INSTALL_BIN_DIRNAME = "cli-bin";
 const FALLBACK_TRIAGE_COMMAND = `~/${DEFAULT_HOME_DIRECTORY}/${cliBin}/t3 triage`;
 const LAST_FAILURE_KEY = "t3code:boot-failed-at";

@@ -24,13 +24,13 @@ env:
 jobs:
   build:
     name: Build Linux CLI and Windows installers
-    if: github.repository == 'YmSaki/t3code' && github.ref_type == 'branch'
+    if: github.repository == 'YmSaki/t3codeJP' && github.ref_type == 'branch'
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     outputs:
       linux_cli_sha256: ${{ steps.candidate.outputs.linux_cli_sha256 }}
     env:
-      T3CODE_DESKTOP_UPDATE_REPOSITORY: YmSaki/t3code
+      T3CODE_DESKTOP_UPDATE_REPOSITORY: YmSaki/t3codeJP
       T3CODE_DESKTOP_SIGNED: "false"
       T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
       T3CODE_CLERK_PUBLISHABLE_KEY: ""
