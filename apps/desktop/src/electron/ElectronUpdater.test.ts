@@ -7,7 +7,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { autoUpdater } from "electron-updater";
-import type * as NodeChildProcess from "node:child_process";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
 import { vi } from "vite-plus/test";
 
@@ -30,6 +31,16 @@ vi.hoisted(() => {
       isPackaged: true,
       quit: () => undefined,
       once: () => undefined,
+      relaunch: (options: { execPath: string; args: ReadonlyArray<string> }) => {
+        const child = process
+          .getBuiltinModule("node:child_process")
+          .spawn(options.execPath, options.args, {
+            env: process.env,
+            stdio: "ignore",
+            windowsHide: true,
+          });
+        child.unref();
+      },
     },
     autoUpdater: new NodeEvents.EventEmitter(),
   };
@@ -45,6 +56,87 @@ const childProcess = NodeModule.createRequire(import.meta.url)("node:child_proce
     options: NodeChildProcess.SpawnOptions,
   ) => NodeChildProcess.ChildProcess;
 };
+
+describe.skipIf(HostProcess.Platform.defaultValue() !== "win32")(
+  "ElectronUpdater NSIS install",
+  () => {
+    it.live("relaunches after installation with the original home environment", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const environment = yield* HostProcess.Environment;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-nsis-'install-" });
+        const installer = path.join(root, "installer.exe");
+        const app = path.join(root, "app.exe");
+        const report = path.join(root, "home.txt");
+        const source = `
+using System;
+using System.IO;
+using System.Diagnostics;
+public class UpdateFixture {
+  public static void Main(string[] args) {
+    if (Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName) == "installer") {
+      if (Array.IndexOf(args, "--force-run") >= 0 || Environment.CommandLine.Contains(${JSON.stringify(' "/S"')})) {
+        var start = new ProcessStartInfo(${JSON.stringify(app)}) { UseShellExecute = false };
+        start.EnvironmentVariables["T3CODE_HOME"] = "wrong-home";
+        Process.Start(start).WaitForExit();
+      }
+    } else {
+      File.WriteAllText(${JSON.stringify(`${report}.tmp`)}, Environment.GetEnvironmentVariable("T3CODE_HOME") ?? "missing-home");
+      File.Move(${JSON.stringify(`${report}.tmp`)}, ${JSON.stringify(report)});
+    }
+  }
+}`;
+        yield* Effect.sync(() =>
+          NodeChildProcess.execFileSync(
+            `${environment.SystemRoot ?? environment.SYSTEMROOT ?? "C:\\Windows"}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "Add-Type -TypeDefinition $env:T3_TEST_SOURCE -OutputAssembly $env:T3_TEST_EXECUTABLE -OutputType ConsoleApplication",
+            ],
+            {
+              env: { ...environment, T3_TEST_SOURCE: source, T3_TEST_EXECUTABLE: installer },
+              windowsHide: true,
+            },
+          ),
+        );
+        yield* fs.copyFile(installer, app);
+        const relaunched = yield* Deferred.make<void>();
+        yield* Effect.acquireRelease(
+          Effect.sync(() => vi.stubEnv("T3CODE_HOME", "original custom home")),
+          () => Effect.sync(() => vi.unstubAllEnvs()),
+        );
+        yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            NodeFS.watch(root, (_, name) => {
+              if (name === "home.txt") Deferred.doneUnsafe(relaunched, Effect.void);
+            }),
+          ),
+          (watcher) => Effect.sync(() => watcher.close()),
+        );
+        autoUpdater.logger = null;
+        Object.assign(autoUpdater, {
+          downloadedUpdateHelper: {
+            file: installer,
+            downloadedFileInfo: { isAdminRightsRequired: false },
+          },
+        });
+        const updater = yield* ElectronUpdater.ElectronUpdater;
+        yield* updater.quitAndInstall({ isSilent: true, isForceRunAfter: true }).pipe(
+          Effect.provideService(HostProcess.ExecutablePath, app),
+          Effect.provideService(HostProcess.Environment, {
+            ...environment,
+            T3CODE_HOME: "original custom home",
+          }),
+        );
+        yield* Deferred.await(relaunched);
+        assert.equal((yield* fs.readFileString(report)).trim(), "original custom home");
+      }).pipe(Effect.provide([ElectronUpdater.layer, NodeServices.layer])),
+    );
+  },
+);
 
 describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
   "ElectronUpdater AppImage install",

@@ -80,8 +80,14 @@ function Invoke-Retrying([scriptblock] $request) {
 }
 function Fetch([string] $uri, [string] $destination, [switch] $progress) {
   if (-not $progress -or -not $interactive) {
-    $ProgressPreference = if ($progress -and $terminal) { "Continue" } else { "SilentlyContinue" }
-    Invoke-Retrying { Invoke-WebRequest -Uri $uri -OutFile $destination -UseBasicParsing }
+    # Invoke-WebRequest treats OutFile as a wildcard path in Windows PowerShell 5.1.
+    $downloadClient = New-Object Net.WebClient
+    try {
+      Invoke-Retrying {
+        try { $downloadClient.DownloadFile($uri, $destination) }
+        catch { throw $_.Exception.InnerException }
+      }
+    } finally { $downloadClient.Dispose() }
     return
   }
   Add-Type -AssemblyName System.Net.Http
@@ -183,7 +189,7 @@ $versionsDir = Join-Path $t3Home "runtime\versions"
 $targetDir = Join-Path $versionsDir $version
 $marker = Join-Path $targetDir ".install-complete"
 
-if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
+if ((Test-Path -LiteralPath $marker) -and ((Get-Content -LiteralPath $marker -Raw).Trim() -eq $version)) {
   Step "Version $version is already downloaded."
 } else {
   New-Item -ItemType Directory -Force -Path $versionsDir | Out-Null
@@ -206,30 +212,27 @@ if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $version)) {
 
     Step "Verifying the download..."
 
-    $expected = (Get-Content (Join-Path $staging "SHA256SUMS") | Where-Object { $_ -match "\s\*?$([regex]::Escape($archive))$" } | Select-Object -First 1)
+    $expected = (Get-Content -LiteralPath (Join-Path $staging "SHA256SUMS") | Where-Object { $_ -match "\s\*?$([regex]::Escape($archive))$" } | Select-Object -First 1)
     if (-not $expected) { Fail "$archive is not listed in SHA256SUMS" }
     $expected = ($expected -split "\s+")[0].ToLowerInvariant()
-    $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $staging $archive)).Hash.ToLowerInvariant()
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $staging $archive)).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { Fail "checksum mismatch for $archive" }
 
     Step "Extracting T3 Code..."
-    # The archive module reads the global preference, not the caller's local scope.
-    $savedProgress = $global:ProgressPreference
-    try {
-      $global:ProgressPreference = "SilentlyContinue"
-      Expand-Archive -Path (Join-Path $staging $archive) -DestinationPath $staging -Force
-    } finally { $global:ProgressPreference = $savedProgress }
-    Get-ChildItem (Join-Path $staging $stem) | Move-Item -Destination $staging
-    Remove-Item (Join-Path $staging $stem), (Join-Path $staging $archive), (Join-Path $staging "SHA256SUMS") -Recurse -Force
+    # Expand-Archive expands DestinationPath wildcards even with LiteralPath on PowerShell 5.1.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $staging $archive), $staging)
+    Get-ChildItem -LiteralPath (Join-Path $staging $stem) | ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination $staging }
+    Remove-Item -LiteralPath (Join-Path $staging $stem), (Join-Path $staging $archive), (Join-Path $staging "SHA256SUMS") -Recurse -Force
 
     & (Join-Path $staging "t3.exe") --version | Out-Null
     if ($LASTEXITCODE -ne 0) { Fail "the downloaded executable does not run" }
-    Set-Content -Path (Join-Path $staging ".install-complete") -Value $version -NoNewline
+    Set-Content -LiteralPath (Join-Path $staging ".install-complete") -Value $version -NoNewline
 
-    if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force }
-    Move-Item $staging $targetDir
+    if (Test-Path -LiteralPath $targetDir) { Remove-Item -LiteralPath $targetDir -Recurse -Force }
+    Move-Item -LiteralPath $staging -Destination $targetDir
   } catch {
-    if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
     throw
   }
 }
@@ -260,7 +263,7 @@ if (Test-Path -LiteralPath $shim) {
 # Pruning keeps what this shim points at; a background service cannot see $binDir otherwise.
 $launchers = Join-Path $t3Home "runtime\launchers"
 $shimPath = (Resolve-Path -LiteralPath $shim).Path
-if (-not ((Test-Path $launchers) -and ((Get-Content $launchers) -contains $shimPath))) {
+if (-not ((Test-Path -LiteralPath $launchers) -and ((Get-Content -LiteralPath $launchers -Encoding UTF8) -contains $shimPath))) {
   [System.IO.File]::AppendAllText($launchers, "$shimPath`r`n", (New-Object System.Text.UTF8Encoding $false))
 }
 if ($interactive) { [Console]::Error.Write("`r$esc[2K") }

@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - Drives the real shell installer against a local GitHub fixture.
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { cliArchiveTarCommand } from "@t3tools/shared/cliRelease";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
@@ -441,11 +442,131 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("install.sh t3 
 });
 
 describe.skipIf(HostProcess.Platform.defaultValue() !== "win32")("install.ps1 t3 command", () => {
+  it("installs and reuses a checked archive in a bracketed home without changing sibling paths", async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-brackets-"));
+    const home = NodePath.join(root, "home[t3]");
+    const versions = NodePath.join(home, "runtime", "versions");
+    const target = NodePath.join(versions, "1.2.3");
+    const sibling = NodePath.join(root, "homet", "runtime", "versions", "1.2.3");
+    const binDir = NodePath.join(root, "bin[t3]");
+    const stem = `t3-1.2.3-win32-${HostProcess.Architecture.defaultValue()}`;
+    const archiveName = `${stem}.zip`;
+    const requests: string[] = [];
+    let published = false;
+    let validChecksum = false;
+    const server = NodeHttp.createServer();
+    try {
+      await NodeFSP.mkdir(NodePath.join(root, stem));
+      await NodeFSP.copyFile(process.execPath, NodePath.join(root, stem, "t3.exe"));
+      const archivePath = NodePath.join(root, archiveName);
+      NodeChildProcess.execFileSync(cliArchiveTarCommand("win32", process.env), [
+        "-a",
+        "-cf",
+        archivePath,
+        "-C",
+        root,
+        stem,
+      ]);
+      const archive = await NodeFSP.readFile(archivePath);
+      const digest = NodeCrypto.createHash("sha256").update(archive).digest("hex");
+      await NodeFSP.mkdir(sibling, { recursive: true });
+      await NodeFSP.writeFile(NodePath.join(sibling, ".install-complete"), "other install");
+      await NodeFSP.writeFile(NodePath.join(sibling, "t3.exe"), "keep this executable");
+      server.on("request", (request, response) => {
+        requests.push(request.url ?? "");
+        if (!published) return response.writeHead(404).end();
+        response.end(
+          request.url?.endsWith("/SHA256SUMS")
+            ? `${validChecksum ? digest : "0".repeat(64)}  ${archiveName}\n`
+            : archive,
+        );
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
+      const install = () =>
+        new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+          const child = NodeChildProcess.spawn(
+            "powershell.exe",
+            [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              NodePath.join(import.meta.dirname, "install.ps1"),
+            ],
+            {
+              env: {
+                // PowerShell 7's inherited module paths hide Windows PowerShell's modules.
+                ...Object.fromEntries(
+                  Object.entries(process.env).filter(
+                    ([key]) => key.toUpperCase() !== "PSMODULEPATH",
+                  ),
+                ),
+                T3CODE_VERSION: "1.2.3",
+                T3CODE_HOME: home,
+                T3CODE_INSTALL_BIN_DIR: binDir,
+                T3CODE_RELEASE_BASE_URL: `http://127.0.0.1:${address.port}`,
+              },
+              stdio: ["ignore", "pipe", "pipe"],
+            },
+          );
+          let output = "";
+          child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
+          child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
+          child.on("error", reject);
+          child.on("close", (code) => resolve({ code, output }));
+        });
+
+      const missing = await install();
+      expect(missing.code, missing.output).not.toBe(0);
+      expect(missing.output).toContain("has no release archive for");
+      expect(requests).toEqual(["/v1.2.3/SHA256SUMS"]);
+      expect(await NodeFSP.readdir(versions)).toEqual([]);
+
+      published = true;
+      const corrupt = await install();
+      expect(corrupt.code, corrupt.output).not.toBe(0);
+      expect(corrupt.output).toContain("checksum mismatch");
+      expect(await NodeFSP.readdir(versions)).toEqual([]);
+
+      validChecksum = true;
+      const installed = await install();
+      expect(installed.code, installed.output).toBe(0);
+      expect(await NodeFSP.readFile(NodePath.join(target, ".install-complete"), "utf8")).toBe(
+        "1.2.3",
+      );
+      const command = NodeChildProcess.spawnSync(
+        process.env.ComSpec ?? "cmd.exe",
+        ["/d", "/s", "/c", `""${NodePath.join(binDir, "t3.cmd")}" --version"`],
+        { encoding: "utf8", windowsVerbatimArguments: true, cwd: NodeOS.tmpdir() },
+      );
+      expect(command.status, command.stdout + command.stderr).toBe(0);
+      expect(command.stdout.trim()).toBe(process.version);
+      const downloaded = requests.length;
+      const reused = await install();
+      expect(reused.code, reused.output).toBe(0);
+      expect(reused.output).toContain("already downloaded");
+      expect(requests).toHaveLength(downloaded);
+      expect(await NodeFSP.readdir(versions)).toEqual(["1.2.3"]);
+      expect(await NodeFSP.readFile(NodePath.join(sibling, ".install-complete"), "utf8")).toBe(
+        "other install",
+      );
+      expect(await NodeFSP.readFile(NodePath.join(sibling, "t3.exe"), "utf8")).toBe(
+        "keep this executable",
+      );
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("replaces only its own t3.cmd, also in non-ASCII and bracketed paths", async () => {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-ps1-"));
     try {
       // Windows PowerShell 5.1 reads files as ANSI by default and expands wildcards in paths.
-      const home = NodePath.join(root, "José", ".t3");
+      const home = NodePath.join(root, "José[t3]", ".t3");
       const binDir = NodePath.join(root, "bin[t3]");
       const shim = NodePath.join(binDir, "t3.cmd");
       await NodeFSP.mkdir(binDir, { recursive: true });

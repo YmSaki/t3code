@@ -3,8 +3,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { app } from "electron";
 
-import { AppImageUpdater, autoUpdater } from "electron-updater";
+import { AppImageUpdater, NsisUpdater, autoUpdater } from "electron-updater";
 
 type AutoUpdater = typeof autoUpdater;
 type SpawnLog = (cmd: string, args?: Array<string>, ...rest: Array<unknown>) => Promise<boolean>;
@@ -25,6 +27,50 @@ const relaunchWithoutInheritedDescriptors = (updater: AppImageUpdater) => {
       ["-p", "-c", CLOSE_INHERITED_FDS_THEN_EXEC, cmd, cmd, ...args],
       ...rest,
     );
+  };
+};
+
+const relaunchWithWindowsEnvironment = (
+  updater: NsisUpdater,
+  executable: string,
+  environment: NodeJS.ProcessEnv,
+) => {
+  const spawnLog = (NsisUpdater.prototype as unknown as { spawnLog: SpawnLog }).spawnLog;
+  const quote = (value: string) => `'${value.replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&")}'`;
+  // NSIS does not recognize a quoted /S switch.
+  const quoteArgument = (value: string) =>
+    !/[\s"]/.test(value)
+      ? value
+      : `"${value
+          .replace(/(\\*)"/g, (_, backslashes: string) => `${backslashes}${backslashes}\\"`)
+          .replace(/\\+$/, (backslashes) => `${backslashes}${backslashes}`)}"`;
+  // NSIS launches through Explorer, which drops T3CODE_HOME and other environment overrides.
+  (updater as unknown as { spawnLog: SpawnLog }).spawnLog = function (cmd, args = [], ...rest) {
+    if (!args.includes("--force-run")) return spawnLog.call(this, cmd, args, ...rest);
+    const installerArgs = args
+      .filter((arg) => arg !== "--force-run")
+      .map(quoteArgument)
+      .join(" ");
+    const script = [
+      "$ErrorActionPreference = 'Stop'",
+      `$installer = Start-Process -FilePath ${quote(cmd)} -ArgumentList ${quote(installerArgs)} -WindowStyle Hidden -PassThru -Wait`,
+      "if ($installer.ExitCode -ne 0) { exit $installer.ExitCode }",
+      `Start-Process -FilePath ${quote(executable)} -ArgumentList '--updated'`,
+    ].join("\n");
+    const systemRoot = environment.SystemRoot ?? environment.SYSTEMROOT ?? "C:\\Windows";
+    app.relaunch({
+      execPath: `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
+      args: [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-EncodedCommand",
+        Buffer.from(script, "utf16le").toString("base64"),
+      ],
+    });
+    return Promise.resolve(true);
   };
 };
 
@@ -167,13 +213,18 @@ export const make = ElectronUpdater.of({
       catch: (cause) => new ElectronUpdaterDownloadUpdateError({ channel, cause }),
     }).pipe(Effect.asVoid);
   }),
-  quitAndInstall: Effect.fn("ElectronUpdater.quitAndInstall")(function ({
+  quitAndInstall: Effect.fn("ElectronUpdater.quitAndInstall")(function* ({
     isSilent,
     isForceRunAfter,
   }) {
-    return Effect.suspend(() => {
+    const executable = yield* HostProcess.ExecutablePath;
+    const environment = yield* HostProcess.Environment;
+    return yield* Effect.suspend(() => {
       const channel = autoUpdater.channel;
       if (autoUpdater instanceof AppImageUpdater) relaunchWithoutInheritedDescriptors(autoUpdater);
+      if (autoUpdater instanceof NsisUpdater) {
+        relaunchWithWindowsEnvironment(autoUpdater, executable, environment);
+      }
       return Effect.try({
         try: () => autoUpdater.quitAndInstall(isSilent, isForceRunAfter),
         catch: (cause) =>
