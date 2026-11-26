@@ -305,11 +305,34 @@ describe("ssh tunnel scripts", () => {
   });
 
   it.each([
-    { host: "Darwin x86_64", system: "Darwin", machine: "x86_64", downloads: false },
-    { host: "Darwin arm64", system: "Darwin", machine: "arm64", downloads: true },
+    {
+      host: "Darwin x86_64",
+      system: "Darwin",
+      machine: "x86_64",
+      platform: "darwin-x64",
+      releaseBaseUrl: undefined,
+      downloads: false,
+    },
+    {
+      host: "Darwin arm64",
+      system: "Darwin",
+      machine: "arm64",
+      platform: "darwin-arm64",
+      releaseBaseUrl: undefined,
+      downloads: true,
+    },
+    ...[
+      { host: "Darwin arm64 mirror", system: "Darwin", machine: "arm64", platform: "darwin-arm64" },
+      { host: "Linux arm64 mirror", system: "Linux", machine: "aarch64", platform: "linux-arm64" },
+      { host: "Linux x64 mirror", system: "Linux", machine: "x86_64", platform: "linux-x64" },
+    ].map((host) => ({
+      ...host,
+      releaseBaseUrl: "https://mirror.example/releases/download?fixture=issue67",
+      downloads: true,
+    })),
   ])(
     "only downloads a release archive the host can run: $host",
-    ({ system, machine, downloads }) => {
+    ({ system, machine, platform, releaseBaseUrl, downloads }) => {
       const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-ssh-runner-"));
       try {
         const bin = NodePath.join(root, "bin");
@@ -322,11 +345,17 @@ describe("ssh tunnel scripts", () => {
         );
         NodeFS.writeFileSync(
           NodePath.join(bin, "curl"),
-          "#!/bin/sh\necho 'download attempt' >&2\necho 'curl: (6) Could not resolve host: github.com' >&2\nexit 6\n",
+          '#!/bin/sh\nfor arg; do case "$arg" in http*) url="$arg" ;; esac; done\necho "download attempt: $url" >&2\ncase "$url" in *SHA256SUMS|*SHA256SUMS\\?fixture=issue67) for last; do :; done; : > "$last"; exit 0 ;; esac\necho "curl: (6) Could not resolve host" >&2\nexit 6\n',
           { mode: 0o755 },
         );
         const runner = NodePath.join(root, "run-t3.sh");
-        NodeFS.writeFileSync(runner, SshTunnel.buildRemoteT3RunnerScript(ARCHIVE));
+        NodeFS.writeFileSync(
+          runner,
+          SshTunnel.buildRemoteT3RunnerScript({
+            ...ARCHIVE,
+            ...(releaseBaseUrl === undefined ? {} : { releaseBaseUrl }),
+          }),
+        );
         const result = NodeChildProcess.spawnSync("sh", [runner, "--version"], {
           encoding: "utf8",
           env: { HOME: NodePath.join(root, "home"), PATH: `${bin}:${process.env.PATH ?? ""}` },
@@ -336,11 +365,15 @@ describe("ssh tunnel scripts", () => {
           assert.include(result.stderr, "download attempt");
           // A bare curl error does not tell the user that t3 itself could not be downloaded.
           assert.include(result.stderr, ARCHIVE.archiveVersion);
-          assert.include(result.stderr, "https://github.com/YmSaki/t3code/releases/download");
+          const base =
+            releaseBaseUrl?.split("?")[0] ?? "https://github.com/YmSaki/t3code/releases/download";
+          const query = releaseBaseUrl === undefined ? "" : "?fixture=issue67";
+          assert.include(result.stderr, `${base}/v${ARCHIVE.archiveVersion}/SHA256SUMS${query}`);
           assert.include(
             result.stderr,
-            `https://github.com/YmSaki/t3code/releases/download/v${ARCHIVE.archiveVersion}/install.sh`,
+            `${base}/v${ARCHIVE.archiveVersion}/t3-${ARCHIVE.archiveVersion}-${platform}.tar.gz${query}`,
           );
+          assert.include(result.stderr, `${base}/v${ARCHIVE.archiveVersion}/install.sh${query}`);
         } else {
           assert.notInclude(result.stderr, "download attempt");
           assert.include(result.stderr, "has no t3 release archive.");
