@@ -701,8 +701,7 @@ const settings = {
   continueThreadsAfterServerUpdate: false,
 } satisfies ServerSettingsPatch;
 function assertSettings() {
-  const actual = record(readJson(NodePath.join(stateDir, "settings.json")));
-  decodeSettings(actual);
+  const actual = record(decodeSettings(readJson(NodePath.join(stateDir, "settings.json"))));
   for (const [key, value] of Object.entries(settings))
     NodeAssert.equal(actual[key], value, `Setting ${key} was not preserved.`);
   const clientSettings = record(readJson(NodePath.join(stateDir, "client-settings.json")));
