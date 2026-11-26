@@ -144,7 +144,7 @@ jobs:
               vp run --filter t3 build
               node scripts/apply-web-brand-assets.ts production apps/server/dist/client
               vp exec node apps/server/scripts/cli.ts build-exe --verbose
-              node scripts/build-cli-archive.ts --platform "$TARGET_PLATFORM" --arch "$TARGET_ARCH" \
+              vp exec node scripts/build-cli-archive.ts --platform "$TARGET_PLATFORM" --arch "$TARGET_ARCH" \
                 --version "$version" --resource-monitor-dir "$RUNNER_TEMP/cli-resource-monitor" \
                 --output-dir "proof-inputs/$version"
             fi
