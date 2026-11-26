@@ -15,7 +15,7 @@ permissions:
 jobs:
   smoke:
     name: Verify macOS ${{ matrix.arch }} coexistence and migration
-    if: github.repository == 'YmSaki/t3code' && github.ref_type == 'branch'
+    if: github.repository_id == '1467336330' && github.ref_type == 'branch'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
     strategy:
@@ -103,6 +103,7 @@ jobs:
             ${{ runner.temp }}/macos-install-proof/**/*.json
             ${{ runner.temp }}/macos-install-proof/**/*.png
             ${{ runner.temp }}/macos-install-proof/**/*.txt
+            ${{ runner.temp }}/macos-install-proof/**/electron-main.*.log
             !${{ runner.temp }}/macos-install-proof/Applications/**
             !${{ runner.temp }}/macos-install-proof/mounts/**
             ${{ runner.temp }}/macos-install-proof.log
