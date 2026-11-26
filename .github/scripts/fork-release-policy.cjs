@@ -5,6 +5,23 @@ const INITIAL_STABLE_VERSION = "1.0.0";
 const MINIMUM_NIGHTLY_GAP_MS = 6 * 60 * 60 * 1000;
 const CORE_VERSION = /^(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}$/;
 const NIGHTLY_TAG = /^v([^-]+)-nightly\.\d{8}\.[1-9]\d*$/;
+const REQUIRED_SIGNING_CONFIGURATION = [
+  "CSC_LINK",
+  "CSC_KEY_PASSWORD",
+  "APPLE_API_KEY",
+  "APPLE_API_KEY_ID",
+  "APPLE_API_ISSUER",
+  "APPLE_TEAM_ID",
+  "MACOS_PROVISIONING_PROFILE",
+  "CLERK_PASSKEY_RP_DOMAINS",
+  "AZURE_TENANT_ID",
+  "AZURE_CLIENT_ID",
+  "AZURE_CLIENT_SECRET",
+  "AZURE_TRUSTED_SIGNING_ENDPOINT",
+  "AZURE_TRUSTED_SIGNING_ACCOUNT_NAME",
+  "AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME",
+  "AZURE_TRUSTED_SIGNING_PUBLISHER_NAME",
+];
 const RELEASES_QUERY = `
   query ($owner: String!, $repo: String!, $cursor: String) {
     repository(owner: $owner, name: $repo) {
@@ -26,6 +43,13 @@ function releaseChannel(eventName, dispatchChannel) {
     return dispatchChannel;
   }
   throw new Error("Unsupported fork release event or channel.");
+}
+
+function assertForkReleaseSigningConfiguration(env) {
+  const missing = REQUIRED_SIGNING_CONFIGURATION.filter((name) => !env[name]?.trim());
+  if (missing.length > 0) {
+    throw new Error(`Missing fork release signing configuration: ${missing.join(", ")}.`);
+  }
 }
 
 function coreVersion(version) {
@@ -127,6 +151,8 @@ async function planForkRelease({
   dispatchChannel = "preview",
   dispatchVersion = "",
   pauseNightly = false,
+  publishEnabled = false,
+  validateSigning = false,
   now = Date.now(),
 }) {
   const slug = `${context.repo.owner}/${context.repo.repo}`;
@@ -136,6 +162,9 @@ async function planForkRelease({
 
   const channel = releaseChannel(context.eventName, dispatchChannel);
   const scheduled = context.eventName === "schedule";
+  if (validateSigning && (context.eventName !== "workflow_dispatch" || channel !== "nightly")) {
+    throw new Error("Signing validation requires a manual Nightly run from main.");
+  }
   if (scheduled && pauseNightly) {
     return { shouldBuild: false, channel, reason: "Scheduled Nightly is paused." };
   }
@@ -194,6 +223,8 @@ async function planForkRelease({
 
   const tag = `v${version}`;
   const track = channel === "nightly" ? "Nightly" : "Preview";
+  const draft = channel === "preview";
+  const publish = publishEnabled && !validateSigning;
   return {
     shouldBuild: true,
     channel,
@@ -204,11 +235,13 @@ async function planForkRelease({
       channel === "stable"
         ? `T3CodeJP ${tag}`
         : `T3CodeJP ${track} ${version} (${ref.slice(0, 12)})`,
-    draft: channel === "preview",
+    draft,
+    publish,
+    requireSigning: validateSigning || (publish && !draft),
     isPrerelease: channel !== "stable",
     makeLatest: channel === "stable",
     hasUpdateFeed: channel !== "preview",
   };
 }
 
-module.exports = { planForkRelease };
+module.exports = { assertForkReleaseSigningConfiguration, planForkRelease };

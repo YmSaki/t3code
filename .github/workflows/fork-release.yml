@@ -21,6 +21,10 @@ on:
       version:
         description: Stable promotion version override (for example 1.2.3)
         type: string
+      validate_signing:
+        description: Validate signing on a Nightly run from main and keep Actions artifacts only
+        type: boolean
+        default: false
 
 # Prereleases take their base version from the published Stable release. Queue
 # every run so a promotion and the next Nightly cannot plan against stale state.
@@ -52,6 +56,8 @@ jobs:
       is_prerelease: ${{ steps.plan.outputs.is_prerelease }}
       make_latest: ${{ steps.plan.outputs.make_latest }}
       has_update_feed: ${{ steps.plan.outputs.has_update_feed }}
+      publish: ${{ steps.plan.outputs.publish }}
+      require_signing: ${{ steps.plan.outputs.require_signing }}
     steps:
       # actions/checkout's credential cleanup enumerates orphaned submodules in .repos.
       - name: Checkout
@@ -74,6 +80,8 @@ jobs:
           DISPATCH_CHANNEL: ${{ inputs.channel }}
           DISPATCH_VERSION: ${{ inputs.version }}
           PAUSE_NIGHTLY: ${{ vars.PAUSE_NIGHTLY }}
+          PUBLISH_ENABLED: ${{ vars.T3CODEJP_RELEASE_PUBLISH }}
+          VALIDATE_SIGNING: ${{ inputs.validate_signing }}
         with:
           retries: 3
           script: |
@@ -84,6 +92,8 @@ jobs:
               dispatchChannel: process.env.DISPATCH_CHANNEL || 'preview',
               dispatchVersion: process.env.DISPATCH_VERSION,
               pauseNightly: process.env.PAUSE_NIGHTLY === 'true',
+              publishEnabled: process.env.PUBLISH_ENABLED === 'true',
+              validateSigning: process.env.VALIDATE_SIGNING === 'true',
             });
 
             core.setOutput('should_build', plan.shouldBuild);
@@ -102,10 +112,32 @@ jobs:
               is_prerelease: plan.isPrerelease,
               make_latest: plan.makeLatest,
               has_update_feed: plan.hasUpdateFeed,
+              publish: plan.publish,
+              require_signing: plan.requireSigning,
             })) {
               core.setOutput(key, value);
             }
             core.notice(`Planned ${plan.name} at ${plan.ref}.`);
+
+      - name: Require fork release signing configuration
+        if: steps.plan.outputs.require_signing == 'true'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          CLERK_PASSKEY_RP_DOMAINS: ${{ vars.CLERK_PASSKEY_RP_DOMAINS }}
+        run: node -e 'require("./.github/scripts/fork-release-policy.cjs").assertForkReleaseSigningConfiguration(process.env)'
 
   build_bundle:
     name: Build fork JavaScript bundle
@@ -329,6 +361,20 @@ jobs:
             cli_archive: true
             launch_check: false
     uses: ./.github/workflows/release-desktop.yml
+    secrets:
+      CSC_LINK: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'mac' && secrets.CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'mac' && secrets.CSC_KEY_PASSWORD || '' }}
+      APPLE_API_KEY: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'mac' && secrets.APPLE_API_KEY || '' }}
+      APPLE_API_KEY_ID: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'mac' && secrets.APPLE_API_KEY_ID || '' }}
+      APPLE_API_ISSUER: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'mac' && secrets.APPLE_API_ISSUER || '' }}
+      MACOS_PROVISIONING_PROFILE: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'mac' && secrets.MACOS_PROVISIONING_PROFILE || '' }}
+      AZURE_TENANT_ID: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'win' && secrets.AZURE_TENANT_ID || '' }}
+      AZURE_CLIENT_ID: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'win' && secrets.AZURE_CLIENT_ID || '' }}
+      AZURE_CLIENT_SECRET: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'win' && secrets.AZURE_CLIENT_SECRET || '' }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ENDPOINT || '' }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME || '' }}
+      AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME || '' }}
+      AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME || '' }}
     with:
       label: ${{ matrix.label }}
       runner: ${{ matrix.runner }}
@@ -345,7 +391,8 @@ jobs:
       release_channel: ${{ needs.preflight.outputs.release_channel }}
       update_repository: YmSaki/t3code
       linux_executable_name: t3codejp
-      skip_windows_signing_tools: true
+      require_signing: ${{ needs.preflight.outputs.require_signing == 'true' }}
+      skip_windows_signing_tools: ${{ needs.preflight.outputs.require_signing != 'true' }}
       relay_client_tracing: false
       clerk_publishable_key: ""
       clerk_jwt_template: ""
@@ -417,7 +464,7 @@ jobs:
     needs: [preflight, collect]
     if: >-
       github.repository == 'YmSaki/t3code' &&
-      vars.T3CODEJP_RELEASE_PUBLISH == 'true' &&
+      needs.preflight.outputs.publish == 'true' &&
       needs.collect.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -471,7 +518,7 @@ jobs:
     needs: [preflight, publish]
     if: >-
       github.repository == 'YmSaki/t3code' &&
-      vars.T3CODEJP_RELEASE_PUBLISH == 'true' &&
+      needs.preflight.outputs.publish == 'true' &&
       needs.preflight.outputs.release_channel == 'nightly' &&
       needs.publish.result == 'success'
     runs-on: ubuntu-24.04

@@ -1555,6 +1555,58 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
+  it.effect("forwards fork signing credentials only to required platform builds", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workflow = yield* fs.readFileString(
+        yield* path.fromFileUrl(new URL("../.github/workflows/fork-release.yml", import.meta.url)),
+      );
+      const { jobs } = yield* Schema.decodeEffect(
+        fromYaml(
+          Schema.Struct({
+            jobs: Schema.Struct({
+              desktop: Schema.Struct({
+                uses: Schema.String,
+                secrets: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+              }),
+            }),
+          }),
+        ),
+      )(workflow);
+      const apple = [
+        "CSC_LINK",
+        "CSC_KEY_PASSWORD",
+        "APPLE_API_KEY",
+        "APPLE_API_KEY_ID",
+        "APPLE_API_ISSUER",
+        "MACOS_PROVISIONING_PROFILE",
+      ];
+      const azure = [
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_TRUSTED_SIGNING_ENDPOINT",
+        "AZURE_TRUSTED_SIGNING_ACCOUNT_NAME",
+        "AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME",
+        "AZURE_TRUSTED_SIGNING_PUBLISHER_NAME",
+      ];
+      assert.equal(jobs.desktop.uses, "./.github/workflows/release-desktop.yml");
+      assert.deepEqual(
+        jobs.desktop.secrets,
+        Object.fromEntries(
+          [...apple, ...azure].map((name) => {
+            const platform = apple.includes(name) ? "mac" : "win";
+            return [
+              name,
+              `\${{ needs.preflight.outputs.require_signing == 'true' && matrix.platform == '${platform}' && secrets.${name} || '' }}`,
+            ];
+          }),
+        ),
+      );
+    }),
+  );
+
   it.effect("rejects a macOS stage without a packaged app", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1940,6 +1992,106 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 });
+
+it.live(
+  "requires a valid Developer ID signature and notarization for the expected macOS team",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const workflow = yield* fs.readFileString(
+          yield* path.fromFileUrl(
+            new URL("../.github/workflows/release-desktop.yml", import.meta.url),
+          ),
+        );
+        const { jobs } = yield* Schema.decodeEffect(
+          fromYaml(
+            Schema.Struct({
+              jobs: Schema.Struct({
+                build: Schema.Struct({
+                  steps: Schema.Array(Schema.Struct({ run: Schema.optional(Schema.String) })),
+                }),
+              }),
+            }),
+          ),
+        )(workflow);
+        const run =
+          jobs.build.steps.find(({ run }) => run?.includes("smoke-desktop-app.ts"))?.run ?? "";
+        const signatureCheck = run.match(
+          /^([ \t]*)if .*inputs\.require_signing.*\n[\s\S]*?^\1fi$/m,
+        )?.[0];
+        assert.isDefined(signatureCheck);
+        const shellOptions = run.split("\n", 1)[0];
+        const stubs = String.raw`
+app="Fixture.app"
+codesign() {
+  case "$1" in
+    --verify) return "$VERIFY_STATUS" ;;
+    --display) printf '%s\n' "$SIGNATURE" >&2 ;;
+    *) return 90 ;;
+  esac
+}
+xcrun() {
+  [[ "$1 $2" == "stapler validate" ]] || return 91
+  return "$STAPLE_STATUS"
+}
+`;
+        const team = "ABCDE12345";
+        const developerId = "Authority=Developer ID Application: Fixture";
+        const validSignature = developerId + "\nTeamIdentifier=" + team;
+        const scenarios = [
+          { name: "valid signature and ticket", exit: 0 },
+          { name: "ad hoc", signature: "Signature=adhoc\nTeamIdentifier=not set", exit: 1 },
+          {
+            name: "development certificate for the expected team",
+            signature: "Authority=Apple Development: Fixture\nTeamIdentifier=" + team,
+            exit: 1,
+          },
+          { name: "wrong team", signature: developerId + "\nTeamIdentifier=WRONG12345", exit: 1 },
+          { name: "invalid signature", verify: 42, exit: 42 },
+          { name: "missing ticket", staple: 43, exit: 43 },
+          { name: "optional signing", required: false, verify: 42, staple: 43, exit: 0 },
+        ];
+        const platform = yield* HostProcess.Platform;
+        const env = yield* HostProcess.Environment;
+        const bash = platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        for (const {
+          name,
+          signature = validSignature,
+          verify = 0,
+          staple = 0,
+          required = true,
+          exit,
+        } of scenarios) {
+          const script = [
+            shellOptions,
+            stubs,
+            signatureCheck.replace(/\$\{\{\s*inputs\.require_signing\s*\}\}/g, String(required)),
+          ].join("\n");
+          const child = yield* spawner.spawn(
+            ChildProcess.make(bash, ["--noprofile", "--norc", "-c", script], {
+              stdin: "ignore",
+              env: {
+                PATH: env.PATH,
+                SystemRoot: env.SystemRoot,
+                APPLE_TEAM_ID: team,
+                SIGNATURE: signature,
+                VERIFY_STATUS: String(verify),
+                STAPLE_STATUS: String(staple),
+              },
+            }),
+          );
+          const [exitCode, output] = yield* Effect.all(
+            [child.exitCode, child.all.pipe(Stream.decodeText, Stream.mkString)],
+            { concurrency: "unbounded" },
+          );
+          assert.equal(Number(exitCode), exit, name + "\n" + output);
+        }
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+);
 
 it("keeps the prefix of a UNC path instead of going relative", () => {
   const paths = ancestorNodeModulesPaths("\\\\server\\share\\tmp\\app", "\\");

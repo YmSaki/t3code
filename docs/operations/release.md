@@ -12,10 +12,23 @@ publish the upstream npm package, AUR packages, marketing site, or Discord annou
 
 Publication is disabled unless the repository variable `T3CODEJP_RELEASE_PUBLISH` is
 `true`. With it unset, scheduled runs skip and manual runs retain validated Actions
-artifacts without creating a GitHub Release. Enable it only after checking the fork's
-branding, platform installation/update paths, and signing configuration. The publish
-job alone receives permission to write release assets; no Release App credentials are
-needed. Disabling the variable again stops subsequent publication and scheduled builds.
+artifacts without creating a GitHub Release. Stable and Nightly publication require
+macOS Developer ID signing and notarization and Windows Azure Trusted Signing. Set the
+Apple and Azure Actions secrets described in the upstream signing sections below, using
+fork-owned credentials and a macOS provisioning profile for `io.github.ymsaki.t3codejp`.
+Set the Actions variables `APPLE_TEAM_ID` and `CLERK_PASSKEY_RP_DOMAINS` to the fork's
+Apple team ID and fork-owned RP domain configuration required by the macOS packager.
+Preflight reports missing configuration by name and stops before any build starts.
+Each macOS installer must contain a valid Developer ID signature for that team and a
+stapled notarization ticket.
+
+To verify signing before enabling publication, dispatch `nightly` from `main` with
+`validate_signing` enabled. This run performs signing and retains the results as Actions
+artifacts without creating a release or updating the Nightly pointer. With publication
+disabled and `validate_signing` off, manual runs build unsigned artifacts. Enable
+publication after checking the fork's branding, installation and update paths, and
+signatures. Release assets are written using the workflow token. Disabling publication
+again stops subsequent publication and scheduled builds.
 
 ### Versions and channels
 
@@ -28,9 +41,9 @@ the existing updater understands the stable/nightly version formats.
 
 Manual stable promotion uses a published fork nightly on `main`, rather than whichever
 commit happens to be newest when stable ships. An explicit stable tag identifies the
-commit to build. Preview is the default manual channel and stays a draft with no update
-feed or updater manifests when publication is enabled; otherwise its files remain Actions
-artifacts. Never publish a preview draft by hand. Scheduled nightlies
+commit to build. Preview is the default manual channel. Its unsigned builds stay in a
+draft with no update feed or updater manifests when publication is enabled. Otherwise
+its files remain Actions artifacts. Never publish a preview draft by hand. Scheduled nightlies
 keep the upstream new-commit and six-hour publication-gap checks.
 
 ### Distribution boundaries
