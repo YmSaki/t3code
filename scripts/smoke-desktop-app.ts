@@ -110,6 +110,7 @@ try {
     throw error;
   }
   console.log("Desktop launch check passed: the app opened and showed the seeded thread.");
+  await page.screenshot({ path: NodePath.join(artifactsDir, "window.png") });
 } catch (error) {
   writeFailureArtifacts(error);
   const logs = NodePath.join(t3Home, "userdata/logs");

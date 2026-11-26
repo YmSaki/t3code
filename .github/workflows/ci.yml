@@ -101,6 +101,9 @@ jobs:
         run: vp run --filter @t3tools/desktop ensure:electron
 
       # Files/dependencies are repo-wide; export checks cover clean workspaces only.
+      - name: Check fork icon exports
+        run: vp run icons:check
+
       - name: Check unused code
         run: vp run knip:check
 
@@ -220,7 +223,7 @@ jobs:
             --artifacts-dir "$RUNNER_TEMP/desktop-launch-check"
 
       - name: Upload desktop launch check
-        if: ${{ failure() && steps.desktop_launch.outcome == 'failure' }}
+        if: ${{ !cancelled() && (steps.desktop_launch.outcome == 'success' || steps.desktop_launch.outcome == 'failure') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-launch-check

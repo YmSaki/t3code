@@ -1863,6 +1863,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.gen(function* () {
       const signedWinConfig = (hostPlatform: string) =>
         createBuildConfig("win", "nsis", "1.2.3", true, false, undefined, undefined).pipe(
+          Effect.tap((config) =>
+            Effect.sync(() => {
+              assert.notProperty(config, "afterPack");
+              assert.match(config.afterSign as string, /prepare-server-compile-cache\.cjs$/);
+            }),
+          ),
           Effect.map((config) => config.win as Record<string, unknown>),
           Effect.provideService(HostProcess.Platform, hostPlatform),
         );

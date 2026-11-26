@@ -39,6 +39,12 @@ export const BRAND_ASSET_PATHS = {
 
 export type WebAssetBrand = "development" | "nightly" | "production";
 
+export const FORK_ICON_DIRECTORIES = {
+  development: "assets/fork/development",
+  nightly: "assets/fork/nightly",
+  production: "assets/fork/production",
+} as const;
+
 export const WEB_ASSET_CHANNELS = ["latest", "nightly"] as const;
 
 export type WebAssetChannel = (typeof WEB_ASSET_CHANNELS)[number];
@@ -61,64 +67,14 @@ const WEB_ICON_TARGET_FILENAMES = {
   icon512Png: "icon-512x512.png",
 } as const;
 
-const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
-  development: {
-    faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
-    icon192Png: BRAND_ASSET_PATHS.developmentWebIcon192Png,
-    icon512Png: BRAND_ASSET_PATHS.developmentWebIcon512Png,
-  },
-  nightly: {
-    faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
-    icon192Png: BRAND_ASSET_PATHS.nightlyWebIcon192Png,
-    icon512Png: BRAND_ASSET_PATHS.nightlyWebIcon512Png,
-  },
-  production: {
-    faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.productionWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
-    icon192Png: BRAND_ASSET_PATHS.productionWebIcon192Png,
-    icon512Png: BRAND_ASSET_PATHS.productionWebIcon512Png,
-  },
-} as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
-
 export function resolveWebIconOverrides(
   brand: WebAssetBrand,
   targetDirectory: string,
 ): ReadonlyArray<IconOverride> {
-  const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
-  return [
-    {
-      sourceRelativePath: sourcePaths.faviconIco,
-      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.faviconIco}`,
-    },
-    {
-      sourceRelativePath: sourcePaths.favicon16Png,
-      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.favicon16Png}`,
-    },
-    {
-      sourceRelativePath: sourcePaths.favicon32Png,
-      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.favicon32Png}`,
-    },
-    {
-      sourceRelativePath: sourcePaths.appleTouchIconPng,
-      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.appleTouchIconPng}`,
-    },
-    {
-      sourceRelativePath: sourcePaths.icon192Png,
-      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.icon192Png}`,
-    },
-    {
-      sourceRelativePath: sourcePaths.icon512Png,
-      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.icon512Png}`,
-    },
-  ];
+  return Object.values(WEB_ICON_TARGET_FILENAMES).map((fileName) => ({
+    sourceRelativePath: `${FORK_ICON_DIRECTORIES[brand]}/${fileName}`,
+    targetRelativePath: `${targetDirectory}/${fileName}`,
+  }));
 }
 
 export const DEVELOPMENT_ICON_OVERRIDES = resolveWebIconOverrides("development", "dist/client");

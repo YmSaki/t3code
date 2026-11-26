@@ -37,7 +37,7 @@ import {
 } from "./update-release-package-versions.ts";
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
 import {
-  BRAND_ASSET_PATHS,
+  FORK_ICON_DIRECTORIES,
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
@@ -2770,18 +2770,11 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 }
 
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
-  if (resolveDesktopUpdateChannel(version) === "nightly") {
-    return {
-      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
-    };
-  }
-
+  const directory = FORK_ICON_DIRECTORIES[resolveDesktopWebAssetBrand(version)];
   return {
-    macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
-    linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
-    windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+    macIconPng: `${directory}/mac-1024.png`,
+    linuxIconPng: `${directory}/icon-1024.png`,
+    windowsIconIco: `${directory}/icon.ico`,
   };
 }
 
@@ -3005,6 +2998,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "win") {
+    // Windows locks the executable while generating bytecode; edit its resources first.
+    buildConfig.afterSign = buildConfig.afterPack;
+    delete buildConfig.afterPack;
     buildConfig.npmRebuild = false;
     buildConfig.nsis = {
       differentialPackage: true,
