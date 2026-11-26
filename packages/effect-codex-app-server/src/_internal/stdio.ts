@@ -92,8 +92,8 @@ export const stderrExcerpt = (tail: string): string | undefined => {
 };
 
 interface StderrLineState {
-  readonly utf8Decoder: TextDecoder;
-  readonly fallbackDecoder: TextDecoder;
+  readonly utf8Decoder: NodeUtil.TextDecoder;
+  readonly fallbackDecoder: NodeUtil.TextDecoder;
   utf8Valid: boolean;
   utf8Tail: string;
   fallbackTail: string;
