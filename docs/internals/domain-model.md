@@ -12,21 +12,21 @@ Before implementing a change that introduces or alters domain concepts (`H1`, `H
 4. **Authoritative owner** — Which domain service or package owns creation, mutation, and persistence.
 5. **Invariants** — Conditions that must hold across all valid states, retries, and failures.
 
-Derive storage schemas, RPC contracts, and configuration structures from the domain model—never infer domain ownership backward from UI layout or ad-hoc environment variables.
+Wire contracts (`packages/contracts`), internal domain models, and persistence models serve different purposes and may define explicit translation boundaries. However, never duplicate the same domain concept, enum, or validation rule independently across boundaries. Derive storage schemas, RPC contracts, and configuration structures from the domain model—never infer ownership backward from UI layout or ad-hoc environment variables.
 
 ## Core execution domain
 
+Separate individual command atomicity from multi-step turn execution:
+
 - **Environment (`1`) -> Project (`0..*`)**: An environment owns its filesystem, credentials, and local project records.
 - **Project (`1`) -> Worktree (`0..*`) / Thread (`0..*`)**: Threads belong to a project and may bind to a dedicated worktree or task folder.
-- **Thread (`1`) -> Turn / Run (`0..*`)**: Each turn records intent as **Events** and updates **Projections**, **CommandReceipts**, and **OutboxEffects** atomically via `EventSink`, then captures **Checkpoints** as hidden Git refs.
 - **Provider / Driver (`1`) -> ProviderInstance (`0..*`) -> Session (`0..1` active per Thread)**: Provider adapters translate native protocols into normalized orchestration commands and events; a thread survives session termination.
+- **Command transaction boundary (atomic):** One `Command` enters `Orchestrator` (pure decision with no I/O) and commits `Event`, `Projection`, `CommandReceipt`, and `OutboxEffect` atomically in a single `EventSink` transaction.
+- **Turn / Run lifecycle (multi-transaction workflow):** One `Turn` spans multiple independent command transactions and asynchronous `OutboxEffect` executions across time (start command, provider turn execution in `EffectWorker`, intermediate events, run finalization, and subsequent `Checkpoint` capture).
 
 ## Product and distribution domain
 
-Changes touching branding, packaging, updates, hosted services, or fork isolation must model configuration against these relationships rather than scattered flags:
+Do not conflate T3CodeJP domain concepts with platform-specific mechanisms (such as GitHub Releases tags, Electron NSIS/DMG targets, or Expo/EAS build profiles), and do not merge independent axes into one enum (for example, mobile `preview:dev` combines a preview distribution/release track with a development client build form).
 
-- **Product (`1`) -> Distribution form (`Desktop` | `CLI` | `Web` | `Mobile`) -> Platform (`macOS` | `Windows` | `Linux` | `iOS` | `Android` | `Browser`)**: Determines derived app identifiers, data directories, and URL schemes from one identity owner.
-- **Product (`1`) -> Release (`0..*`) -> Channel (`Stable` | `Nightly` | `Dev`)**: Determines update feeds, binary naming, and mandatory signing/notarization policy.
-- **Product (`1`) -> External service (`Auth` | `Relay` | `Hosted Web` | `OTA`) -> Service configuration (`Disabled` | `Configured`)**: Distinguishes intentionally disabled optional services from misconfigured required boundaries.
-
-Together, **Distribution form + Platform + Channel + Service configuration** resolve once at the startup or build boundary into a validated **Effective product configuration** governed by [Product configuration](./product-configuration.md).
+- Separate only dimensions that vary independently (such as execution/runtime mode, build variant, release/distribution track, product identity, and external service enablement); derive platform manifests, update feeds, signing policies, and data isolation paths from those domain dimensions rather than inferring them from labels or repository names.
+- The exact minimal set of independent product-distribution axes is governed by explicit design agreement before implementation (`H5`) and enforced via [Product configuration](./product-configuration.md).

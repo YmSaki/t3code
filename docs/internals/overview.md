@@ -33,17 +33,29 @@ Provider-specific behavior belongs behind an adapter. Orchestration works with n
 and events, so adding a provider should not require branches throughout the domain or clients.
 See [provider constraints](./providers.md).
 
-## Package layers and allowed dependencies
+## Dependency model and package roles
 
-Dependencies flow strictly downward from applications to shared cores and contracts; reverse dependencies across layers are forbidden:
+Evaluate dependencies across three independent axes rather than conflating them in one hierarchy:
 
-- **Layer 0 (Contracts & protocol primitives):** `packages/contracts`, `packages/effect-acp` — zero internal workspace dependencies.
-- **Layer 1 (Shared utilities & domain cores):** `packages/shared`, `packages/provider-core`, `packages/source-control-core`, `packages/secret-provider-core`, `packages/ssh`, `packages/tailscale` — depend only on Layer 0 and `packages/shared`.
-- **Layer 2 (Adapters & definitions):** `packages/provider-*`, `packages/source-control-*`, `packages/secret-provider-*`, `packages/issue-tracker-*` — depend on their corresponding core, `contracts`, and `shared`; never on `client-runtime` or `apps/*`.
-- **Layer 3 (Client runtime):** `packages/client-runtime` — shared client state, connection, and domain logic; depends on `contracts`, `shared`, and Layer 1–2 definitions/cores, never on `apps/*`.
-- **Layer 4 (Applications / shells):** `apps/server` (orchestration, persistence, provider execution, transports) and `apps/{web,desktop,mobile,marketing}` (platform shells consuming `client-runtime`, `contracts`, and `shared`; never importing `apps/server` internals).
+- **Phase (when needed):** Runtime, build/bundle, or test.
+- **Purpose (why needed):** Wire contract, shared utility, domain logic, or adapter aggregation.
+- **Boundary (what it crosses):** Cross-workspace package, public subpath export, or intra-package module.
 
-Distinguish adopted architectural patterns from historical leftovers before copying existing code.
+Do not infer runtime coupling solely from `package.json` `dependencies` vs. `devDependencies`: bundled builds may pull runtime assets through `devDependencies` (for example, `apps/server` bundles `@t3tools/web` without a runtime domain dependency on Web UI internals).
+
+Separate package and directory responsibilities as follows:
+
+- **Standalone protocol libraries** (`packages/effect-acp`, `packages/effect-codex-app-server`): Independent protocol implementations with zero dependencies on product packages (`@t3tools/*`).
+- **Wire contracts** (`packages/contracts`): Zero internal workspace dependencies. Owns wire schemas and shared identifiers only; internal domain models and persistence models may define explicit translation boundaries without duplicating domain definitions.
+- **Shared utilities** (`packages/shared`): Cross-package utilities, shared platform abstractions, and multi-app pure logic. Do not place single-domain logic here, and prohibit unrelated intra-package cross-domain imports.
+- **Domain cores** (`packages/*-core`, `packages/ssh`, `packages/tailscale`): Domain-specific contracts and pure/shared foundations.
+- **Adapters** (`packages/provider-*`, `packages/source-control-*`, `packages/secret-provider-*`, `packages/issue-tracker-*`): External protocol and service integrations.
+- **Adapter registries / definitions** (`packages/*-definitions`): Composition and registration of adapter sets; depending on the adapters they aggregate is intentional.
+- **Client runtime** (`packages/client-runtime`): Shared Web/Desktop/Mobile connection and client domain state; must not depend on `apps/*`.
+- **Application shells** (`apps/server`, `apps/{web,desktop,mobile,marketing}`): Host/UI shells; client apps must not import `apps/server` internals.
+- **Support & non-runtime areas** (`infra/`, `scripts/`, `evals/`, `oxlint-plugin-t3code/`, `packaging/`, `packages/*-testing`): Tooling, build, and test support only; never imported by production runtime code.
+
+Dependencies between packages of the same role are neither blanket-allowed nor blanket-forbidden; judge them by ownership and purpose, forbidding cross-domain coupling via shared helpers. Distinguish adopted architectural patterns from historical leftovers before copying existing code.
 
 ## Settings ownership
 
@@ -56,7 +68,7 @@ select known environment-local checkouts; the group itself does not store inheri
 
 ## Durable intent and side effects
 
-Orchestration commands decide events without side effects, and persisted projections provide the authoritative view of current state once applied. The [v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and decides events without performing provider or filesystem work.
+Orchestration commands decide events without side effects, and persisted projections provide the authoritative view of current state once applied. The atomic transaction boundary is one individual command—not an entire turn, which spans multiple command transactions and asynchronous outbox effects over time. The [v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and decides events without performing provider or filesystem work.
 [EventSink](../../apps/server/src/orchestration-v2/EventSink.ts) commits events, persisted projections,
 the accepted command receipt, and outbox effects in one database transaction. Subscribers receive
 events after that commit. This keeps command retries idempotent and prevents a persisted projection

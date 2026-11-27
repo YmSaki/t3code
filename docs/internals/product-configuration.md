@@ -6,7 +6,7 @@
 
 > Each fact has one authoritative definition, one owner, and explicit resolution rules. This does not require one configuration file.
 
-Separate configuration into four ownership categories so public product metadata, release trust boundaries, runtime preferences, and credentials never mix:
+Derive platform-specific settings (GitHub Releases, Electron builders, Expo/EAS profiles) from the T3CodeJP product domain model rather than defining domain behavior from platform configs. Separate configuration into four ownership categories so public product metadata, release trust boundaries, runtime preferences, and credentials never mix:
 
 1. **Product identity** — Public metadata identifying the product and isolating its local state.
 2. **Release and deployment** — Distribution targets, update feeds, hosted endpoints, channels, and signing policy.
