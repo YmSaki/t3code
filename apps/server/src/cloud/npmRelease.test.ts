@@ -40,7 +40,8 @@ it.effect.each([
           const response =
             url.pathname === "/repos/YmSaki/t3codeJP/releases"
               ? Response.json([{ tag_name: `v${nightly}` }, { tag_name: `v${version}` }])
-              : url.pathname === `/YmSaki/t3codeJP/releases/download/v${expected}/t3code-release.json`
+              : url.pathname ===
+                  `/YmSaki/t3codeJP/releases/download/v${expected}/t3code-release.json`
                 ? metadata(expected, 42)
                 : url.pathname ===
                       `/pingdotgg/t3code/releases/download/v${expected}/t3code-release.json` ||
