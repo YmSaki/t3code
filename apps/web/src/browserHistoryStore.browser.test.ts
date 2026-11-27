@@ -228,23 +228,19 @@ it("moves the legacy snapshot into the shared database", async () => {
 
 it("persists new visits from an open document after its history database is deleted", async () => {
   await resetHistoryFixture();
-  localStorage.setItem(
-    storageKey,
-    JSON.stringify({ state: { byProjectKey: { a: [page] } }, version: 1 }),
-  );
   try {
-    using documents = new DisposableStack();
-    const first = await openHistoryDocument(documents);
-    await vi.waitFor(() => expect(first.getState().byProjectKey).toEqual({ a: [page] }));
-    first.getState().removeUrl("a", page.url);
-    await vi.waitFor(() => expect(first.getState().byProjectKey).toEqual({}));
+    const store = useBrowserHistoryStore;
+    store.getState().recordVisit("a", oldEntry.url, oldEntry.lastVisitedAt);
+    await vi.waitFor(() => expect(store.getState().byProjectKey).toEqual({ a: [oldEntry] }));
 
     await deleteHistoryDatabase();
-    first.getState().recordVisit("b", otherEntry.url, otherEntry.lastVisitedAt);
-    await vi.waitFor(() => expect(first.getState().byProjectKey.b).toEqual([otherEntry]));
+    store.getState().recordVisit("b", otherEntry.url, otherEntry.lastVisitedAt);
+    const expected = { b: [otherEntry] };
+    await vi.waitFor(() => expect(store.getState().byProjectKey).toEqual(expected));
 
-    const reopened = await openHistoryDocument(documents);
-    await vi.waitFor(() => expect(reopened.getState().byProjectKey).toEqual({ b: [otherEntry] }));
+    using fixtures = new DisposableStack();
+    const db = await openHistoryFixture(fixtures);
+    expect(await readHistoryFixture(db)).toHaveProperty("byProjectKey", expected);
   } finally {
     await resetHistoryFixture();
   }
@@ -258,10 +254,9 @@ it("keeps overlapping visits from independent documents", async () => {
   );
   try {
     using fixtures = new DisposableStack();
-    const [first, second] = await Promise.all([
-      openHistoryDocument(fixtures),
-      openHistoryDocument(fixtures),
-    ]);
+    const first = useBrowserHistoryStore;
+    const second = await openHistoryDocument(fixtures);
+    await vi.waitFor(() => expect(second.getState().byProjectKey).toEqual({ a: [page] }));
     first.getState().recordVisit("a", oldEntry.url, oldEntry.lastVisitedAt);
     second.getState().recordVisit("b", otherEntry.url, otherEntry.lastVisitedAt);
     const expected = { a: [page, oldEntry], b: [otherEntry] };
@@ -270,7 +265,6 @@ it("keeps overlapping visits from independent documents", async () => {
       expect(second.getState().byProjectKey).toEqual(expected);
     });
 
-    localStorage.removeItem(storageKey);
     const db = await openHistoryFixture(fixtures);
     await vi.waitFor(async () =>
       expect(await readHistoryFixture(db)).toHaveProperty("byProjectKey", expected),
