@@ -2987,6 +2987,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.nsis = {
       differentialPackage: true,
       include: "apps/desktop/resources/installer.nsh",
+      // A second compression pass prevents blockmaps from reusing the WSL archive's gzip blocks.
+      ...(wslRuntimeBundled ? { preCompressedFileExtensions: [".tar.gz"] } : {}),
     };
     const winConfig: Record<string, unknown> = {
       target: [target],

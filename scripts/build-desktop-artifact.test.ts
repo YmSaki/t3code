@@ -604,6 +604,26 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
+  it.effect("keeps the bundled WSL archive outside the compressed NSIS payload", () =>
+    Effect.gen(function* () {
+      const createWindowsConfig = (wslRuntimeBundled: boolean) =>
+        createBuildConfig(
+          "win",
+          "nsis",
+          "1.0.0",
+          false,
+          false,
+          undefined,
+          undefined,
+          wslRuntimeBundled,
+        );
+      const bundled = yield* createWindowsConfig(true);
+      const unbundled = yield* createWindowsConfig(false);
+      assert.deepNestedPropertyVal(bundled, "nsis.preCompressedFileExtensions", [".tar.gz"]);
+      assert.notNestedProperty(unbundled, "nsis.preCompressedFileExtensions");
+    }),
+  );
+
   it.effect("names updatable AppImages without a version and apart per channel", () =>
     Effect.gen(function* () {
       const appImageName = (version: string) =>
