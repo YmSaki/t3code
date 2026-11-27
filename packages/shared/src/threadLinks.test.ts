@@ -214,6 +214,37 @@ describe("thread links", () => {
 });
 
 describe("hosted thread links", () => {
+  it("shares fork URLs and reads old links alongside all configured channel origins", async () => {
+    vi.resetModules();
+    const routing = {
+      router: "https://fork.example.test",
+      stable: "https://stable.fork.example.test",
+      nightly: "https://nightly.fork.example.test",
+    };
+    vi.stubGlobal("__T3CODE_BUILD_HOSTED_APP_ROUTING__", routing);
+    try {
+      const links = await import("./threadLinks.ts");
+      const { buildNewThreadLink, promptLinkAppPath } = await import("./promptLinks.ts");
+      const thread = ref("remote", "tracked");
+      expect(links.hostedThreadLink(thread)).toBe(`${routing.router}/threads/remote/tracked`);
+      expect(buildNewThreadLink({ prompt: "go" })).toBe(`${routing.router}/new?prompt=go`);
+      for (const origin of [...Object.values(routing), "https://app.t3.codes"]) {
+        const href = `${origin}/threads/remote/tracked`;
+        expect(links.parseThreadLinkHref(href)).toEqual(thread);
+        expect(links.threadLinkRefs(`Open [this thread](${href}).`, local)).toEqual([thread]);
+        expect(promptLinkAppPath(href)).toBe("/remote/tracked");
+        expect(promptLinkAppPath(`${origin}/new?prompt=go`)).toBe("/new?prompt=go");
+      }
+      const foreign = "https://fork.example.test.other.test/threads/remote/tracked";
+      expect(links.parseThreadLinkHref(foreign)).toBeNull();
+      expect(links.threadLinkRefs(foreign, local)).toEqual([]);
+      expect(promptLinkAppPath(foreign)).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
+
   it("escapes every id character a sentence or path could claim, and reads it back", () => {
     const thread = ref("env.1", "thread:delegated/mcp%3A1.");
     const link = hostedThreadLink(thread);

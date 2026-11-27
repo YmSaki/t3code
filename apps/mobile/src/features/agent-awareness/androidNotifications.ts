@@ -1,6 +1,6 @@
-import Constants from "expo-constants";
 import { requireOptionalNativeModule } from "expo";
 import { Linking, Platform } from "react-native";
+import { mobileAppScheme } from "../../lib/appScheme";
 
 interface AndroidAgentNotifications {
   configure(deviceId: string, userId: string, scheme: string, ongoingEnabled: boolean): void;
@@ -19,22 +19,17 @@ export function supportsAndroidAgentNotifications(): boolean {
   return typeof native?.configure === "function" && typeof native?.clear === "function";
 }
 
-function appScheme(): string {
-  const scheme = Constants.expoConfig?.scheme;
-  return (Array.isArray(scheme) ? scheme[0] : scheme) ?? "t3code";
-}
-
 export function configureAndroidAgentNotifications(
   deviceId: string,
   userId: string,
   ongoingEnabled: boolean,
 ): void {
-  native?.configure?.(deviceId, userId, appScheme(), ongoingEnabled);
+  native?.configure?.(deviceId, userId, mobileAppScheme(), ongoingEnabled);
 }
 
 export function showAndroidShowcaseAgentActivity(data: Record<string, string>): boolean {
   if (!native?.showShowcaseActivity) return false;
-  native.showShowcaseActivity(appScheme(), data);
+  native.showShowcaseActivity(mobileAppScheme(), data);
   return true;
 }
 

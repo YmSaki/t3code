@@ -77,6 +77,15 @@ checks.
 Server updates restart the connection and can interrupt active agents and
 terminal commands. Saved threads, settings, and project files remain.
 
+Before an upgrade or a track switch, keep the exact installer or archive for
+the version that works. Quit the desktop app and stop the server before
+copying its full T3 home directory to a separate location. The default is
+`~/.t3codejp`. If you configured `T3CODE_HOME` or `--base-dir`, back up that
+directory instead. For a background service, `t3 service uninstall` stops it
+and preserves its data. Run `t3 service install` when you are ready to start it
+again. Use the same home for both commands. Back up project repositories
+separately if they contain work you need.
+
 **Settings → Maintenance → Continue threads after restarts** is on by default.
 It resumes supported active threads after an update, crash, or machine
 restart. Changes are saved to connected environments that support this setting;
@@ -101,14 +110,20 @@ before continuing an important older thread.
 
 ## When versions don't match
 
-A client and server must speak the same orchestration protocol. If they do not, the connection is
-refused rather than running half-upgraded:
+A client and server must speak the same orchestration protocol. Desktop and
+the bundled web client ship with their own server version. For a remote server,
+use that server's bundled web client or a compatible T3CodeJP desktop release.
+Stable and Nightly releases can use the same protocol, and a release in either
+track can change it.
 
-- An app newer than the server is blocked before connecting, with a notice telling you to update
-  T3 Code on the machine named in the notice.
-- A server newer than your app refuses the connection with an update message.
+- If the client requires a newer protocol, update the server on the machine
+  named in the notice.
+- If the server requires a newer protocol, update the app you are using.
 
-Update the side the notice names, then reconnect.
+If the matching fork release is unavailable, open the bundled web client on
+the server's URL. T3CodeJP supports fork clients paired to fork servers. An
+upstream client on the same protocol can connect directly in some versions.
+Use each product's own releases and Connect configuration.
 
 ## Update a connected server
 
@@ -148,13 +163,37 @@ launcher is `~/.t3codejp/cli-bin/t3` on macOS/Linux or
 Keep the client open until it reconnects or reports a failure. A failed service
 update can roll back to the previous version. If the update still fails:
 
-1. Retry the offered action once.
-2. Check that you updated the server's machine, not only the device you are using.
-3. For a command-line server, stop it and relaunch the exact version shown in the notice.
+1. Check the notice for the machine and target version, then retry the offered action once.
+2. If the target release is unavailable, keep using the working version. For a
+   command-line server you manage yourself, use `t3 update <version>` on the
+   host and relaunch it once the download succeeds.
+3. If the new version is installed and fails to start, restore the previous
+   version and its data together.
 
 Only one server can use a T3 home directory at a time. If startup reports that
 another server owns it, stop that server before retrying, or use a separate home
 directory and pair with the running server.
+
+### Restore a previous version and its data
+
+1. On the server's machine, quit the desktop app and stop any CLI server. Use
+   `t3 service uninstall` to stop a background service and remove it from startup.
+2. Move the current T3 home directory aside to keep its logs and any work made
+   since the backup. Put the complete backup from before the update in its
+   place. Keep settings, secrets, attachments, and SQLite files together.
+3. For desktop, reinstall the matching fork installer. For the standalone CLI,
+   reinstall the exact fork version with `T3CODE_VERSION` set as described in
+   [Install T3CodeJP](./install.md#command-line). For a server run directly from
+   an archive, start the retained version with the same arguments and home.
+   Run `t3 service install` with the restored home if you used a background service.
+4. Check that your threads, settings, and attachments are present, then
+   reconnect your clients. Keep the newer copy until recovery is complete.
+
+Restoring a backup returns the server to the state captured in that backup.
+`t3 update --allow-downgrade` changes the installed version when the database
+preflight passes. It cannot undo database migrations. If you have no matching
+backup and the previous version rejects the database, keep the data and use a
+release that supports it.
 
 ### macOS app does not reopen after an Alpha update
 
@@ -173,9 +212,10 @@ from Applications again.
 
 If the desktop app's server keeps failing at startup, T3 Code shows a "T3 Code
 could not start" window instead of the app. If a newer version is available,
-choose **Update** to install it. If not, the window links to the last version
-that started on your computer. Download and install it to go back. Use **Copy
-details** to include the error in a bug report.
+choose **Update** to install it. The window can also link to the last version
+that started on your computer. If you go back, follow the [restore steps](#restore-a-previous-version-and-its-data)
+so the older app starts with the matching backup. Use **Copy details** to include
+the error in a bug report.
 
 ## Registries and proxies
 
@@ -210,11 +250,11 @@ status and refresh it again.
 
 ## Mobile updates
 
-To update an environment from your phone, open **Settings → Environments** and
-select it. **Check for updates** finds the latest release on that environment's
-current release channel. Keep the app open while the environment updates and
-reconnects. Hosts that cannot update remotely show instructions for updating on
-the machine instead.
+On a compatible mobile build, you can update an environment from
+**Settings → Environments**. Select it and use **Check for updates** to find the
+latest release on its current channel. Keep the app open while the environment
+updates and reconnects. Hosts that cannot update remotely show instructions for
+updating on the machine instead.
 
 The same page lets you refresh provider status and update supported providers.
 These controls require a connected environment and permission to operate it.
@@ -224,8 +264,7 @@ there before refreshing to find newer versions. The same setting controls whethe
 T3 Code downloads model catalog updates, so with it off new models may not appear
 until you enable it and refresh provider status.
 
-Install App Store or Google Play releases as usual. The mobile app can also
-download updates in the background and apply them when you next leave the app.
-It saves drafts and queued messages before restarting. If you keep the app open
-for a long time, it may ask to install immediately; choosing **Later** leaves the
-update queued for the next suitable moment.
+Fork mobile distribution is in preparation. If a mobile or hosted client can no
+longer connect after an update, use the server's bundled web client in your
+browser while a compatible client is being restored. [Install T3CodeJP](./install.md)
+lists the available fork clients.

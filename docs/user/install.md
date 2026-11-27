@@ -4,10 +4,17 @@ T3CodeJP runs coding agents on your computer and lets you control them from its
 desktop, web, or mobile app. Set up the machine where the agents will work first.
 
 T3CodeJP is an unofficial fork of [T3 Code](https://github.com/pingdotgg/t3code),
-maintained independently. Fork mobile distribution and hosted Web are tracked in
-[#50](https://github.com/YmSaki/t3codeJP/issues/50) and
-[#49](https://github.com/YmSaki/t3codeJP/issues/49). The installed CLI serves this
-fork's bundled Web client.
+maintained independently.
+
+| Client or server  | Platforms                                       | Where to get it                                                                |
+| ----------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Desktop           | macOS, Windows, and Linux on x64 and ARM64      | [Desktop installers](#desktop-app)                                             |
+| Standalone server | macOS ARM64, Windows and Linux on x64 and ARM64 | [Command-line installers](#command-line)                                       |
+| Bundled web       | Browser                                         | Open the URL printed by your server or use a pairing link from the host        |
+| Hosted web        | Browser                                         | [Fork deployment in preparation](https://github.com/YmSaki/t3codeJP/issues/49) |
+| Mobile            | iOS and Android                                 | [Fork distribution in preparation](#mobile-app)                                |
+
+See [Updating T3CodeJP](./updating.md) for compatibility and recovery.
 
 ## Requirements
 
@@ -40,8 +47,8 @@ An existing launcher belonging to another installation is preserved.
 Set `T3CODE_CHANNEL=nightly` to select Nightly, or `T3CODE_VERSION` to pin a
 published fork version. Clear `T3CODE_VERSION` to let a later installer follow
 its selected channel. `t3 update` checks the newest published release on its
-channel independently of GitHub's desktop Latest label. If the selected release is unavailable, build from
-source; do not substitute an upstream npm package or installer.
+channel independently of GitHub's desktop Latest label. If the selected release
+is unavailable, use the [source build instructions](#build-from-source).
 
 | Task                                  | Command                                                                 |
 | ------------------------------------- | ----------------------------------------------------------------------- |
@@ -62,15 +69,15 @@ command it names and open the pairing URL to connect to that server. Stop it
 before starting a replacement, or use a different `--base-dir` for an
 independent server.
 
-### Intel Macs
+### Build from source
 
-There is no `t3` executable for Intel Macs (the desktop app is available). To
-run a server there, build it from source with `vp`, which provides the Node version it needs
+Intel Macs have a desktop installer and require a source build for a standalone
+server. Use `vp`, which provides the Node version the server needs
 ([Install vp](../operations/development.md#first-checkout)):
 
 ```bash
 git clone https://github.com/YmSaki/t3codeJP
-cd t3codeJP && vp i && vp run build:desktop
+cd t3codeJP && vp i && vp run --filter t3 build
 node apps/server/dist/bin.mjs
 ```
 
@@ -167,24 +174,10 @@ folder paths, so in the web app use **Add project** instead.
 
 ## Mobile app
 
-Install T3CodeJP from the
-[App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) or
-[Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code).
-The phone connects to a server on another machine. Follow
-[remote access](./remote-access.md) to link it through T3 Connect or a pairing URL.
-
-Store links and QR codes are also available in **Settings → About → Mobile app**
-on web and desktop. The store apps work with both stable and Nightly servers. Test builds are optional:
-
-- **iPhone and iPad:** TestFlight is invite-only.
-- **Android:** download an APK from the
-  [Android beta releases](https://github.com/YmSaki/t3codeJP/releases?q=android-beta-).
-
-If the app crashes during launch, open Settings → Diagnostics on the next launch
-that succeeds. It lists startup crashes from the last 7 days with the error and
-component stack that store crash reports leave out. Copy the report and paste it
-into a GitHub issue. Error messages can quote values from the app, so read it over
-before sharing.
+[Fork mobile distribution](https://github.com/YmSaki/t3codeJP/issues/50) is in
+preparation. The existing App Store and Google Play listings distribute upstream
+T3 Code. To reach a fork server from a phone, use the bundled web client in your
+browser and follow the [pairing URL instructions](./remote-access.md).
 
 ## Providers
 

@@ -1,0 +1,122 @@
+name: Deploy fork hosted Web
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published fork Stable or Nightly release tag (for example v1.2.3)
+        type: string
+        required: true
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: true
+    secrets:
+      T3CODEJP_WEB_VERCEL_TOKEN:
+        required: true
+      T3CODEJP_WEB_VERCEL_ORG_ID:
+        required: true
+      T3CODEJP_WEB_VERCEL_PROJECT_ID:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-hosted-web
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  deploy:
+    if: >-
+      github.repository == 'YmSaki/t3codeJP' &&
+      (github.ref == 'refs/heads/main' ||
+       (inputs.sha != '' && github.ref == format('refs/tags/{0}', inputs.tag)))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+      T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+      T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+    steps:
+      - name: Checkout deployment workflow
+        shell: bash
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git sparse-checkout set --cone .github/actions/setup-ci-deps .github/scripts packages/shared/src scripts/lib
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
+
+      - name: Validate published fork release
+        id: release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_RELEASE_SHA: ${{ inputs.sha }}
+          T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
+          T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
+          T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
+        with:
+          script: |
+            const { resolveForkConnectConfig } = require('./scripts/lib/public-config.ts');
+            resolveForkConnectConfig(process.env);
+            const { planForkWebRelease } = require('./.github/scripts/fork-release-web.cjs');
+            const plan = await planForkWebRelease({
+              github,
+              context,
+              tag: process.env.RELEASE_TAG,
+              expectedSha: process.env.EXPECTED_RELEASE_SHA,
+              env: process.env,
+            });
+            for (const [name, value] of Object.entries(plan)) core.setOutput(name, value);
+            core.notice(`Deploying v${plan.version} from ${plan.sha} to the ${plan.channel} channel.`);
+
+      - name: Setup Vite+
+        uses: ./.github/actions/setup-ci-deps
+        with:
+          install: "false"
+
+      # The tag checkout can contain orphaned .repos submodules.
+      - name: Checkout published source
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          git init release-source
+          git -C release-source remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git -C release-source fetch --no-tags --depth=1 origin "$RELEASE_SHA"
+          git -C release-source sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -C release-source -c checkout.workers=0 checkout --detach FETCH_HEAD
+          if ! git -C release-source grep -q hostedAppRoutingFromEnv HEAD -- apps/web/vercel.ts; then
+            printf '%s\n' 'The release predates support for fork hosted Web domains.' >&2
+            exit 1
+          fi
+
+      - name: Install Vercel configuration dependencies from the release
+        shell: bash
+        working-directory: release-source
+        run: vp install --frozen-lockfile --ignore-scripts --filter '@t3tools/web...'
+
+      - name: Build and promote fork deployment
+        shell: bash
+        working-directory: release-source
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
+          VITE_HOSTED_APP_CHANNEL: ${{ steps.release.outputs.channel }}
+          T3CODE_WEB_ROUTER_URL: ${{ steps.release.outputs.routerUrl }}
+          T3CODE_WEB_LATEST_DOMAIN: ${{ steps.release.outputs.latestDomain }}
+          T3CODE_WEB_NIGHTLY_DOMAIN: ${{ steps.release.outputs.nightlyDomain }}
+          VERCEL_TOKEN: ${{ secrets.T3CODEJP_WEB_VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_PROJECT_ID }}
+        run: bash ../.github/scripts/deploy-fork-web.sh

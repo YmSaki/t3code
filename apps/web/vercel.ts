@@ -1,9 +1,9 @@
-import { matchers, routes, type Transform, type VercelConfig } from "@vercel/config/v1";
+import { matchers, type Transform, type VercelConfig } from "@vercel/config/v1";
+import { hostedAppRouting, hostedAppRoutingFromEnv } from "@t3tools/shared/hostedApp";
 
-const ROUTER_HOST = "app.t3.codes";
+const routing = hostedAppRoutingFromEnv(process.env) ?? hostedAppRouting;
+const routerHost = new URL(routing.router).hostname;
 const HOSTED_WEB_CHANNEL_COOKIE = "t3code_web_channel";
-const LATEST_ORIGIN = "https://latest.app.t3.codes";
-const NIGHTLY_ORIGIN = "https://nightly.app.t3.codes";
 const CLEAN_CHANNEL_QUERY_TRANSFORMS = [
   {
     type: "request.query",
@@ -53,21 +53,20 @@ export const config: VercelConfig = {
     },
     {
       src: "/(.*)",
-      has: [matchers.host(ROUTER_HOST), matchers.cookie(HOSTED_WEB_CHANNEL_COOKIE, "nightly")],
-      dest: `${NIGHTLY_ORIGIN}/$1`,
+      has: [matchers.host(routerHost), matchers.cookie(HOSTED_WEB_CHANNEL_COOKIE, "nightly")],
+      dest: `${routing.nightly}/$1`,
     },
     {
       src: "/(.*)",
-      has: [matchers.host(ROUTER_HOST)],
-      dest: `${LATEST_ORIGIN}/$1`,
+      has: [matchers.host(routerHost)],
+      dest: `${routing.stable}/$1`,
     },
-  ],
-  rewrites: [
     // Apple fetches it without an extension; the .json file is served as application/json.
-    routes.rewrite(
-      "/.well-known/apple-app-site-association",
-      "/.well-known/apple-app-site-association.json",
-    ),
-    routes.rewrite("/(.*)", "/index.html"),
+    {
+      src: "^/\\.well-known/apple-app-site-association$",
+      dest: "/.well-known/apple-app-site-association.json",
+    },
+    { handle: "filesystem" },
+    { src: "/(.*)", dest: "/index.html" },
   ],
 };

@@ -27,8 +27,8 @@ local server. Saving your sign-in alone does not start a server or make the
 machine reachable.
 
 On your other device, sign in to the same T3 Connect account and choose the
-environment. On the app.t3.codes home page with no computer added yet, signing
-in adds compatible computers linked to your account. Over SSH, the CLI prints a
+environment. On the hosted web home page, signing in adds compatible computers
+linked to your account. Over SSH, the CLI prints a
 browser link and a short code. Open the link on any device, confirm the code
 matches, and approve. The CLI continues on its own, so you do not need to forward
 an OAuth callback port.
@@ -231,11 +231,18 @@ tailscale serve --https=443 --set-path=/ off
 If that port is already in use, choose another with
 `--tailscale-serve-port`. See `t3 pair --help` for other pairing options.
 
-### Hosted web app
+### Open T3 Code in a browser
 
-[app.t3.codes](https://app.t3.codes) needs an HTTPS endpoint. It connects directly
-to your server; a hosted pairing link does not make an unreachable backend
-reachable or convert HTTP to HTTPS.
+Each T3CodeJP server includes a web client. Open the direct pairing URL printed
+by the server to use the web client that ships with it. Updating the server also
+updates that client. See [Installation](./install.md) and [Updating T3CodeJP](./updating.md)
+for server setup and updates.
+
+If your maintainer provides a hosted T3CodeJP web address, use it to connect
+from a browser without visiting each server's web address. For a direct
+connection from the hosted app, the server needs an HTTPS endpoint reachable
+from your browser. The Stable or Nightly client updates when that channel is
+deployed.
 
 For a plain HTTP LAN endpoint, use the direct pairing URL in a browser that can
 open it, or pair from the desktop app. On mobile, an IP address entered without a

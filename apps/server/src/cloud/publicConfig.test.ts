@@ -27,6 +27,7 @@ it.effect("rejects malformed or insecure hosted app URLs", () =>
       "http://app.t3.codes",
       "https://app.t3.codes/nested",
       "https://app.t3.codes?alias=true",
+      "https://user:password@app.t3.codes",
     ]) {
       const result = yield* hostedAppUrlConfig.pipe(
         provideEnv({ T3CODE_HOSTED_APP_URL: value }),

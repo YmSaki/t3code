@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from "@t3tools/shared/productIdentity";
+import { DEFAULT_HOSTED_APP_URL, hostedAppRoutingFromEnv } from "@t3tools/shared/hostedApp";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Vite config runs before any Effect runtime.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeZlib from "node:zlib";
@@ -23,6 +24,7 @@ import { resolveWebIconOverrides } from "../../scripts/lib/brand-assets";
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-version";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
+import { forkMobileLinks } from "./vite/forkMobileLinks";
 import { tailwindPlugins } from "./vite/tailwind";
 import { warmBundledDevPlugin } from "./vite/warmBundledDev";
 import { formatAppDisplayName, resolveWebAppStageLabel } from "./src/branding.logic";
@@ -46,6 +48,7 @@ const configuredRelayTracingUrl = repoEnv.VITE_RELAY_OTLP_TRACES_URL?.trim() || 
 const configuredRelayTracingDataset = repoEnv.VITE_RELAY_OTLP_TRACES_DATASET?.trim() || "";
 const configuredRelayTracingToken = repoEnv.VITE_RELAY_OTLP_TRACES_TOKEN?.trim() || "";
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
+const hostedAppRouting = hostedAppRoutingFromEnv(repoEnv);
 const configuredReleaseChannel =
   process.env.T3CODE_BUILT_DEV === "1" ? "dev" : process.env.VITE_RELEASE_CHANNEL?.trim() || "";
 const configuredDesktopUpdateRepository =
@@ -53,6 +56,7 @@ const configuredDesktopUpdateRepository =
   process.env.GITHUB_REPOSITORY?.trim() ||
   "";
 const configuredHostedAppUrl = (() => {
+  if (hostedAppRouting) return hostedAppRouting.router;
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {
     return explicitHostedAppUrl;
@@ -336,6 +340,9 @@ export default defineConfig(({ command }) => {
       bootstrapBrandingPlugin(),
       devCompressionPlugin(),
       chunkCycleGuardPlugin(),
+      hostedAppRouting && hostedAppRouting.router !== DEFAULT_HOSTED_APP_URL
+        ? forkMobileLinks(repoEnv)
+        : undefined,
       builtDev
         ? undefined
         : thirdPartyLicensesPlugin({
@@ -382,6 +389,7 @@ export default defineConfig(({ command }) => {
       ),
       "import.meta.env.VITE_RELAY_OTLP_TRACES_TOKEN": JSON.stringify(configuredRelayTracingToken),
       "import.meta.env.VITE_HOSTED_APP_URL": JSON.stringify(configuredHostedAppUrl ?? ""),
+      __T3CODE_BUILD_HOSTED_APP_ROUTING__: JSON.stringify(hostedAppRouting),
       "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
       "import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY": JSON.stringify(
         configuredDesktopUpdateRepository,

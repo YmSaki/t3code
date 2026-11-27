@@ -78,7 +78,7 @@ jobs:
           git init .
           git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
-          git sparse-checkout set --cone .github/scripts
+          git sparse-checkout set --cone .github/scripts scripts/lib packages/shared/src
           git -c checkout.workers=0 checkout --detach FETCH_HEAD
 
       - name: Resolve fork release metadata
@@ -90,8 +90,17 @@ jobs:
           PAUSE_NIGHTLY: ${{ vars.PAUSE_NIGHTLY }}
           PUBLISH_ENABLED: ${{ vars.T3CODEJP_RELEASE_PUBLISH }}
           CLI_PUBLISH_ENABLED: ${{ vars.T3CODEJP_CLI_RELEASE_PUBLISH }}
+          WEB_PUBLISH_ENABLED: ${{ vars.T3CODEJP_WEB_PUBLISH }}
           DISTRIBUTION: ${{ inputs.distribution || 'all' }}
           VALIDATE_SIGNING: ${{ inputs.validate_signing }}
+          T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+          T3CODE_CLERK_PASSKEY_RP_DOMAINS: ${{ vars.CLERK_PASSKEY_RP_DOMAINS }}
+          T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+          T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+          T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+          T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
+          T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
+          T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
         with:
           retries: 3
           script: |
@@ -113,6 +122,14 @@ jobs:
             if (!plan.shouldBuild) {
               core.notice(plan.reason);
               return;
+            }
+            const { resolveForkConnectConfig } = require('./scripts/lib/public-config.ts');
+            const { resolveForkWebRouting } = require('./.github/scripts/fork-release-web.cjs');
+            const connect = resolveForkConnectConfig(process.env);
+            const routing = resolveForkWebRouting(process.env);
+            const deployWeb = plan.publish && !plan.draft && process.env.WEB_PUBLISH_ENABLED === 'true';
+            if ((connect.relayUrl || deployWeb) && !routing) {
+              throw new Error('Set the three fork hosted Web repository variables before enabling Connect or publishing hosted Web.');
             }
 
             for (const [key, value] of Object.entries({
@@ -150,6 +167,7 @@ jobs:
           AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           CLERK_PASSKEY_RP_DOMAINS: ${{ vars.CLERK_PASSKEY_RP_DOMAINS }}
+          T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
         run: node -e 'require("./.github/scripts/fork-release-policy.cjs").assertForkReleaseSigningConfiguration(process.env)'
 
   build_bundle:
@@ -162,15 +180,15 @@ jobs:
       database_migration: ${{ steps.migration.outputs.head }}
     env:
       T3CODE_TELEMETRY_CHANNEL: dev
+      T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
+      T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
+      T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
       T3CODE_TELEMETRY_ENABLED: "false"
-      T3CODE_CLERK_PUBLISHABLE_KEY: ""
-      T3CODE_CLERK_JWT_TEMPLATE: ""
-      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ""
-      T3CODE_RELAY_URL: ""
-      VITE_CLERK_PUBLISHABLE_KEY: ""
-      VITE_CLERK_JWT_TEMPLATE: ""
-      VITE_CLERK_CLI_OAUTH_CLIENT_ID: ""
-      VITE_T3CODE_RELAY_URL: ""
+      T3CODE_CONNECT_DISTRIBUTION: fork
+      T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+      T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+      T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
       T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ""
       T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ""
       T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ""
@@ -407,10 +425,10 @@ jobs:
       require_signing: ${{ needs.preflight.outputs.require_signing == 'true' }}
       skip_windows_signing_tools: ${{ needs.preflight.outputs.require_signing != 'true' }}
       relay_client_tracing: false
-      clerk_publishable_key: ""
-      clerk_jwt_template: ""
-      clerk_cli_oauth_client_id: ""
-      relay_url: ""
+      clerk_publishable_key: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+      clerk_jwt_template: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+      clerk_cli_oauth_client_id: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+      relay_url: ${{ vars.T3CODE_RELAY_URL }}
 
   cli:
     name: CLI ${{ matrix.platform }} ${{ matrix.arch }}
@@ -612,3 +630,20 @@ jobs:
               --title "T3CodeJP update feed" --notes "Nightly pointer used by the desktop updater."
           fi
           gh release upload update-feed nightly.json --clobber
+
+  deploy_web:
+    name: Deploy published fork Web
+    needs: [preflight, publish, nightly_pointer]
+    if: >-
+      !cancelled() &&
+      needs.publish.result == 'success' &&
+      (needs.preflight.outputs.release_channel == 'stable' || needs.nightly_pointer.result == 'success') &&
+      vars.T3CODEJP_WEB_PUBLISH == 'true'
+    uses: ./.github/workflows/fork-hosted-web.yml
+    with:
+      tag: ${{ needs.preflight.outputs.tag }}
+      sha: ${{ needs.preflight.outputs.ref }}
+    secrets:
+      T3CODEJP_WEB_VERCEL_TOKEN: ${{ secrets.T3CODEJP_WEB_VERCEL_TOKEN }}
+      T3CODEJP_WEB_VERCEL_ORG_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_ORG_ID }}
+      T3CODEJP_WEB_VERCEL_PROJECT_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_PROJECT_ID }}

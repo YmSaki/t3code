@@ -12,8 +12,6 @@ const REQUIRED_SIGNING_CONFIGURATION = [
   "APPLE_API_KEY_ID",
   "APPLE_API_ISSUER",
   "APPLE_TEAM_ID",
-  "MACOS_PROVISIONING_PROFILE",
-  "CLERK_PASSKEY_RP_DOMAINS",
   "AZURE_TENANT_ID",
   "AZURE_CLIENT_ID",
   "AZURE_CLIENT_SECRET",
@@ -47,6 +45,12 @@ function releaseChannel(eventName, dispatchChannel) {
 
 function assertForkReleaseSigningConfiguration(env) {
   const missing = REQUIRED_SIGNING_CONFIGURATION.filter((name) => !env[name]?.trim());
+  if (
+    (env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() || env.CLERK_PASSKEY_RP_DOMAINS?.trim()) &&
+    !env.MACOS_PROVISIONING_PROFILE?.trim()
+  ) {
+    missing.push("MACOS_PROVISIONING_PROFILE");
+  }
   if (missing.length > 0) {
     throw new Error(`Missing fork release signing configuration: ${missing.join(", ")}.`);
   }

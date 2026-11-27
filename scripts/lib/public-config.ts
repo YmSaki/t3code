@@ -30,33 +30,38 @@ export function loadRepoEnv({
 } = {}): Record<string, string | undefined> {
   const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
-  const config = resolvePublicConfig(baseEnv, localEnv, rootEnv);
+  const env = { ...rootEnv, ...localEnv, ...baseEnv };
+  const forkConnect =
+    env.T3CODE_CONNECT_DISTRIBUTION?.trim() === "fork" ||
+    env.T3CODE_MOBILE_DISTRIBUTION?.trim() === "fork";
+  const config = {
+    ...resolvePublicConfig(baseEnv, localEnv, rootEnv),
+    ...(forkConnect ? resolveForkConnectConfig(env) : {}),
+  };
 
   return {
-    ...rootEnv,
-    ...localEnv,
-    ...baseEnv,
-    ...(config.clerkPublishableKey
+    ...env,
+    ...(forkConnect || config.clerkPublishableKey
       ? {
           T3CODE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
           VITE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
           EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
         }
       : {}),
-    ...(config.clerkJwtTemplate
+    ...(forkConnect || config.clerkJwtTemplate
       ? {
           T3CODE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
           VITE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
           EXPO_PUBLIC_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
         }
       : {}),
-    ...(config.clerkCliOAuthClientId
+    ...(forkConnect || config.clerkCliOAuthClientId
       ? {
           T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
           VITE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
         }
       : {}),
-    ...(config.relayUrl
+    ...(forkConnect || config.relayUrl
       ? {
           T3CODE_RELAY_URL: config.relayUrl,
           VITE_T3CODE_RELAY_URL: config.relayUrl,
@@ -98,6 +103,57 @@ export function loadRepoEnv({
           VITE_RELAY_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
         }
       : {}),
+  };
+}
+
+function isUpstreamConnectHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  return host === "t3.codes" || host.endsWith(".t3.codes");
+}
+
+function forkClerkHostname(key: string): string | undefined {
+  const encoded = /^pk_(?:live|test)_(.+)$/.exec(key)?.[1];
+  if (!encoded) return undefined;
+  try {
+    return /^([a-z0-9-]+(?:\.[a-z0-9-]+)+)\$$/i.exec(atob(encoded))?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveForkConnectConfig(env: Environment) {
+  const passkeyDomains = env.T3CODE_CLERK_PASSKEY_RP_DOMAINS?.split(",") ?? [];
+  if (passkeyDomains.some((domain) => isUpstreamConnectHost(domain.trim()))) {
+    throw new Error("T3CODE_CLERK_PASSKEY_RP_DOMAINS must use fork-owned domains.");
+  }
+  const clerkPublishableKey = env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
+  const clerkJwtTemplate = env.T3CODE_CLERK_JWT_TEMPLATE?.trim() ?? "";
+  const clerkCliOAuthClientId = env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() ?? "";
+  const relay = env.T3CODE_RELAY_URL?.trim() ?? "";
+  if (!clerkPublishableKey && !clerkJwtTemplate && !clerkCliOAuthClientId && !relay) {
+    return { clerkPublishableKey, clerkJwtTemplate, clerkCliOAuthClientId, relayUrl: "" };
+  }
+  if (!clerkPublishableKey || !clerkJwtTemplate || !clerkCliOAuthClientId || !relay) {
+    throw new Error("Set all four Connect settings for the fork together.");
+  }
+  const clerkHost = forkClerkHostname(clerkPublishableKey);
+  if (!clerkHost || isUpstreamConnectHost(clerkHost)) {
+    throw new Error("T3CODE_CLERK_PUBLISHABLE_KEY must be from the fork-owned Clerk instance.");
+  }
+  const relayUrl = URL.parse(relay);
+  if (
+    !relayUrl ||
+    relayUrl.protocol !== "https:" ||
+    relayUrl.href !== `${relayUrl.origin}/` ||
+    isUpstreamConnectHost(relayUrl.hostname)
+  ) {
+    throw new Error("T3CODE_RELAY_URL must be a fork-owned HTTPS relay origin.");
+  }
+  return {
+    clerkPublishableKey,
+    clerkJwtTemplate,
+    clerkCliOAuthClientId,
+    relayUrl: relayUrl.origin,
   };
 }
 

@@ -2,6 +2,7 @@ import "vite-plus/test/config";
 import * as NodeOS from "node:os";
 
 import { defaultInclude, defineConfig } from "vite-plus";
+import { hostedAppRoutingFromEnv } from "@t3tools/shared/hostedApp";
 
 import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-external-packages.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
@@ -21,6 +22,7 @@ const devElectronCommand =
     ? "node scripts/dev-electron.mjs"
     : "exec node scripts/dev-electron.mjs";
 const publicConfigDefine = {
+  __T3CODE_BUILD_HOSTED_APP_ROUTING__: JSON.stringify(hostedAppRoutingFromEnv(repoEnv)),
   __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
   ),

@@ -51,6 +51,60 @@ describe("loadRepoEnv", () => {
       VITE_T3CODE_RELAY_URL: "https://ci.example.test",
     });
   });
+
+  it("uses only canonical Connect settings for a fork distribution", () => {
+    const repoRoot = makeTemporaryDirectory();
+    const upstreamKey = `pk_live_${btoa("clerk.t3.codes$")}`;
+    const forkKey = `pk_live_${btoa("accounts.fork.example.test$")}`;
+    const build = (baseEnv: Record<string, string>) => loadRepoEnv({ baseEnv, repoRoot });
+    const canonical = {
+      T3CODE_CLERK_PUBLISHABLE_KEY: forkKey,
+      T3CODE_CLERK_JWT_TEMPLATE: "t3-relay",
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_fork",
+      T3CODE_RELAY_URL: "https://relay.fork.example.test/",
+    };
+    const existingAliases = {
+      VITE_CLERK_PUBLISHABLE_KEY: upstreamKey,
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: upstreamKey,
+      VITE_T3CODE_RELAY_URL: "https://relay.t3.codes",
+    };
+    expect(build({ T3CODE_CONNECT_DISTRIBUTION: "fork", ...existingAliases })).toMatchObject({
+      VITE_CLERK_PUBLISHABLE_KEY: "",
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "",
+      VITE_T3CODE_RELAY_URL: "",
+    });
+    expect(
+      build({ T3CODE_MOBILE_DISTRIBUTION: "fork", ...existingAliases, ...canonical }),
+    ).toMatchObject({
+      VITE_CLERK_PUBLISHABLE_KEY: forkKey,
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: forkKey,
+      VITE_T3CODE_RELAY_URL: "https://relay.fork.example.test",
+    });
+    expect(() =>
+      build({ T3CODE_CONNECT_DISTRIBUTION: "fork", T3CODE_RELAY_URL: canonical.T3CODE_RELAY_URL }),
+    ).toThrow(/all four Connect settings/);
+    expect(() =>
+      build({
+        T3CODE_MOBILE_DISTRIBUTION: "fork",
+        ...canonical,
+        T3CODE_CLERK_PUBLISHABLE_KEY: upstreamKey,
+      }),
+    ).toThrow(/fork-owned Clerk/);
+    expect(() =>
+      build({
+        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        ...canonical,
+        T3CODE_RELAY_URL: "https://relay.t3.codes.",
+      }),
+    ).toThrow(/fork-owned HTTPS relay/);
+    expect(() =>
+      build({
+        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        ...canonical,
+        T3CODE_CLERK_PASSKEY_RP_DOMAINS: "accounts.fork.example.test, clerk.t3.codes",
+      }),
+    ).toThrow(/T3CODE_CLERK_PASSKEY_RP_DOMAINS must use fork-owned domains/);
+  });
 });
 
 function makeTemporaryDirectory() {

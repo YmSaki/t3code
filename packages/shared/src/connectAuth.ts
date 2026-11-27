@@ -1,13 +1,13 @@
 import { readHashParams } from "./remote.ts";
 
+export { DEFAULT_HOSTED_APP_URL } from "./hostedApp.ts";
+
 const CONNECT_AUTH_STATE_PARAM = "state";
 const CONNECT_AUTH_CHALLENGE_PARAM = "challenge";
 const CONNECT_AUTH_PORT_PARAM = "port";
 const CONNECT_LOOPBACK_CALLBACK_PATH = "/callback";
 
 const CONNECT_AUTHORIZE_PATH = "/connect";
-
-export const DEFAULT_HOSTED_APP_URL = "https://app.t3.codes";
 
 export const CONNECT_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
 

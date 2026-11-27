@@ -2,6 +2,7 @@ import type { RelayAgentActivityAggregateState } from "@t3tools/contracts/relay"
 import { msg } from "gt-react-native";
 
 import { m, type MessageResolver } from "../i18n/messages";
+import { mobileAppScheme } from "../lib/appScheme";
 
 import type { AgentActivityProps, AgentActivityText } from "./AgentActivity";
 
@@ -91,6 +92,7 @@ export function agentActivityWidgetTimeline(
 
   const { aggregate } = source;
   const props: AgentActivityProps = {
+    appScheme: mobileAppScheme(),
     text: agentActivityText(Math.max(aggregate.activeCount, aggregate.activities.length), resolve),
     title: aggregate.title,
     subtitle: aggregate.subtitle,

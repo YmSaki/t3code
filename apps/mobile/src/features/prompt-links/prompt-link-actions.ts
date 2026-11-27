@@ -1,10 +1,11 @@
 import * as Dialog from "../../components/ui/Dialog";
-import { buildNewThreadLink, type LinkedPrompt } from "@t3tools/shared/promptLinks";
+import type { LinkedPrompt } from "@t3tools/shared/promptLinks";
 import { msg } from "gt-react-native";
 
 import { m } from "../../i18n/messages";
 
 import { tryCopyTextWithHaptic } from "../../lib/copyTextWithHaptic";
+import { mobilePromptShareUrl } from "../../lib/hostedApp";
 import {
   getComposerDraftSnapshot,
   setComposerDraftText,
@@ -46,7 +47,11 @@ export async function applyLinkedPromptToThreadDraft(
 }
 
 export async function copyPromptLink(prompt: string): Promise<void> {
-  if (!(await tryCopyTextWithHaptic(buildNewThreadLink({ prompt }), { target: "prompt link" }))) {
+  if (
+    !(await tryCopyTextWithHaptic(mobilePromptShareUrl(prompt), {
+      target: "prompt link",
+    }))
+  ) {
     Dialog.alert(m(msg("Could not copy")), m(msg("Try again.")));
   }
 }
