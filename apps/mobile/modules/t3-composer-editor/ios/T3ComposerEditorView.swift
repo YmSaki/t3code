@@ -89,6 +89,7 @@ private final class ComposerTextView: UITextView {
   var onPasteContext: (([String: String]) -> Void)?
   var onPasteText: ((String, NSRange) -> Void)?
   var clipboardFragment = ""
+  var hostedThreadLinkPrefixes: [String] = []
   var onSubmit: ((Bool) -> Void)?
   var isReadOnly = false
   var textPasteThresholdBytes = 0
@@ -258,7 +259,9 @@ private final class ComposerTextView: UITextView {
     }
     // read() sees only the first item; native paste keeps every item of a longer pasteboard.
     if !bypassTextPasteInterception, pasteboard.numberOfItems == 1,
-       T3ComposerClipboard.hasThreadLink(context["text", default: ""]) {
+       T3ComposerClipboard.hasThreadLink(
+         context["text", default: ""], hostedPrefixes: hostedThreadLinkPrefixes
+       ) {
       onPasteContext?(context)
       return
     }
@@ -693,6 +696,10 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
 
   func setClipboardFragment(_ fragment: String) {
     textView.clipboardFragment = fragment
+  }
+
+  func setHostedThreadLinkPrefixes(_ prefixes: [String]) {
+    textView.hostedThreadLinkPrefixes = prefixes
   }
 
   public override func didMoveToWindow() {

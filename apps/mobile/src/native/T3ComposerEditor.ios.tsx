@@ -39,6 +39,7 @@ import {
   type ComposerNativeEventSnapshot,
 } from "./composerEditorRevision";
 import { DEFAULT_COMPOSER_ENTER_BEHAVIOR } from "../lib/composerEnterBehavior";
+import { mobileThreadLinkMatcher } from "../lib/hostedApp";
 import type { ComposerEditorProps, ComposerEditorSelection } from "./T3ComposerEditor.types";
 
 const NATIVE_MODULE_NAME = "T3ComposerEditor";
@@ -89,6 +90,7 @@ interface NativeComposerEditorProps extends ViewProps {
   readonly ref?: Ref<NativeComposerEditorRef>;
   readonly controlledDocumentJson: string;
   readonly clipboardFragment: string;
+  readonly hostedThreadLinkPrefixes: readonly string[];
   readonly themeJson: string;
   readonly placeholder: string;
   readonly fontFamily: string;
@@ -353,6 +355,7 @@ export function ComposerEditor({
       ref={nativeRef}
       controlledDocumentJson={controlledDocumentJson}
       clipboardFragment={props.clipboardFragment ?? ""}
+      hostedThreadLinkPrefixes={mobileThreadLinkMatcher.prefixes}
       themeJson={themeJson}
       placeholder={props.placeholder ?? ""}
       fontFamily={

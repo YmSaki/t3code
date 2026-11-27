@@ -4,6 +4,7 @@ import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineToken
 import { markdownMathRanges } from "@t3tools/shared/markdownMath";
 import { composerContextEditorTokens, composerSkillLabels } from "../lib/composerContext";
 import { DEFAULT_COMPOSER_ENTER_BEHAVIOR } from "../lib/composerEnterBehavior";
+import { mobileThreadLinkMatcher } from "../lib/hostedApp";
 import { useComposerModelTokens } from "./useComposerModelTokens";
 import { requireNativeView } from "expo";
 import { TextInputWrapper } from "expo-paste-input";
@@ -80,6 +81,7 @@ interface NativeComposerEditorProps extends ViewProps {
   readonly ref?: Ref<NativeComposerEditorRef>;
   readonly controlledDocumentJson: string;
   readonly clipboardFragment: string;
+  readonly hostedThreadLinkPrefixes: readonly string[];
   readonly themeJson: string;
   readonly placeholder: string;
   readonly fontFamily: string;
@@ -324,6 +326,7 @@ export function ComposerEditor({
         ref={nativeRef}
         controlledDocumentJson={controlledDocumentJson}
         clipboardFragment={props.clipboardFragment ?? ""}
+        hostedThreadLinkPrefixes={mobileThreadLinkMatcher.prefixes}
         themeJson={themeJson}
         placeholder={props.placeholder ?? ""}
         fontFamily={

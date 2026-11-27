@@ -22,6 +22,16 @@ const mocks = vi.hoisted(() => ({
   sequence: 0,
 }));
 vi.mock("expo", () => ({ requireNativeModule: vi.fn() }));
+vi.mock("expo-constants", () => ({
+  default: {
+    expoConfig: {
+      extra: {
+        hostedAppUrl: "https://fork.example.test",
+        hostedAppOrigins: ["https://nightly.fork.example.test"],
+      },
+    },
+  },
+}));
 vi.mock("expo-file-system", () => ({
   File: class {
     size = 42;
@@ -351,33 +361,42 @@ describe("mobile context clipboard imports", () => {
     ).toEqual(result!.context.records.map((record) => record.contextId));
   });
 
-  it("pastes a thread link as a chip only where the destination's agent reads its machine", async () => {
-    const text = [
-      "https://app.t3.codes/threads/destination/local-thread",
-      "<t3-thread://v2/source/foreign-thread>",
-    ].join(" ");
-    const result = await importComposerContextClipboard(
-      { text, fragment: "", html: "" },
-      0,
-      new AbortController().signal,
-      0,
-      EnvironmentId.make("destination"),
-    );
-    const [record] = result!.context.records;
-    expect(record).toMatchObject({
-      kind: "thread",
-      environmentId: "destination",
-      threadId: "local-thread",
-    });
-    expect(result!.text).toBe(
-      `[Thread](t3-context://v1/thread/${record!.contextId}) <t3-thread://v2/source/foreign-thread>`,
-    );
-    expect(
-      await importComposerContextClipboard(
-        { text: "plain text", fragment: "", html: "" },
+  it.each([
+    "https://app.t3.codes",
+    "https://fork.example.test",
+    "https://nightly.fork.example.test",
+  ])(
+    "pastes a thread link from %s as a chip only into a compatible destination",
+    async (origin) => {
+      const text = [
+        `${origin}/threads/destination/local-thread`,
+        "<t3-thread://v2/source/foreign-thread>",
+        "https://unrelated.example.test/threads/destination/plain-link",
+      ].join(" ");
+      const result = await importComposerContextClipboard(
+        { text, fragment: "", html: "" },
         0,
         new AbortController().signal,
-      ),
-    ).toBeNull();
-  });
+        0,
+        EnvironmentId.make("destination"),
+      );
+      expect(result).not.toBeNull();
+      const [record] = result!.context.records;
+      expect(record).toMatchObject({
+        kind: "thread",
+        environmentId: "destination",
+        threadId: "local-thread",
+      });
+      expect(result!.text).toBe(
+        `[Thread](t3-context://v1/thread/${record!.contextId}) <t3-thread://v2/source/foreign-thread> https://unrelated.example.test/threads/destination/plain-link`,
+      );
+      expect(
+        await importComposerContextClipboard(
+          { text: "plain text", fragment: "", html: "" },
+          0,
+          new AbortController().signal,
+        ),
+      ).toBeNull();
+    },
+  );
 });

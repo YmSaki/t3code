@@ -283,6 +283,10 @@ class T3ComposerEditorView(context: Context, appContext: AppContext) : ExpoView(
     editor.clipboardFragment = fragment
   }
 
+  fun setHostedThreadLinkPrefixes(prefixes: List<String>) {
+    editor.hostedThreadLinkPrefixes = prefixes
+  }
+
   fun setFontFamily(fontFamily: String) {
     editor.typeface = if (fontFamily.contains("Mono", ignoreCase = true)) {
       Typeface.MONOSPACE
@@ -640,6 +644,7 @@ internal class SelectionAwareEditText(
   var textPasteThresholdBytes = 0
   var maxInputChars = Int.MAX_VALUE
   var clipboardFragment = ""
+  var hostedThreadLinkPrefixes = emptyList<String>()
   private var touchDownScrollX = 0
   private var touchDownScrollY = 0
   private var touchDownCaret = -1
@@ -908,7 +913,10 @@ internal class SelectionAwareEditText(
     return when {
       payload["html"]?.contains("data-t3-context-fragment=") == true -> pasteContext(payload)
       pasteImagesOrInterceptedText() -> true
-      isSingleItemClip() && T3ComposerClipboard.hasThreadLink(payload["text"].orEmpty()) ->
+      isSingleItemClip() && T3ComposerClipboard.hasThreadLink(
+        payload["text"].orEmpty(),
+        hostedThreadLinkPrefixes
+      ) ->
         pasteContext(payload)
       else -> false
     }
