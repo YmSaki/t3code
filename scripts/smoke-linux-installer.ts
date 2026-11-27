@@ -56,10 +56,16 @@ const run = (command: string, args: string[]) => {
 };
 const digest = (file: string) =>
   NodeCrypto.createHash("sha256").update(NodeFS.readFileSync(file)).digest("hex");
-NodeAssert.equal(
-  digest(upstream),
-  "c1ca3e656e12ba10377513e9bbe20a5112540cda9601e21c70b85ba7c53f1b29",
-);
+const architecture = run("dpkg", ["--print-architecture"]);
+NodeAssert.ok(architecture === "amd64" || architecture === "arm64", "Use an amd64 or arm64 host");
+const upstreamSha256 = {
+  amd64: "c1ca3e656e12ba10377513e9bbe20a5112540cda9601e21c70b85ba7c53f1b29",
+  arm64: "3ca1a4e548794e39fa11027d39f5e6a3510154c49bd771756b1744a1d5a804e0",
+};
+NodeAssert.equal(digest(upstream), upstreamSha256[architecture]);
+for (const file of [upstream, baseline, candidate]) {
+  NodeAssert.equal(run("dpkg-deb", ["--field", file, "Architecture"]), architecture, file);
+}
 NodeAssert.equal(run("dpkg-deb", ["--field", upstream, "Package"]), "t3code");
 NodeAssert.equal(run("dpkg-deb", ["--field", upstream, "Version"]), "0.1.12");
 const baselineVersion = run("dpkg-deb", ["--field", baseline, "Version"]);
@@ -378,6 +384,7 @@ NodeFS.unlinkSync(imagePath);
 NodeAssert.deepEqual(tree(NodePath.join(imageHome, "userdata")), imageData);
 assertOfficial();
 const result = {
+  architecture,
   upstreamVersion: "0.1.12",
   baselineVersion,
   candidateVersion,
