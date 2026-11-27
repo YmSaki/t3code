@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { toastManager } from "./ui/toast";
 
-const { add, update, openExternal, commands, starred, page } = vi.hoisted(() => ({
+const { add, update, openExternal, runCommand, commands, starred, page } = vi.hoisted(() => ({
   add: vi.fn<typeof toastManager.add>(),
   update: vi.fn<typeof toastManager.update>(),
   openExternal: vi.fn(async (_url: string) => {}),
+  runCommand: vi.fn<(command: unknown, input: unknown) => void>(),
   commands: { checkStarred: {}, star: {} },
   starred: { value: false, failed: false, starWorks: true, duringCheck: () => {} },
   page: {
@@ -20,7 +21,8 @@ vi.mock("../localApi", () => ({ readLocalApi: () => ({ shell: { openExternal } }
 vi.mock("../rpc/atomRegistry", () => ({ appAtomRegistry: {} }));
 vi.mock("../state/sourceControl", () => ({ sourceControlEnvironment: commands }));
 vi.mock("@t3tools/client-runtime/state/runtime", () => ({
-  runAtomCommand: async (_registry: unknown, command: unknown) => {
+  runAtomCommand: async (_registry: unknown, command: unknown, input: unknown) => {
+    runCommand(command, input);
     if (command === commands.star) return { _tag: "Success", value: starred.starWorks };
     starred.duringCheck();
     return starred.failed ? { _tag: "Failure" } : { _tag: "Success", value: starred.value };
@@ -34,6 +36,7 @@ function setup({ sent = 0, writable = true, alreadyStarred = false } = {}) {
   add.mockReset();
   update.mockReset();
   openExternal.mockClear();
+  runCommand.mockClear();
   starred.value = alreadyStarred;
   starred.failed = false;
   starred.starWorks = true;
@@ -167,9 +170,29 @@ describe("recordPromptSent", () => {
   it("stars on click, opens GitHub when starring fails, and asks for a click once the click expired", async () => {
     const store = setup({ sent: 5 });
     await (await startSession()).send();
+    expect(add.mock.lastCall?.[0]).toMatchObject({
+      title: "Enjoying T3CodeJP?",
+      description: "Give YmSaki/t3codeJP a star on GitHub to let us know!",
+    });
+    expect(runCommand).toHaveBeenCalledWith(
+      commands.checkStarred,
+      expect.objectContaining({
+        input: expect.objectContaining({ repository: "YmSaki/t3codeJP" }),
+      }),
+    );
+
     click(add.mock.lastCall?.[0].actionProps);
     await vi.advanceTimersByTimeAsync(0);
-    expect(update.mock.lastCall?.[1]).toMatchObject({ title: "Thanks for the star!" });
+    expect(runCommand).toHaveBeenCalledWith(
+      commands.star,
+      expect.objectContaining({
+        input: expect.objectContaining({ repository: "YmSaki/t3codeJP" }),
+      }),
+    );
+    expect(update.mock.lastCall?.[1]).toMatchObject({
+      title: "Thanks for the star!",
+      description: "It really helps T3CodeJP grow.",
+    });
     expect(store.get("t3code:github-star-prompt:dismissed")).toBe("true");
     expect(openExternal).not.toHaveBeenCalled();
 
@@ -178,7 +201,7 @@ describe("recordPromptSent", () => {
     await (await startSession()).send();
     click(add.mock.lastCall?.[0].actionProps);
     await vi.advanceTimersByTimeAsync(0);
-    expect(openExternal).toHaveBeenCalledWith("https://github.com/pingdotgg/t3code");
+    expect(openExternal).toHaveBeenCalledWith("https://github.com/YmSaki/t3codeJP");
     expect(update.mock.lastCall?.[1]).not.toMatchObject({
       actionProps: { children: "Open GitHub" },
     });
@@ -196,4 +219,45 @@ describe("recordPromptSent", () => {
     expect(openExternal).toHaveBeenCalledOnce();
     vi.unstubAllGlobals();
   });
+
+  it("uses VITE_GITHUB_STAR_REPOSITORY consistently for copy, API calls, and fallback links", async () => {
+    setup({ sent: 5 });
+    vi.stubEnv("VITE_GITHUB_STAR_REPOSITORY", "example/custom-fork");
+    starred.starWorks = false;
+    await (await startSession()).send();
+    expect(add.mock.lastCall?.[0]).toMatchObject({
+      description: "Give example/custom-fork a star on GitHub to let us know!",
+    });
+    expect(runCommand).toHaveBeenCalledWith(
+      commands.checkStarred,
+      expect.objectContaining({
+        input: expect.objectContaining({ repository: "example/custom-fork" }),
+      }),
+    );
+    click(add.mock.lastCall?.[0].actionProps);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runCommand).toHaveBeenCalledWith(
+      commands.star,
+      expect.objectContaining({
+        input: expect.objectContaining({ repository: "example/custom-fork" }),
+      }),
+    );
+    expect(openExternal).toHaveBeenCalledWith("https://github.com/example/custom-fork");
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it.each(["", "off", "false", "not-a-repo"])(
+    "does not prompt or record counts when VITE_GITHUB_STAR_REPOSITORY=%j",
+    async (configured) => {
+      const store = setup({ sent: 5 });
+      vi.stubEnv("VITE_GITHUB_STAR_REPOSITORY", configured);
+      await (await startSession()).send();
+      expect(runCommand).not.toHaveBeenCalled();
+      expect(add).not.toHaveBeenCalled();
+      expect(store.get("t3code:github-star-prompt:sent")).toBe("5");
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    },
+  );
 });
