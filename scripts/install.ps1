@@ -1,7 +1,7 @@
 # Installs the T3CodeJP CLI from a GitHub Release archive on Windows. Needs
 # only PowerShell 5.1+; no Node, npm, or compiler.
 #
-# Release assets are published at https://github.com/YmSaki/t3code/releases.
+# Release assets are published at https://github.com/YmSaki/t3codeJP/releases.
 #
 # Environment:
 #   T3CODE_CHANNEL           release train to follow: stable, nightly, or preview
@@ -16,7 +16,7 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repo = "YmSaki/t3code"
+$repo = "YmSaki/t3codeJP"
 $baseUrl = if ($env:T3CODE_RELEASE_BASE_URL) { $env:T3CODE_RELEASE_BASE_URL } else { "https://github.com/$repo/releases/download" }
 $t3Home = if ($env:T3CODE_HOME) { $env:T3CODE_HOME } else { Join-Path $HOME ".t3codejp" }
 $t3Home = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($t3Home)

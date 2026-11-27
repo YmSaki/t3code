@@ -1,7 +1,7 @@
 # Updating T3CodeJP
 
 Use installers and server archives from the
-[T3CodeJP releases](https://github.com/YmSaki/t3code/releases). The official T3 Code
+[T3CodeJP releases](https://github.com/YmSaki/t3codeJP/releases). The official T3 Code
 npm package and app-store listings do not distribute this fork. Its default data
 directory is `~/.t3codejp`; keep a backup before moving data from another installation.
 

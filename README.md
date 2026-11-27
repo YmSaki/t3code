@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/YmSaki/t3code">
+  <a href="https://github.com/YmSaki/t3codeJP">
     <img src="./assets/fork/icon.svg" width="80" height="80" alt="T3CodeJPのロゴ" />
   </a>
 </p>
@@ -9,9 +9,9 @@
 <p align="center">コーディングエージェントをまとめて操作できる、オープンソースのアプリケーション。</p>
 
 <p align="center">
-  <a href="https://github.com/YmSaki/t3code/releases"><strong>フォーク版のダウンロード</strong></a> ·
+  <a href="https://github.com/YmSaki/t3codeJP/releases"><strong>フォーク版のダウンロード</strong></a> ·
   <a href="./docs/README.md">ドキュメント</a> ·
-  <a href="https://github.com/YmSaki/t3code/issues">Issues</a>
+  <a href="https://github.com/YmSaki/t3codeJP/issues">Issues</a>
 </p>
 
 <p align="center">
@@ -28,9 +28,9 @@ Claude Code、Codex、Cursor、OpenCode、Grok Build、Antigravity、Kiro、Pi�
 
 T3CodeJPは[pingdotgg/t3code](https://github.com/pingdotgg/t3code)を元にした非公式フォークです。上流の開発者とは独立して保守しています。セルフホストでの複数PC運用、複数リポジトリを束ねる上位プロジェクト（MetaProject）、PMによるワーカーの並列管理、双方向アーティファクト、リポジトリ監視、既存AIセッションの取り込み、稼働カレンダーなどを開発しています。
 
-実装状況や残件は、このフォークの[Issues](https://github.com/YmSaki/t3code/issues)と[Pull requests](https://github.com/YmSaki/t3code/pulls)を確認してください。画面やサービスの一部は開発・検証中です。
+実装状況や残件は、このフォークの[Issues](https://github.com/YmSaki/t3codeJP/issues)と[Pull requests](https://github.com/YmSaki/t3codeJP/pulls)を確認してください。画面やサービスの一部は開発・検証中です。
 
-フォーク版の配布物は、このリポジトリの[Releases](https://github.com/YmSaki/t3code/releases)から入手できます。目的の版がまだ公開されていない場合は、[ソースからの開発](#ソースからの開発)を参照してください。
+フォーク版の配布物は、このリポジトリの[Releases](https://github.com/YmSaki/t3codeJP/releases)から入手できます。目的の版がまだ公開されていない場合は、[ソースからの開発](#ソースからの開発)を参照してください。
 
 ## 主な機能
 
@@ -46,7 +46,7 @@ T3CodeJPは[pingdotgg/t3code](https://github.com/pingdotgg/t3code)を元にし�
 
 ### デスクトップアプリ
 
-macOS・Windows・Linux向けのフォーク版は[T3CodeJPのReleases](https://github.com/YmSaki/t3code/releases)から入手してください。StableとNightlyはリリース名で区別できます。インストール・更新の詳細は[インストールガイド](./docs/user/install.md)を参照してください。
+macOS・Windows・Linux向けのフォーク版は[T3CodeJPのReleases](https://github.com/YmSaki/t3codeJP/releases)から入手してください。StableとNightlyはリリース名で区別できます。インストール・更新の詳細は[インストールガイド](./docs/user/install.md)を参照してください。
 
 ### コマンドライン
 
@@ -54,7 +54,7 @@ Releasesから目的の版の`install.sh`または`install.ps1`をダウンロ�
 
 ### スマートフォン・ホスト版Web
 
-フォーク版のモバイル配布は[#50](https://github.com/YmSaki/t3code/issues/50)、ホスト版Webは[#49](https://github.com/YmSaki/t3code/issues/49)で準備中です。上流のストア版や`app.t3.codes`には、このフォーク独自の変更は含まれません。
+フォーク版のモバイル配布は[#50](https://github.com/YmSaki/t3codeJP/issues/50)、ホスト版Webは[#49](https://github.com/YmSaki/t3codeJP/issues/49)で準備中です。上流のストア版や`app.t3.codes`には、このフォーク独自の変更は含まれません。
 
 ### エージェントへのログイン
 
@@ -81,7 +81,7 @@ irm https://vite.plus/ps1 | iex
 リポジトリを取得し、依存パッケージをインストールします。Windowsの長いパスにも対応できるよう、クローン時に`core.longpaths`を有効にしています。
 
 ```bash
-git clone -c core.longpaths=true https://github.com/YmSaki/t3code.git
+git clone -c core.longpaths=true https://github.com/YmSaki/t3codeJP.git
 cd t3code
 vp i
 vp run dev --home-dir ./.t3
@@ -124,7 +124,7 @@ T3 Codeは、エージェントを使った開発体験をよりよくするた�
 
 ## コントリビュート
 
-このフォークの不具合や開発課題は[Issues](https://github.com/YmSaki/t3code/issues)で扱っています。
+このフォークの不具合や開発課題は[Issues](https://github.com/YmSaki/t3codeJP/issues)で扱っています。
 
 上流への報告や貢献を行う場合は、[CONTRIBUTING.md](./CONTRIBUTING.md)を先に確認してください。上流はレビューできる件数に限りがあるため、範囲を絞った修正を優先し、新機能には事前の議論と承認を求めています。
 

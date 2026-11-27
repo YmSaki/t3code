@@ -64,7 +64,7 @@ it.layer(NodeServices.layer)("t3 install", (it) => {
         const error = yield* provide(
           installCli().pipe(Effect.provideService(HostProcess.IsExecutable, false)),
         ).pipe(Effect.flip);
-        const release = `https://github.com/YmSaki/t3code/releases/download/v${VERSION}`;
+        const release = `https://github.com/YmSaki/t3codeJP/releases/download/v${VERSION}`;
         if (platform === "win32") {
           assert.include(error.message, `$env:T3CODE_VERSION = '${VERSION}'`);
           assert.include(error.message, `irm '${release}/install.ps1' | iex`);

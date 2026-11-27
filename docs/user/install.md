@@ -5,8 +5,8 @@ desktop, web, or mobile app. Set up the machine where the agents will work first
 
 T3CodeJP is an unofficial fork of [T3 Code](https://github.com/pingdotgg/t3code),
 maintained independently. Fork mobile distribution and hosted Web are tracked in
-[#50](https://github.com/YmSaki/t3code/issues/50) and
-[#49](https://github.com/YmSaki/t3code/issues/49). The installed CLI serves this
+[#50](https://github.com/YmSaki/t3codeJP/issues/50) and
+[#49](https://github.com/YmSaki/t3codeJP/issues/49). The installed CLI serves this
 fork's bundled Web client.
 
 ## Requirements
@@ -17,13 +17,13 @@ launch T3CodeJP and configure providers afterwards.
 ## Command line
 
 ```bash
-curl -fsSL https://github.com/YmSaki/t3code/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/YmSaki/t3codeJP/releases/latest/download/install.sh | sh
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://github.com/YmSaki/t3code/releases/latest/download/install.ps1 | iex
+irm https://github.com/YmSaki/t3codeJP/releases/latest/download/install.ps1 | iex
 ```
 
 The release installers download this fork's CLI archive and verify its checksum.
@@ -61,7 +61,7 @@ run a server there, build it from source with `vp`, which provides the Node vers
 ([Install vp](../operations/development.md#first-checkout)):
 
 ```bash
-git clone https://github.com/YmSaki/t3code
+git clone https://github.com/YmSaki/t3codeJP
 cd t3code && vp i && vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
@@ -71,7 +71,7 @@ update it with `git pull` and a rebuild.
 
 ## Desktop app
 
-Download a fork build from [T3CodeJP Releases](https://github.com/YmSaki/t3code/releases).
+Download a fork build from [T3CodeJP Releases](https://github.com/YmSaki/t3codeJP/releases).
 Choose the installer for your OS and architecture. Nightly builds are marked
 as prereleases. The app's name and icon distinguish it from official T3 Code.
 Official Homebrew, winget, Scoop, AUR, and nixpkgs packages install upstream
@@ -170,7 +170,7 @@ on web and desktop. The store apps work with both stable and Nightly servers. Te
 
 - **iPhone and iPad:** TestFlight is invite-only.
 - **Android:** download an APK from the
-  [Android beta releases](https://github.com/YmSaki/t3code/releases?q=android-beta-).
+  [Android beta releases](https://github.com/YmSaki/t3codeJP/releases?q=android-beta-).
 
 If the app crashes during launch, open Settings → Diagnostics on the next launch
 that succeeds. It lists startup crashes from the last 7 days with the error and

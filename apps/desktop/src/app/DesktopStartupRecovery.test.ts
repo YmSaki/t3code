@@ -225,13 +225,13 @@ it.effect.each([
   {
     action: "reinstall",
     status: 200,
-    expected: "https://github.com/YmSaki/t3code/releases/tag/v0.1.2",
+    expected: "https://github.com/YmSaki/t3codeJP/releases/tag/v0.1.2",
   },
-  { action: "reinstall", status: 404, expected: "https://github.com/YmSaki/t3code/releases" },
-  { action: "reinstall", status: 503, expected: "https://github.com/YmSaki/t3code/releases" },
-  { action: "reinstall", status: "offline", expected: "https://github.com/YmSaki/t3code/releases" },
-  { action: "reinstall", status: "timeout", expected: "https://github.com/YmSaki/t3code/releases" },
-  { action: "releases", status: 200, expected: "https://github.com/YmSaki/t3code/releases" },
+  { action: "reinstall", status: 404, expected: "https://github.com/YmSaki/t3codeJP/releases" },
+  { action: "reinstall", status: 503, expected: "https://github.com/YmSaki/t3codeJP/releases" },
+  { action: "reinstall", status: "offline", expected: "https://github.com/YmSaki/t3codeJP/releases" },
+  { action: "reinstall", status: "timeout", expected: "https://github.com/YmSaki/t3codeJP/releases" },
+  { action: "releases", status: 200, expected: "https://github.com/YmSaki/t3codeJP/releases" },
 ] as const)(
   "resolves the $action recovery action with HTTP $status",
   ({ action, status, expected }) =>
@@ -270,7 +270,7 @@ it.effect.each([
                     expect(action).toBe("reinstall");
                     expect(request.method).toBe("HEAD");
                     expect(request.url).toBe(
-                      "https://github.com/YmSaki/t3code/releases/tag/v0.1.2",
+                      "https://github.com/YmSaki/t3codeJP/releases/tag/v0.1.2",
                     );
                     if (status === "offline") {
                       return yield* new HttpClientError.HttpClientError({

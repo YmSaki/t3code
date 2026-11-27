@@ -197,8 +197,8 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const mirror = "https://updates.example.com/404/t3code";
       assert.isFalse(isUnpublishedRelease(yield* failsWith(403, mirror)));
       assert.deepEqual(requests, [
-        `https://github.com/YmSaki/t3code/releases/download/v${version}/SHA256SUMS`,
-        `https://github.com/YmSaki/t3code/releases/download/v${version}/${archiveName}`,
+        `https://github.com/YmSaki/t3codeJP/releases/download/v${version}/SHA256SUMS`,
+        `https://github.com/YmSaki/t3codeJP/releases/download/v${version}/${archiveName}`,
         `${mirror}/v${version}/SHA256SUMS`,
         `${mirror}/v${version}/${archiveName}`,
       ]);

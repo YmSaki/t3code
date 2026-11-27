@@ -56,8 +56,8 @@ describe("environment maintenance access", () => {
 
 describe("environment release checks", () => {
   const signal = new AbortController().signal;
-  const forkReleases = "https://github.com/YmSaki/t3code/releases";
-  const forkIndex = "https://api.github.com/repos/YmSaki/t3code/releases?per_page=100";
+  const forkReleases = "https://github.com/YmSaki/t3codeJP/releases";
+  const forkIndex = "https://api.github.com/repos/YmSaki/t3codeJP/releases?per_page=100";
   const feed = (releasePage: string, ...tags: ReadonlyArray<string>) =>
     new Response(
       `<feed><id>tag:github.com,2008:${releasePage}</id>${tags
