@@ -9,7 +9,7 @@ const {
 const now = Date.parse("2026-11-25T12:00:00Z");
 const candidate = "a".repeat(40);
 const promoted = "b".repeat(40);
-const repo = { owner: "YmSaki", repo: "t3code" };
+const repo = { owner: "YmSaki", repo: "t3codeJP" };
 
 function release(
   tagName,
@@ -200,7 +200,7 @@ test("the production signing gate rejects incomplete Apple and Azure configurati
 
 test("rejects foreign repositories before inspecting release history", async () => {
   const { run, reads } = fixture({ context: { repo: { owner: "pingdotgg", repo: "t3code" } } });
-  await assert.rejects(run, /only runs in YmSaki\/t3code/);
+  await assert.rejects(run, /only runs in YmSaki\/t3codeJP\./);
   assert.deepEqual(reads, []);
 });
 

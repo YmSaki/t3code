@@ -229,8 +229,16 @@ it.effect.each([
   },
   { action: "reinstall", status: 404, expected: "https://github.com/YmSaki/t3codeJP/releases" },
   { action: "reinstall", status: 503, expected: "https://github.com/YmSaki/t3codeJP/releases" },
-  { action: "reinstall", status: "offline", expected: "https://github.com/YmSaki/t3codeJP/releases" },
-  { action: "reinstall", status: "timeout", expected: "https://github.com/YmSaki/t3codeJP/releases" },
+  {
+    action: "reinstall",
+    status: "offline",
+    expected: "https://github.com/YmSaki/t3codeJP/releases",
+  },
+  {
+    action: "reinstall",
+    status: "timeout",
+    expected: "https://github.com/YmSaki/t3codeJP/releases",
+  },
   { action: "releases", status: 200, expected: "https://github.com/YmSaki/t3codeJP/releases" },
 ] as const)(
   "resolves the $action recovery action with HTTP $status",

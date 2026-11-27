@@ -7,7 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { migrationManifest, runMigrations } from "./Migrations.ts";
+import { hasPendingMigrations, migrationManifest, runMigrations } from "./Migrations.ts";
 
 const v2Migrations = migrationManifest.filter(([id]) => id >= 55);
 const newerMigrationId = Math.max(...migrationManifest.map(([id]) => id)) + 1;
@@ -29,6 +29,68 @@ const v2TableCount = Effect.gen(function* () {
 });
 
 describe("runMigrations", () => {
+  it.effect.each(["valid", "future", "incomplete", "renamed", "ddl-failure"])(
+    "imports only verified upstream histories and rolls back failures: %s",
+    (variant) =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* runMigrations({ toMigrationInclusive: 105 });
+        const names = [
+          "WorktreePathKeyIndex",
+          "DeferredSlashCommandIndex",
+          "AgentFeedback",
+          "IssueTrackerAccounts",
+          "Workflows",
+          "SupersededRunAttemptIndex",
+          "LayoutCommandApprovals",
+          "WorkflowSkippedRuns",
+          "WorkflowRunIndexes",
+          "WorkflowRunTags",
+          "ForkHistoryMembership",
+          "WorkflowMailSender",
+        ];
+        for (const [index, name] of names.entries()) {
+          yield* sql`INSERT INTO effect_sql_migrations (migration_id, name) VALUES (${106 + index}, ${name})`;
+        }
+        if (variant === "future")
+          yield* sql`INSERT INTO effect_sql_migrations (migration_id, name) VALUES (118, 'UnknownUpstreamMigration')`;
+        if (variant === "incomplete")
+          yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = 110`;
+        if (variant === "renamed")
+          yield* sql`UPDATE effect_sql_migrations SET name = 'OtherMigration' WHERE migration_id = 106`;
+        if (variant === "ddl-failure")
+          yield* sql`CREATE TABLE pm_worker_dispatches (thread_id TEXT)`;
+        const before = yield* history;
+        if (variant !== "valid") {
+          assert.isTrue(Exit.isFailure(yield* Effect.exit(runMigrations())));
+          assert.deepStrictEqual(yield* history, before);
+          const created =
+            yield* sql`SELECT name FROM sqlite_master WHERE name IN ('t3codejp_upstream_migrations', 'meta_projects')`;
+          assert.deepStrictEqual(created, []);
+          return;
+        }
+        assert.isTrue(yield* hasPendingMigrations());
+        assert.deepStrictEqual(
+          yield* runMigrations(),
+          migrationManifest.filter(([id]) => id >= 106),
+        );
+        assert.deepStrictEqual(yield* history, migrationManifest);
+        const archived = yield* sql<{
+          readonly migration_id: number;
+          readonly name: string;
+        }>`SELECT migration_id, name FROM t3codejp_upstream_migrations ORDER BY migration_id`;
+        assert.deepStrictEqual(
+          archived.map((row) => [row.migration_id, row.name] as const),
+          before.filter(([id]) => id >= 106),
+        );
+        yield* sql`SELECT dispatch_command_id FROM pm_worker_dispatches`;
+        yield* sql`SELECT id FROM web_push_subscriptions`;
+        yield* sql`PRAGMA query_only = ON`;
+        assert.isFalse(yield* hasPendingMigrations());
+        assert.deepStrictEqual(yield* runMigrations(), []);
+      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect("refuses to start when another migration took a V2 id", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
