@@ -149,7 +149,7 @@ function Assert-CandidatePayload {
     $updateConfig = Get-Content -LiteralPath (Join-Path $forkInstall 'resources/app-update.yml') -Raw
     if ($updateConfig -cnotmatch '(?m)^provider: github\r?$' -or
         $updateConfig -cnotmatch '(?m)^owner: YmSaki\r?$' -or
-        $updateConfig -cnotmatch '(?m)^repo: t3code\r?$') {
+        $updateConfig -cnotmatch '(?m)^repo: t3codeJP\r?$') {
         throw 'Installed updater configuration does not point to YmSaki/t3codeJP.'
     }
 }
