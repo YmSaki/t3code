@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const {
   existsSync,
@@ -48,7 +49,7 @@ function linuxManifest(version, installers) {
   ].join("\n");
 }
 
-function fixture(t, channel = "stable") {
+function fixture(t, channel = "stable", distribution) {
   const root = mkdtempSync(join(tmpdir(), "t3codejp-release-assets-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const options = {
@@ -58,6 +59,7 @@ function fixture(t, channel = "stable") {
     channel,
     version: channel === "stable" ? "1.0.0" : "1.0.0-" + channel + ".20261125.10",
     databaseMigration: 42,
+    ...(distribution === undefined ? {} : { distribution }),
   };
   const scripts = {
     "install.sh": Buffer.from("#!/bin/sh\necho planned shell installer\n"),
@@ -73,7 +75,7 @@ function fixture(t, channel = "stable") {
     writeFileSync(join(dir, name), contents);
   };
   const prefix = channel === "stable" ? "latest" : "nightly";
-  for (const [target, extensions, manifest] of desktop) {
+  for (const [target, extensions, manifest] of distribution === "cli" ? [] : desktop) {
     const artifact = "desktop-" + target;
     const arch = target.split("-")[1];
     const installers = [];
@@ -107,35 +109,48 @@ function fixture(t, channel = "stable") {
   return { options, archives, scripts, put };
 }
 
-test("stages the full platform matrix with version-matched metadata and source installer scripts", async (t) => {
-  const { options, archives, scripts } = fixture(t, "nightly");
-  await stageForkReleaseAssets(options);
-  const files = readdirSync(options.outputDir);
-  assert.ok(files.includes("nightly-win-x64.yml"));
-  assert.ok(files.includes("nightly-win-arm64.yml"));
-  assert.ok(files.includes("nightly-linux-arm64.yml"));
-  assert.ok(files.includes("nightly-mac-x64.yml"));
-  assert.ok(files.includes("T3CodeJP-Nightly-x86_64.AppImage"));
-  assert.ok(files.includes("T3CodeJP-" + options.version + "-amd64.deb"));
-  assert.equal(files.filter((name) => name.endsWith(".exe.blockmap")).length, 2);
-  assert.ok(!files.includes("builder-debug.yml"));
+for (const [channel, distribution] of [
+  ["nightly", undefined],
+  ["nightly", "all"],
+  ["stable", "cli"],
+  ["nightly", "cli"],
+  ["preview", "cli"],
+]) {
+  test(`stages the ${distribution ?? "default"} ${channel} matrix with version-matched metadata and source installer scripts`, async (t) => {
+    const { options, archives, scripts } = fixture(t, channel, distribution);
+    await stageForkReleaseAssets(options);
+    const files = readdirSync(options.outputDir);
+    if (distribution !== "cli") {
+      assert.ok(files.includes("nightly-win-x64.yml"));
+      assert.ok(files.includes("nightly-win-arm64.yml"));
+      assert.ok(files.includes("nightly-linux-arm64.yml"));
+      assert.ok(files.includes("nightly-mac-x64.yml"));
+      assert.ok(files.includes("T3CodeJP-Nightly-x86_64.AppImage"));
+      assert.ok(files.includes("T3CodeJP-" + options.version + "-amd64.deb"));
+      assert.equal(files.filter((name) => name.endsWith(".exe.blockmap")).length, 2);
+      assert.ok(!files.includes("builder-debug.yml"));
+    }
 
-  const read = (name) => readFileSync(join(options.outputDir, name));
-  const metadataName = "t3code-release.json";
-  assert.deepEqual(JSON.parse(read(metadataName)), {
-    version: options.version,
-    t3code: { databaseMigration: options.databaseMigration },
+    const read = (name) => readFileSync(join(options.outputDir, name));
+    const metadataName = "t3code-release.json";
+    assert.deepEqual(JSON.parse(read(metadataName)), {
+      version: options.version,
+      t3code: { databaseMigration: options.databaseMigration },
+    });
+    for (const [name, contents] of Object.entries(scripts)) {
+      assert.deepEqual(read(name), contents);
+    }
+    const checkedFiles = [...archives, metadataName, ...Object.keys(scripts)].sort();
+    const expected =
+      checkedFiles
+        .map((name) => createHash("sha256").update(read(name)).digest("hex") + "  " + name)
+        .join("\n") + "\n";
+    assert.equal(read("SHA256SUMS").toString(), expected);
+    if (distribution === "cli") {
+      assert.deepEqual(files.sort(), [...checkedFiles, "SHA256SUMS"].sort());
+    }
   });
-  for (const [name, contents] of Object.entries(scripts)) {
-    assert.deepEqual(read(name), contents);
-  }
-  const checkedFiles = [...archives, metadataName, ...Object.keys(scripts)].sort();
-  const expected =
-    checkedFiles
-      .map((name) => createHash("sha256").update(read(name)).digest("hex") + "  " + name)
-      .join("\n") + "\n";
-  assert.equal(read("SHA256SUMS").toString(), expected);
-});
+}
 
 test("refuses to stage a partial platform matrix even when desktop and CLI artifacts exist", async (t) => {
   const { options } = fixture(t);
@@ -144,13 +159,113 @@ test("refuses to stage a partial platform matrix even when desktop and CLI artif
   assert.equal(existsSync(join(options.outputDir, "SHA256SUMS")), false);
 });
 
-test("refuses to stage a release when a source installer is missing", async (t) => {
-  const { options } = fixture(t);
-  const missingScript = join(options.sourceDir, "install.ps1");
-  rmSync(missingScript);
-  await assert.rejects(stageForkReleaseAssets(options), { code: "ENOENT", path: missingScript });
+for (const [target] of cli) {
+  test(`refuses a CLI-only release missing cli-${target}`, async (t) => {
+    const { options } = fixture(t, "stable", "cli");
+    rmSync(join(options.inputDir, "cli-" + target), { recursive: true });
+    await assert.rejects(
+      stageForkReleaseAssets(options),
+      new RegExp("Missing artifact cli-" + target),
+    );
+    assert.equal(existsSync(options.outputDir), false);
+  });
+
+  test(`rejects extra files and wrong CLI archive versions or targets in cli-${target}`, async (t) => {
+    const { options, put } = fixture(t, "stable", "cli");
+    const artifact = "cli-" + target;
+    const name = readdirSync(join(options.inputDir, artifact))[0];
+    const expected = new RegExp(artifact + " must contain exactly ");
+    for (const extra of ["unexpected.txt", "T3CodeJP-1.0.0-x64.exe"]) {
+      put(artifact, extra);
+      await assert.rejects(stageForkReleaseAssets(options), expected);
+      assert.equal(existsSync(options.outputDir), false);
+      rmSync(join(options.inputDir, artifact, extra));
+    }
+    rmSync(join(options.inputDir, artifact, name));
+    await assert.rejects(stageForkReleaseAssets(options), expected);
+    for (const wrong of [
+      name.replace(options.version, "1.0.1"),
+      name.replace(/(?:arm64|x64)/, "ia32"),
+    ]) {
+      put(artifact, wrong);
+      await assert.rejects(stageForkReleaseAssets(options), expected);
+      assert.equal(existsSync(options.outputDir), false);
+      rmSync(join(options.inputDir, artifact, wrong));
+    }
+  });
+}
+
+test("rejects unexpected desktop and unsupported CLI artifacts in a CLI-only release", async (t) => {
+  const { options, put } = fixture(t, "stable", "cli");
+  for (const artifact of [...desktop.map(([target]) => "desktop-" + target), "cli-mac-x64"]) {
+    put(artifact, "unexpected.zip");
+    await assert.rejects(stageForkReleaseAssets(options), /Unexpected artifact.*cli/i);
+    assert.equal(existsSync(options.outputDir), false);
+    rmSync(join(options.inputDir, artifact), { recursive: true });
+  }
+  writeFileSync(join(options.inputDir, "latest-win-x64.yml"), "version: 1.0.0\n");
+  await assert.rejects(stageForkReleaseAssets(options), /Unexpected artifact.*cli/i);
   assert.equal(existsSync(options.outputDir), false);
 });
+
+test("rejects an unknown distribution before staging assets", async (t) => {
+  const { options } = fixture(t);
+  await assert.rejects(
+    stageForkReleaseAssets({ ...options, distribution: "desktop" }),
+    /distribution/i,
+  );
+  assert.equal(existsSync(options.outputDir), false);
+});
+
+for (const distribution of [undefined, "cli"]) {
+  for (const name of ["install.sh", "install.ps1"]) {
+    test(`refuses a ${distribution ?? "default"} release when source ${name} is missing`, async (t) => {
+      const { options } = fixture(t, "stable", distribution);
+      const missingScript = join(options.sourceDir, name);
+      rmSync(missingScript);
+      await assert.rejects(stageForkReleaseAssets(options), {
+        code: "ENOENT",
+        path: missingScript,
+      });
+      assert.equal(existsSync(options.outputDir), false);
+    });
+  }
+}
+
+for (const distribution of [undefined, "all", "cli"]) {
+  test(`command accepts ${distribution ?? "omitted"} distribution after database migration`, (t) => {
+    const { options, archives } = fixture(t, "stable", distribution);
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(__dirname, "fork-release-assets.cjs"),
+        options.inputDir,
+        options.outputDir,
+        options.channel,
+        options.version,
+        String(options.databaseMigration),
+        ...(distribution === undefined ? [] : [distribution]),
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const files = readdirSync(options.outputDir);
+    if (distribution === "cli") {
+      assert.deepEqual(
+        files.sort(),
+        [...archives, "install.sh", "install.ps1", "t3code-release.json", "SHA256SUMS"].sort(),
+      );
+    } else {
+      assert.ok(files.includes("latest-win-x64.yml"));
+    }
+    for (const name of ["install.sh", "install.ps1"]) {
+      assert.deepEqual(
+        readFileSync(join(options.outputDir, name)),
+        readFileSync(join(__dirname, "../../scripts", name)),
+      );
+    }
+  });
+}
 
 test("rejects missing Windows differential assets and incomplete or mismatched updater manifests", async (t) => {
   const { options, put } = fixture(t);

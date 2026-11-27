@@ -16,14 +16,20 @@ launch T3CodeJP and configure providers afterwards.
 
 ## Command line
 
+Choose a published version from [T3CodeJP Releases](https://github.com/YmSaki/t3codeJP/releases).
+The examples use `1.0.0`; replace it with the version you chose. Download the
+installer from that same version, including when the release contains only CLI archives.
+
 ```bash
-curl -fsSL https://github.com/YmSaki/t3codeJP/releases/latest/download/install.sh | sh
+version=1.0.0
+curl -fsSL "https://github.com/YmSaki/t3codeJP/releases/download/v${version}/install.sh" | T3CODE_VERSION="$version" sh
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://github.com/YmSaki/t3codeJP/releases/latest/download/install.ps1 | iex
+$env:T3CODE_VERSION = "1.0.0"
+irm "https://github.com/YmSaki/t3codeJP/releases/download/v$env:T3CODE_VERSION/install.ps1" | iex
 ```
 
 The release installers download this fork's CLI archive and verify its checksum.
@@ -32,7 +38,9 @@ to your `PATH` when prompted. On Windows, the command is available in the
 installer's PowerShell session; add the directory to `PATH` for new windows.
 An existing launcher belonging to another installation is preserved.
 Set `T3CODE_CHANNEL=nightly` to select Nightly, or `T3CODE_VERSION` to pin a
-published fork version. If the selected release is unavailable, build from
+published fork version. Clear `T3CODE_VERSION` to let a later installer follow
+its selected channel. `t3 update` checks the newest published release on its
+channel independently of GitHub's desktop Latest label. If the selected release is unavailable, build from
 source; do not substitute an upstream npm package or installer.
 
 | Task                                  | Command                                                                 |
@@ -62,7 +70,7 @@ run a server there, build it from source with `vp`, which provides the Node vers
 
 ```bash
 git clone https://github.com/YmSaki/t3codeJP
-cd t3code && vp i && vp run build:desktop
+cd t3codeJP && vp i && vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
 

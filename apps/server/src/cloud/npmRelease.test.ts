@@ -13,7 +13,15 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import * as NpmRelease from "./npmRelease.ts";
 
 const version = "1.2.3";
+const newerCli = "1.2.4";
 const nightly = "1.2.4-nightly.20261030.1";
+const desktopLatestUrl = "https://api.github.com/repos/YmSaki/t3codeJP/releases/latest";
+const desktopLatest = {
+  tag_name: `v${version}`,
+  draft: false,
+  prerelease: false,
+  assets: [{ name: "latest.yml" }],
+};
 const metadata = (version: string, databaseMigration: number) =>
   Response.json({ version, t3code: { databaseMigration } });
 const notFound = () => new Response(null, { status: 404 });
@@ -38,24 +46,32 @@ it.effect.each([
           requested.push(request.url);
           const url = new URL(request.url);
           const response =
-            url.pathname === "/repos/YmSaki/t3codeJP/releases"
-              ? Response.json([{ tag_name: `v${nightly}` }, { tag_name: `v${version}` }])
-              : url.pathname ===
-                  `/YmSaki/t3codeJP/releases/download/v${expected}/t3code-release.json`
-                ? metadata(expected, 42)
+            request.url === desktopLatestUrl
+              ? Response.json(desktopLatest)
+              : url.pathname === "/repos/YmSaki/t3codeJP/releases"
+                ? Response.json([
+                    { tag_name: `v${nightly}` },
+                    { tag_name: `v${newerCli}` },
+                    { tag_name: `v${version}` },
+                  ])
                 : url.pathname ===
-                      `/pingdotgg/t3code/releases/download/v${expected}/t3code-release.json` ||
-                    url.hostname === "registry.npmjs.org"
-                  ? metadata(expected, 99)
-                  : notFound();
+                    `/YmSaki/t3codeJP/releases/download/v${expected}/t3code-release.json`
+                  ? metadata(expected, 42)
+                  : url.pathname ===
+                        `/pingdotgg/t3code/releases/download/v${expected}/t3code-release.json` ||
+                      url.hostname === "registry.npmjs.org"
+                    ? metadata(expected, 99)
+                    : notFound();
           return Effect.succeed(HttpClientResponse.fromWeb(request, response));
         }),
       );
       const expectedResult = { version: expected, databaseMigration: 42 };
       const expectedUrls = [
-        ...(spec === expected
-          ? []
-          : ["https://api.github.com/repos/YmSaki/t3codeJP/releases?per_page=100&page=1"]),
+        ...(spec === "latest"
+          ? [desktopLatestUrl]
+          : spec === "nightly"
+            ? ["https://api.github.com/repos/YmSaki/t3codeJP/releases?per_page=100&page=1"]
+            : []),
         `https://github.com/YmSaki/t3codeJP/releases/download/v${expected}/t3code-release.json`,
       ];
       expect(yield* service.get({ spec })).toEqual(expectedResult);
@@ -65,6 +81,64 @@ it.effect.each([
       expect(yield* service.get({ spec })).toEqual(expectedResult);
       expect(requested).toEqual([...expectedUrls, ...expectedUrls]);
     }),
+);
+
+it.effect.each([
+  { label: "no Desktop Latest", response: notFound },
+  {
+    label: "a CLI-only Latest fallback",
+    response: () => Response.json({ ...desktopLatest, assets: [{ name: "t3code-release.json" }] }),
+  },
+  { label: "a draft", response: () => Response.json({ ...desktopLatest, draft: true }) },
+  { label: "a prerelease", response: () => Response.json({ ...desktopLatest, prerelease: true }) },
+  {
+    label: "a Nightly tag",
+    response: () => Response.json({ ...desktopLatest, tag_name: `v${nightly}` }),
+  },
+  {
+    label: "an unprefixed tag",
+    response: () => Response.json({ ...desktopLatest, tag_name: version }),
+  },
+  {
+    label: "a malformed Stable tag",
+    response: () => Response.json({ ...desktopLatest, tag_name: "v1.02.3" }),
+  },
+  {
+    label: "missing flags",
+    response: () => Response.json({ tag_name: `v${version}`, assets: desktopLatest.assets }),
+  },
+  {
+    label: "missing assets",
+    response: () => Response.json({ ...desktopLatest, assets: undefined }),
+  },
+  {
+    label: "malformed assets",
+    response: () => Response.json({ ...desktopLatest, assets: [null] }),
+  },
+  { label: "a release list", response: () => Response.json([desktopLatest]) },
+  { label: "a null release", response: () => Response.json(null) },
+  { label: "invalid JSON", response: () => new Response("not json") },
+  { label: "an empty body", response: () => new Response(null) },
+  { label: "a host error", response: () => new Response("sensitive", { status: 500 }) },
+])("refuses Desktop Latest when GitHub returns $label", (fixture) =>
+  Effect.gen(function* () {
+    const requested: string[] = [];
+    const service = yield* makeService(
+      HttpClient.make((request) => {
+        requested.push(request.url);
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            request.url === desktopLatestUrl ? fixture.response() : metadata(newerCli, 42),
+          ),
+        );
+      }),
+    );
+    const error = yield* service.get({ spec: "latest" }).pipe(Effect.flip);
+    expect(error).toBeInstanceOf(ServerNpmReleaseError);
+    expect(error.message).not.toContain("sensitive");
+    expect(requested).toEqual([desktopLatestUrl]);
+  }),
 );
 
 it.effect.each([undefined, "https://mirror.example.test/releases/?token=example"])(
@@ -93,30 +167,64 @@ it.effect.each([undefined, "https://mirror.example.test/releases/?token=example"
 );
 
 it.effect.each([
-  { label: "missing metadata", response: notFound },
-  { label: "a version mismatch", response: () => metadata("9.9.9", 42) },
-  { label: "unknown migration compatibility", response: () => Response.json({ version }) },
-  { label: "a noninteger migration", response: () => metadata(version, 1.5) },
-  { label: "a negative migration", response: () => metadata(version, -1) },
-  { label: "invalid JSON", response: () => new Response("not json") },
-  { label: "a host error", response: () => new Response("sensitive", { status: 500 }) },
+  { label: "missing metadata", response: notFound, reason: "No compatibility metadata" },
+  {
+    label: "a version mismatch",
+    response: () => metadata("9.9.9", 42),
+    reason: "Invalid compatibility metadata",
+  },
+  {
+    label: "unknown migration compatibility",
+    response: () => Response.json({ version }),
+    reason: "Invalid compatibility metadata",
+  },
+  {
+    label: "a noninteger migration",
+    response: () => metadata(version, 1.5),
+    reason: "Invalid compatibility metadata",
+  },
+  {
+    label: "a negative migration",
+    response: () => metadata(version, -1),
+    reason: "Invalid compatibility metadata",
+  },
+  {
+    label: "invalid JSON",
+    response: () => new Response("not json"),
+    reason: "Invalid compatibility metadata",
+  },
+  {
+    label: "an empty body",
+    response: () => new Response(null),
+    reason: "Invalid compatibility metadata",
+  },
+  {
+    label: "a host error",
+    response: () => new Response("sensitive", { status: 500 }),
+    reason: "Could not read release metadata",
+  },
 ])("blocks a track lookup with $label", (fixture) =>
   Effect.gen(function* () {
+    const requested: string[] = [];
     const service = yield* makeService(
-      HttpClient.make((request) =>
-        Effect.succeed(
+      HttpClient.make((request) => {
+        requested.push(request.url);
+        return Effect.succeed(
           HttpClientResponse.fromWeb(
             request,
-            request.url.startsWith("https://api.github.com/")
-              ? Response.json([{ tag_name: `v${version}` }])
-              : fixture.response(),
+            request.url === desktopLatestUrl ? Response.json(desktopLatest) : fixture.response(),
           ),
-        ),
-      ),
+        );
+      }),
     );
     const error = yield* service.get({ spec: "latest" }).pipe(Effect.flip);
     expect(error).toBeInstanceOf(ServerNpmReleaseError);
+    expect(error.reason).toContain(fixture.reason);
     expect(error.message).not.toContain("sensitive");
+    expect(requested).toEqual([
+      desktopLatestUrl,
+      `https://github.com/YmSaki/t3codeJP/releases/download/v${version}/t3code-release.json`,
+    ]);
   }),
 );
 

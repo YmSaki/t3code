@@ -153,6 +153,7 @@ async function planForkRelease({
   pauseNightly = false,
   publishEnabled = false,
   validateSigning = false,
+  distribution = "all",
   now = Date.now(),
 }) {
   const slug = `${context.repo.owner}/${context.repo.repo}`;
@@ -160,7 +161,20 @@ async function planForkRelease({
     throw new Error(`Fork release preflight only runs in ${FORK_REPOSITORY}.`);
   }
 
+  if (!["all", "cli"].includes(distribution)) throw new Error("Invalid release distribution.");
+  const cliOnly = distribution === "cli";
+  if (cliOnly && (context.eventName !== "workflow_dispatch" || validateSigning)) {
+    throw new Error(
+      "CLI-only builds require a manual distribution run without signing validation.",
+    );
+  }
+
   const channel = releaseChannel(context.eventName, dispatchChannel);
+  if (cliOnly && channel === "nightly") {
+    throw new Error(
+      "CLI-only Nightly publication would overlap the desktop Nightly feed; use Stable or Preview.",
+    );
+  }
   const scheduled = context.eventName === "schedule";
   if (validateSigning && (context.eventName !== "workflow_dispatch" || channel !== "nightly")) {
     throw new Error("Signing validation requires a manual Nightly run from main.");
@@ -196,7 +210,9 @@ async function planForkRelease({
   let version;
   if (channel === "stable") {
     let target = requestedStable;
-    if (!pushedTag) {
+    if (cliOnly) {
+      target ??= requireStableVersion(nextStableVersion(latestStable));
+    } else if (!pushedTag) {
       if (!latestNightly) throw new Error("No published fork Nightly is available to promote.");
       target ??= requireStableVersion(latestNightly.version);
       const { data } = await github.rest.repos.getCommit({
@@ -227,20 +243,21 @@ async function planForkRelease({
   const publish = publishEnabled && !validateSigning;
   return {
     shouldBuild: true,
+    distribution,
     channel,
     ref,
     version,
     tag,
     name:
       channel === "stable"
-        ? `T3CodeJP ${tag}`
-        : `T3CodeJP ${track} ${version} (${ref.slice(0, 12)})`,
+        ? `T3CodeJP ${cliOnly ? "CLI " : ""}${tag}`
+        : `T3CodeJP ${cliOnly ? "CLI " : ""}${track} ${version} (${ref.slice(0, 12)})`,
     draft,
     publish,
-    requireSigning: validateSigning || (publish && !draft),
+    requireSigning: validateSigning || (publish && !draft && !cliOnly),
     isPrerelease: channel !== "stable",
-    makeLatest: channel === "stable",
-    hasUpdateFeed: channel !== "preview",
+    makeLatest: channel === "stable" && !cliOnly,
+    hasUpdateFeed: channel !== "preview" && !cliOnly,
   };
 }
 

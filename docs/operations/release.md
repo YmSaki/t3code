@@ -46,6 +46,39 @@ draft with no update feed or updater manifests when publication is enabled. Othe
 its files remain Actions artifacts. Never publish a preview draft by hand. Scheduled nightlies
 keep the upstream new-commit and six-hour publication-gap checks.
 
+### Standalone CLI releases
+
+To release the server and its bundled Web client independently, manually run
+`fork-release.yml` with `distribution=cli`. It builds and smoke-tests macOS ARM64,
+Linux x64/ARM64, and Windows x64/ARM64 archives without packaging desktop apps.
+These CLI archives are unsigned (macOS uses an ad hoc signature); this operation
+does not perform Developer ID signing, notarization, or Windows Trusted Signing.
+
+CLI publication is separately disabled unless `T3CODEJP_CLI_RELEASE_PUBLISH=true`.
+Keep it unset for artifact-only runs. Run `distribution=cli, channel=stable`
+from reviewed `main`; this builds that exact commit, starting at 1.0.0 or the
+next patch after the latest published Stable. The existing `version` input can
+choose a newer Stable core. Preview builds may run on a branch and remain draft
+or artifact-only. CLI-only Nightly is refused because its tags would also be
+offered to desktop Nightly clients that require desktop update manifests.
+All distributions share the `vX.Y.Z` version line, so a
+CLI-only Stable consumes that version and later releases must advance it.
+
+The CLI release includes all five archives, source-matched `install.sh` and
+`install.ps1`, `t3code-release.json`, and `SHA256SUMS`. A partial matrix cannot be
+published. CLI-only releases never replace GitHub's desktop Latest selection or
+the desktop Nightly pointer and contain no desktop update manifests. Download
+installers from the exact version's assets, rather than `releases/latest/download`.
+CLI installers and `t3 update` discover versions through the paginated release
+list. Desktop publication keeps its existing Apple/Azure signing requirements.
+
+`fork-cli-validation.yml` builds test-only 1.0.0/1.0.1 archives on each target and
+verifies fresh installation, unqualified updates, and retained synthetic data.
+Linux also cold-installs through a real localhost SSH connection. Its release
+index and archive mirror are loopback fixtures; passing it does not publish a
+GitHub Release. The production publish switch and a public download remain the
+maintainer's final release operation after review.
+
 ### Distribution boundaries
 
 The distribution targets match upstream:

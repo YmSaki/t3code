@@ -5,6 +5,14 @@ Use installers and server archives from the
 npm package and app-store listings do not distribute this fork. Its default data
 directory is `~/.t3codejp`; keep a backup before moving data from another installation.
 
+For a standalone CLI server, run `t3 update` on its host. It selects the newest
+published release on the server's current channel, including CLI-only releases.
+Use `t3 update 1.0.1` to request a particular published version. Stop active
+agent work before restarting a server, and restart an unmanaged `t3 serve`
+process yourself after updating. Saved threads, settings, and attachments stay
+in the same data home. Updating one host does not update your desktop app or
+servers on other machines.
+
 The app you use and the server running your agents can be on different machines.
 When a server is behind your web or desktop app, the update button at the bottom
 of the sidebar and **Settings → Environments** offer to update it.

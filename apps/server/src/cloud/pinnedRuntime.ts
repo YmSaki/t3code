@@ -12,6 +12,7 @@ import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
+import { isWindowsRenameLock } from "@t3tools/shared/atomicWrite";
 import {
   CLI_INSTALL_BIN_DIRNAME,
   CLI_RELEASE_CHECKSUMS_FILE,
@@ -447,7 +448,19 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
             new PinnedRuntimeInstallError({ step: "recording the completed install", cause }),
         ),
       );
-    const published = yield* fs.rename(stagingDir, paths.versionDir).pipe(
+    // Windows can briefly lock the staged executable after validation.
+    const rename = fs.rename(stagingDir, paths.versionDir);
+    const publish =
+      input.platform === "win32"
+        ? rename.pipe(
+            Effect.retry({
+              times: 20,
+              schedule: Schedule.spaced("250 millis"),
+              while: isWindowsRenameLock,
+            }),
+          )
+        : rename;
+    const published = yield* publish.pipe(
       Effect.as(true),
       Effect.catch((cause) =>
         Effect.all([

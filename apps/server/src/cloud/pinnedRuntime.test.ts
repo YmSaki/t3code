@@ -7,6 +7,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as Stream from "effect/Stream";
 import * as NodePath from "node:path";
 import * as TestClock from "effect/testing/TestClock";
@@ -15,6 +16,7 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { cliArchiveFileName, cliArchiveTarCommand } from "@t3tools/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
 import {
@@ -47,17 +49,26 @@ const releaseHttpClient = (checksums: string, requests: string[] = []) =>
     const body = new URL(request.url).pathname.endsWith("/SHA256SUMS") ? checksums : archiveBytes;
     return Effect.succeed(HttpClientResponse.fromWeb(request, new Response(body)));
   });
-const extractingRunner = (fs: FileSystem.FileSystem, path: Path.Path, commands: string[] = []) =>
+const extractingRunner = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  commands: string[] = [],
+  platform: "linux" | "win32" = "linux",
+) =>
   ProcessRunner.ProcessRunner.of({
     run: (input) =>
       Effect.gen(function* () {
         commands.push(input.command);
         const targetIndex = input.args.indexOf("-C");
         const stagingDir = input.args[targetIndex + 1];
-        if (input.command !== "tar" || stagingDir === undefined) {
+        if (
+          input.command !== cliArchiveTarCommand(platform, process.env) ||
+          stagingDir === undefined
+        ) {
           return yield* Effect.die(`unexpected command ${input.command}`);
         }
-        yield* fs.writeFileString(path.join(stagingDir, "t3"), "#!/bin/sh\n").pipe(Effect.orDie);
+        const entry = platform === "win32" ? "t3.exe" : "t3";
+        yield* fs.writeFileString(path.join(stagingDir, entry), "#!/bin/sh\n").pipe(Effect.orDie);
         return {
           stdout: "",
           stderr: "",
@@ -446,36 +457,62 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
     }),
   );
 
-  it.effect("validates a staging tree before atomically publishing it", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-runtime-test-" });
-      const finalPaths = pinnedRuntimePaths(path, baseDir, version, "linux");
-      let validatedDirectory = "";
+  it.effect.each(["linux", "win32"] as const)(
+    "validates a staging tree before atomically publishing it on %s",
+    (platform) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-runtime-test-" });
+        const finalPaths = pinnedRuntimePaths(path, baseDir, version, platform);
+        const firstRename = yield* Deferred.make<void>();
+        const stagingFs = FileSystem.make({
+          ...fs,
+          rename: (from, to) =>
+            Effect.gen(function* () {
+              if (platform === "win32" && (yield* Deferred.succeed(firstRename, undefined))) {
+                return yield* PlatformError.systemError({
+                  _tag: "PermissionDenied",
+                  module: "FileSystem",
+                  method: "rename",
+                  cause: { code: "EPERM" },
+                });
+              }
+              return yield* fs.rename(from, to);
+            }),
+        });
+        const fileName = cliArchiveFileName(version, `${platform}-x64`);
+        const checksums = `${yield* archiveHex(archiveBytes)}  ${fileName}\n`;
+        let validatedDirectory = "";
 
-      const installed = yield* ensurePinnedRuntimeInstalled({
-        baseDir,
-        version,
-        fs,
-        path,
-        platform: "linux",
-        arch: "x64",
-        httpClient: releaseHttpClient(yield* validChecksums),
-        runner: extractingRunner(fs, path),
-        validate: (staging) =>
-          Effect.gen(function* () {
-            validatedDirectory = staging.versionDir;
-            assert.isFalse(yield* fs.exists(finalPaths.versionDir));
-            assert.isTrue(yield* fs.exists(staging.entryPath));
-          }).pipe(Effect.orDie),
-      });
+        const install = yield* ensurePinnedRuntimeInstalled({
+          baseDir,
+          version,
+          fs: stagingFs,
+          path,
+          platform,
+          arch: "x64",
+          httpClient: releaseHttpClient(checksums),
+          runner: extractingRunner(fs, path, [], platform),
+          validate: (staging) =>
+            Effect.gen(function* () {
+              validatedDirectory = staging.versionDir;
+              assert.isFalse(yield* fs.exists(finalPaths.versionDir));
+              assert.isTrue(yield* fs.exists(staging.entryPath));
+            }).pipe(Effect.orDie),
+        }).pipe(Effect.forkChild);
+        if (platform === "win32") {
+          yield* Deferred.await(firstRename);
+          yield* TestClock.adjust("1 second");
+        }
+        const installed = yield* Fiber.join(install);
 
-      assert.notEqual(validatedDirectory, finalPaths.versionDir);
-      assert.deepEqual(installed, finalPaths);
-      assert.isTrue(yield* fs.exists(finalPaths.entryPath));
-      assert.equal(yield* fs.readFileString(finalPaths.sentinelPath), `${version}\n`);
-    }),
+        assert.notEqual(validatedDirectory, finalPaths.versionDir);
+        assert.deepEqual(installed, finalPaths);
+        assert.isTrue(yield* fs.exists(finalPaths.entryPath));
+        assert.equal(yield* fs.readFileString(finalPaths.sentinelPath), `${version}\n`);
+        assert.deepEqual(yield* fs.readDirectory(path.dirname(finalPaths.versionDir)), [version]);
+      }),
   );
 
   it.effect("removes staging and leaves no final runtime when validation fails", () =>

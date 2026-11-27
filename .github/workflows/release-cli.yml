@@ -1,0 +1,245 @@
+name: Build standalone CLI
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        required: true
+        type: string
+      platform:
+        required: true
+        type: string
+      arch:
+        required: true
+        type: string
+      rust_target:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      validate_update:
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Native CLI ${{ inputs.platform }} ${{ inputs.arch }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      T3CODE_TELEMETRY_CHANNEL: dev
+      T3CODE_TELEMETRY_ENABLED: "false"
+      T3CODE_CLERK_PUBLISHABLE_KEY: ""
+      T3CODE_CLERK_JWT_TEMPLATE: ""
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ""
+      T3CODE_RELAY_URL: ""
+      VITE_CLERK_PUBLISHABLE_KEY: ""
+      VITE_CLERK_JWT_TEMPLATE: ""
+      VITE_CLERK_CLI_OAUTH_CLIENT_ID: ""
+      VITE_T3CODE_RELAY_URL: ""
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ""
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ""
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ""
+      VITE_RELAY_OTLP_TRACES_URL: ""
+      VITE_RELAY_OTLP_TRACES_DATASET: ""
+      VITE_RELAY_OTLP_TRACES_TOKEN: ""
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout planned source
+        env:
+          CHECKOUT_REF: ${{ inputs.ref }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/scripts...
+
+      - name: Fingerprint native archive inputs
+        if: inputs.validate_update
+        id: product
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          const proofFiles = new Set(['scripts/smoke-cli-distribution.ts', 'scripts/smoke-cli-ssh.ts', '.github/workflows/fork-cli-validation.yml']);
+          const inputs = execFileSync('git', ['ls-tree', '-r', 'HEAD'], {encoding:'utf8', maxBuffer:32*1024*1024})
+            .split('\n').filter(row => !proofFiles.has(row.split('\t')[1])).join('\n');
+          console.log(`digest=${createHash('sha256').update(process.env.GITHUB_REPOSITORY).update('\0').update(inputs).digest('hex')}`);
+          NODE
+
+      - name: Restore test archives with matching build inputs
+        if: inputs.validate_update
+        id: archive_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: cli-validation-native-v1-${{ inputs.platform }}-${{ inputs.arch }}-${{ steps.product.outputs.digest }}
+          path: |
+            proof-inputs/**/*.tar.gz
+            proof-inputs/**/*.zip
+            cli-build-inputs.json
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        if: steps.archive_cache.outputs.cache-hit != 'true'
+        with:
+          toolchain: stable
+          targets: ${{ inputs.rust_target }}
+
+      - uses: ./.github/actions/setup-apt-mirrors
+        if: inputs.platform == 'linux'
+
+      - name: Install Linux archive tools
+        if: inputs.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf libsecret-1-dev pkg-config build-essential openssh-server
+
+      - name: Build native resource monitor
+        if: steps.archive_cache.outputs.cache-hit != 'true'
+        env:
+          RUST_TARGET: ${{ inputs.rust_target }}
+          TARGET_PLATFORM: ${{ inputs.platform }}
+          TARGET_ARCH: ${{ inputs.arch }}
+        run: |
+          set -euo pipefail
+          cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml --target "$RUST_TARGET"
+          executable=t3-resource-monitor
+          key="$TARGET_PLATFORM-$TARGET_ARCH"
+          if [[ "$TARGET_PLATFORM" == win ]]; then executable+=.exe; key="win32-$TARGET_ARCH"; fi
+          if [[ "$TARGET_PLATFORM" == mac ]]; then key="darwin-$TARGET_ARCH"; fi
+          mkdir -p "$RUNNER_TEMP/cli-resource-monitor/$key"
+          cp "native/resource-monitor/target/$RUST_TARGET/release/$executable" "$RUNNER_TEMP/cli-resource-monitor/$key/"
+
+      - name: Build and verify self-contained CLI archives
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          VALIDATE_UPDATE: ${{ inputs.validate_update }}
+          TARGET_PLATFORM: ${{ inputs.platform }}
+          TARGET_ARCH: ${{ inputs.arch }}
+          CACHED_INPUTS: ${{ steps.archive_cache.outputs.cache-hit }}
+          PRODUCT_INPUT_DIGEST: ${{ steps.product.outputs.digest }}
+        run: |
+          set -euo pipefail
+          versions=("$RELEASE_VERSION")
+          if [[ "$VALIDATE_UPDATE" == true ]]; then versions=(1.0.0 1.0.1); fi
+          for version in "${versions[@]}"; do
+            if [[ "$CACHED_INPUTS" != true ]]; then
+              node scripts/update-release-package-versions.ts "$version"
+              vp run --filter t3 build
+              node scripts/apply-web-brand-assets.ts production apps/server/dist/client
+              vp exec node apps/server/scripts/cli.ts build-exe --verbose
+              vp exec node scripts/build-cli-archive.ts --platform "$TARGET_PLATFORM" --arch "$TARGET_ARCH" \
+                --version "$version" --resource-monitor-dir "$RUNNER_TEMP/cli-resource-monitor" \
+                --output-dir "proof-inputs/$version"
+            fi
+            archive="$(find "$PWD/proof-inputs/$version" -maxdepth 1 -type f -name 't3-*' -print -quit)"
+            node scripts/smoke-cli-archive.ts --archive "$archive" --expect-version "$version"
+            if [[ "$VALIDATE_UPDATE" == true ]]; then
+              cp scripts/install.sh scripts/install.ps1 "proof-inputs/$version/"
+              PROOF_VERSION="$version" node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+          import { BUILD_MIGRATION_HEAD } from './apps/server/src/persistence/databaseMigrationHead.ts';
+          const version = process.env.PROOF_VERSION;
+          const dir = `proof-inputs/${version}`;
+          writeFileSync(`${dir}/t3code-release.json`, JSON.stringify({version, t3code:{databaseMigration:BUILD_MIGRATION_HEAD}}));
+          const sums = readdirSync(dir).filter(name => name !== 'SHA256SUMS').map(name => `${createHash('sha256').update(readFileSync(`${dir}/${name}`)).digest('hex')}  ${name}`);
+          writeFileSync(`${dir}/SHA256SUMS`, sums.join('\n')+'\n');
+          NODE
+            fi
+          done
+          if [[ "$VALIDATE_UPDATE" == true && "$CACHED_INPUTS" != true ]]; then
+            node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('cli-build-inputs.json', JSON.stringify({
+            productInputDigest:process.env.PRODUCT_INPUT_DIGEST, builtFromCommit:process.env.GITHUB_SHA,
+            repository:process.env.GITHUB_REPOSITORY, platform:process.env.TARGET_PLATFORM, arch:process.env.TARGET_ARCH,
+            versions:['1.0.0','1.0.1'],
+          }, null, 2));
+          NODE
+          fi
+
+      - name: Save verified test archives before installation proof
+        if: inputs.validate_update && steps.archive_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: ${{ steps.archive_cache.outputs.cache-primary-key }}
+          path: |
+            proof-inputs/**/*.tar.gz
+            proof-inputs/**/*.zip
+            cli-build-inputs.json
+
+      - name: Verify archive build provenance
+        if: inputs.validate_update
+        env:
+          PRODUCT_INPUT_DIGEST: ${{ steps.product.outputs.digest }}
+          TARGET_PLATFORM: ${{ inputs.platform }}
+          TARGET_ARCH: ${{ inputs.arch }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const proof = JSON.parse(readFileSync('cli-build-inputs.json','utf8'));
+          assert.equal(proof.productInputDigest, process.env.PRODUCT_INPUT_DIGEST);
+          assert.equal(proof.repository, process.env.GITHUB_REPOSITORY);
+          assert.equal(proof.platform, process.env.TARGET_PLATFORM);
+          assert.equal(proof.arch, process.env.TARGET_ARCH);
+          assert.deepEqual(proof.versions, ['1.0.0','1.0.1']);
+          console.log(`Validating archives built at ${proof.builtFromCommit}; product/build inputs match the current verifier.`);
+          NODE
+
+      - name: Prove fresh installation and CLI update
+        if: inputs.validate_update
+        run: |
+          node scripts/smoke-cli-distribution.ts --baseline-dir "$PWD/proof-inputs/1.0.0" \
+            --candidate-dir "$PWD/proof-inputs/1.0.1" --output-dir "$RUNNER_TEMP/cli-distribution-proof"
+
+      - name: Prove installation over a real SSH connection
+        if: inputs.validate_update && inputs.platform == 'linux'
+        run: |
+          node scripts/smoke-cli-ssh.ts --baseline-dir "$PWD/proof-inputs/1.0.0" \
+            --candidate-dir "$PWD/proof-inputs/1.0.1" --output-dir "$RUNNER_TEMP/cli-ssh-proof"
+
+      - name: Upload native CLI archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-${{ inputs.platform }}-${{ inputs.arch }}
+          path: proof-inputs/${{ inputs.validate_update && '1.0.1' || inputs.version }}/t3-*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Record test archive provenance
+        if: always() && inputs.validate_update
+        run: |
+          if [[ -f cli-build-inputs.json ]]; then
+            mkdir -p "$RUNNER_TEMP/cli-distribution-proof"
+            cp cli-build-inputs.json "$RUNNER_TEMP/cli-distribution-proof/"
+          fi
+
+      - name: Upload installation evidence
+        if: always() && inputs.validate_update
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installation-evidence-cli-${{ inputs.platform }}-${{ inputs.arch }}
+          path: |
+            ${{ runner.temp }}/cli-distribution-proof/
+            ${{ runner.temp }}/cli-ssh-proof/
+          if-no-files-found: error
+          retention-days: 7
