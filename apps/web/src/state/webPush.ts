@@ -1,5 +1,6 @@
 import { createWebPushEnvironmentAtoms } from "@t3tools/client-runtime/state/webPush";
 import type { WebPushSubscriptionKeys } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 
@@ -42,6 +43,71 @@ function arrayBufferToBase64Url(buffer: ArrayBuffer | null): string {
     binary += String.fromCharCode(bytes[index] ?? 0);
   }
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function decodeVapidKeyBytes(base64Url: string): Uint8Array<ArrayBuffer> | null {
+  if (base64Url.length === 0) return null;
+  try {
+    return urlBase64ToUint8Array(base64Url);
+  } catch {
+    return null;
+  }
+}
+
+function applicationServerKeyBytes(
+  rawKey: ArrayBuffer | ArrayBufferView | null | undefined,
+): Uint8Array | null {
+  if (!rawKey) return null;
+  if (ArrayBuffer.isView(rawKey)) {
+    return new Uint8Array(rawKey.buffer, rawKey.byteOffset, rawKey.byteLength);
+  }
+  if (
+    rawKey instanceof ArrayBuffer ||
+    Object.prototype.toString.call(rawKey) === "[object ArrayBuffer]"
+  ) {
+    return new Uint8Array(rawKey);
+  }
+  return null;
+}
+
+export class WebPushVapidKeyMismatchError extends Schema.TaggedError<WebPushVapidKeyMismatchError>()(
+  "WebPushVapidKeyMismatchError",
+  {},
+) {
+  override get message(): string {
+    return "This browser already has a Web Push subscription for another environment with a different VAPID key.";
+  }
+}
+
+export function pushSubscriptionApplicationServerKey(subscription: {
+  readonly options?: {
+    readonly applicationServerKey?: ArrayBuffer | ArrayBufferView | null;
+  };
+}): string | null {
+  const bytes = applicationServerKeyBytes(subscription.options?.applicationServerKey);
+  if (!bytes || bytes.byteLength === 0) return null;
+  let binary = "";
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    binary += String.fromCharCode(bytes[index] ?? 0);
+  }
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+export function vapidPublicKeysMatch(left: string, right: string): boolean {
+  const leftBytes = decodeVapidKeyBytes(left);
+  const rightBytes = decodeVapidKeyBytes(right);
+  if (
+    leftBytes === null ||
+    rightBytes === null ||
+    leftBytes.byteLength === 0 ||
+    leftBytes.byteLength !== rightBytes.byteLength
+  ) {
+    return false;
+  }
+  for (let index = 0; index < leftBytes.byteLength; index += 1) {
+    if (leftBytes[index] !== rightBytes[index]) return false;
+  }
+  return true;
 }
 
 export function detectIosSafariPwaState(): IosSafariPwaStatus {
@@ -101,6 +167,13 @@ export async function subscribeBrowserPush(
 
   const registration = await registerWebPushServiceWorker();
   const existing = await registration.pushManager.getSubscription();
+  if (existing) {
+    const existingKey = pushSubscriptionApplicationServerKey(existing);
+    // Replacing an existing browser subscription would silently break another environment on this origin.
+    if (existingKey === null || !vapidPublicKeysMatch(existingKey, vapidPublicKey)) {
+      throw new WebPushVapidKeyMismatchError();
+    }
+  }
   const subscription =
     existing ??
     (await registration.pushManager.subscribe({

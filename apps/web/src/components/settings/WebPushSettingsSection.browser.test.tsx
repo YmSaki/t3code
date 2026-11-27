@@ -12,8 +12,20 @@ import { userEvent } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
 
 const { state, subscribeRpc, unsubscribeRpc, browserUnsubscribe } = vi.hoisted(() => {
+  const encodeBase64Url = (bytes: ReadonlyArray<number>) =>
+    btoa(String.fromCharCode(...bytes))
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replaceAll("=", "");
+  const keyABytes = new Uint8Array([4, 1, 2, 3]);
+  const keyBBytes = new Uint8Array([4, 9, 8, 7]);
   const state = {
     subscriptions: {} as Record<string, ReadonlyArray<WebPushSubscriptionSummary>>,
+    vapidKeys: {} as Record<string, string>,
+    browserVapidKey: encodeBase64Url([...keyABytes]) as string | null,
+    keyABytes,
+    keyA: encodeBase64Url([...keyABytes]),
+    keyB: encodeBase64Url([...keyBBytes]),
     endpoint: "https://push.example/this-browser",
   };
   return {
@@ -35,7 +47,7 @@ vi.mock(import("../../state/query"), () => ({
   useEnvironmentQuery: ((atom: { kind: string; environmentId: string }) => ({
     data:
       atom.kind === "vapid"
-        ? { publicKey: "vapid-key" }
+        ? { publicKey: state.vapidKeys[atom.environmentId] ?? state.keyA }
         : (state.subscriptions[atom.environmentId] ?? []),
     isPending: false,
     isSuccess: true,
@@ -50,8 +62,36 @@ vi.mock(import("../../state/use-atom-command"), () => ({
 
 vi.mock(import("../../state/webPush"), async () => {
   const { Atom } = await import("effect/reactivity");
+  const Schema = await import("effect/Schema");
   const permission = Atom.make(true);
+  class MockWebPushVapidKeyMismatchError extends Schema.TaggedError<MockWebPushVapidKeyMismatchError>()(
+    "WebPushVapidKeyMismatchError",
+    {},
+  ) {
+    override get message(): string {
+      return "This browser already has a Web Push subscription for another environment with a different VAPID key.";
+    }
+  }
+  const pushSubscriptionApplicationServerKey = (subscription: {
+    readonly options?: {
+      readonly applicationServerKey?: ArrayBuffer | ArrayBufferView | null;
+    };
+  }): string | null => {
+    const buffer = subscription.options?.applicationServerKey;
+    if (!buffer) return null;
+    const bytes = ArrayBuffer.isView(buffer)
+      ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+      : new Uint8Array(buffer);
+    if (bytes.byteLength === 0) return null;
+    return btoa(String.fromCharCode(...bytes))
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replaceAll("=", "");
+  };
   return {
+    WebPushVapidKeyMismatchError: MockWebPushVapidKeyMismatchError as never,
+    pushSubscriptionApplicationServerKey,
+    vapidPublicKeysMatch: (left: string, right: string) => left === right,
     webPushEnvironment: {
       vapidPublicKey: ({ environmentId }: { environmentId: string }) => ({
         kind: "vapid",
@@ -76,10 +116,16 @@ vi.mock(import("../../state/webPush"), async () => {
       secureContext: true,
       permission: "granted",
     }),
-    subscribeBrowserPush: vi.fn(async () => ({
-      endpoint: state.endpoint,
-      keys: { p256dh: "p256dh", auth: "auth" },
-    })),
+    subscribeBrowserPush: vi.fn(async (vapidPublicKey: string) => {
+      if (state.browserVapidKey !== null && state.browserVapidKey !== vapidPublicKey) {
+        throw new MockWebPushVapidKeyMismatchError();
+      }
+      state.browserVapidKey = vapidPublicKey;
+      return {
+        endpoint: state.endpoint,
+        keys: { p256dh: "p256dh", auth: "auth" },
+      };
+    }),
     unsubscribeBrowserPush: async () => {
       await browserUnsubscribe();
       return state.endpoint;
@@ -117,6 +163,11 @@ function setup() {
     [environmentA]: [subscription(state.endpoint)],
     [environmentB]: [],
   };
+  state.vapidKeys = {
+    [environmentA]: state.keyA,
+    [environmentB]: state.keyA,
+  };
+  state.browserVapidKey = state.keyA;
   subscribeRpc.mockReset();
   subscribeRpc.mockImplementation(
     async ({
@@ -148,6 +199,7 @@ describe("WebPushSettingsSection", () => {
       pushManager: {
         getSubscription: async () => ({
           endpoint: state.endpoint,
+          options: { applicationServerKey: state.keyABytes.buffer },
           unsubscribe: browserUnsubscribe,
         }),
       },
@@ -194,5 +246,36 @@ describe("WebPushSettingsSection", () => {
         enabled: true,
       },
     });
+  });
+
+  it("refuses to enable a second environment with a different VAPID key and preserves the first environment", async () => {
+    setup();
+    state.vapidKeys[environmentB] = state.keyB;
+    state.subscriptions[environmentB] = [subscription(state.endpoint)];
+    using _registration = vi.spyOn(navigator.serviceWorker, "getRegistration").mockResolvedValue({
+      pushManager: {
+        getSubscription: async () => ({
+          endpoint: state.endpoint,
+          options: { applicationServerKey: state.keyABytes.buffer },
+          unsubscribe: browserUnsubscribe,
+        }),
+      },
+    } as unknown as ServiceWorkerRegistration);
+
+    await using screen = await render(<WebPushSettingsSection environmentId={environmentA} />);
+    await expect.element(screen.getByRole("switch")).toBeChecked();
+
+    await screen.rerender(<WebPushSettingsSection environmentId={environmentB} />);
+    await expect.element(screen.getByRole("switch")).not.toBeChecked();
+
+    screen.getByRole("switch").element().focus();
+    await userEvent.keyboard(" ");
+    await expect.element(screen.getByText(/different VAPID key/)).toBeInTheDocument();
+    await expect.element(screen.getByRole("switch")).not.toBeChecked();
+    expect(subscribeRpc).not.toHaveBeenCalled();
+    expect(browserUnsubscribe).not.toHaveBeenCalled();
+
+    await screen.rerender(<WebPushSettingsSection environmentId={environmentA} />);
+    await expect.element(screen.getByRole("switch")).toBeChecked();
   });
 });
