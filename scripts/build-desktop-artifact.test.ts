@@ -619,6 +619,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         );
       const bundled = yield* createWindowsConfig(true);
       const unbundled = yield* createWindowsConfig(false);
+      assert.propertyVal(bundled, "compression", "store");
+      assert.notProperty(unbundled, "compression");
       assert.deepNestedPropertyVal(bundled, "nsis.preCompressedFileExtensions", [".tar.gz"]);
       assert.notNestedProperty(unbundled, "nsis.preCompressedFileExtensions");
     }),

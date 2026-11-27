@@ -2984,11 +2984,16 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.afterSign = buildConfig.afterPack;
     delete buildConfig.afterPack;
     buildConfig.npmRebuild = false;
+    const storeWslArchive = target === "nsis" && wslRuntimeBundled;
+    if (storeWslArchive) {
+      // NSIS otherwise recompresses the gzip stream.
+      // The differential 7-Zip archive still uses LZMA2.
+      buildConfig.compression = "store";
+    }
     buildConfig.nsis = {
       differentialPackage: true,
       include: "apps/desktop/resources/installer.nsh",
-      // A second compression pass prevents blockmaps from reusing the WSL archive's gzip blocks.
-      ...(wslRuntimeBundled ? { preCompressedFileExtensions: [".tar.gz"] } : {}),
+      ...(storeWslArchive ? { preCompressedFileExtensions: [".tar.gz"] } : {}),
     };
     const winConfig: Record<string, unknown> = {
       target: [target],
