@@ -40,6 +40,42 @@ The rest of this document is meant to help you navigate the codebase and make ch
 
 Of note: Most T3 Code contributions will come from T3 Code itself, often controlled remotely. This means you should be careful about accessing data, killing dev servers, and other things that may damage the T3 Code instance that the contributor is using.
 
+## T3CodeJP governance (Hard rules)
+
+H1–H6 are hard rules for this fork. The earlier "good defaults" paragraph does not weaken them. They take precedence over conflicting repository defaults, including "One request is one PR"; non-conflicting instructions still apply. Do not infer permission to split work, create PRs, or publish comments.
+
+### Hard rules
+
+- **H1. Single owner per fact.** Every domain concept, durable state, and configuration fact has one authoritative owner; never re-decide or re-interpret it in another layer.
+- **H2. Preserve architectural boundaries.** Pure decisions belong in core, I/O in shell, external differences in adapters; transports stay thin and hold no domain logic.
+- **H3. Centralize configuration resolution.** Read, validate, and resolve precedence once at the startup or build boundary; pass typed values inward and never scatter env reads or ad-hoc fallbacks.
+- **H4. Fail closed across trust boundaries.** Missing required configuration, invalid values, or unsupported combinations must reject the operation rather than silently switching to another product, environment, or unsigned mode.
+- **H5. Pass the Design Gate before gated edits.** Changes matching the gate below require an agreed seven-field design brief before implementation; reuse existing agreement while its scope and assumptions hold.
+- **H6. Cohesive PRs with invariant proof.** Scope each PR to one cohesive, independently reviewable outcome and prove its affected paths and invariants at the lowest failing layer.
+
+### Design Gate
+
+Apply the gate when a change would:
+
+- Introduce or move domain responsibility or a Core/Shell/Adapter boundary.
+- Change authoritative data ownership, lifecycle, or resolution precedence.
+- Change authorization, secret handling, or product/environment isolation.
+- Change external-integration contracts or release/deployment trust boundaries.
+- Change client/server contracts or compatibility guarantees.
+
+Before implementing a gated design, agree on the seven-field design brief. Use an existing issue or PR when available; explicit agreement in the active conversation also counts. Any necessary PR split must be explicitly included in that agreement. Read-only investigation may continue while gated implementation waits.
+
+### Read when relevant
+
+- Domain, ownership, or boundary changes: [Design principles](docs/internals/design-principles.md).
+- Product identity, releases, configuration, secrets, or fork isolation: [Product configuration](docs/internals/product-configuration.md).
+- Architecture and durable state: [Overview](docs/internals/overview.md).
+- Pure decisions and I/O boundaries: [Functional core](docs/internals/functional-core-shell.md).
+- Effect services and transport boundaries: [Effect services](docs/internals/effect-services.md).
+- Evidence and test selection: [Testing](docs/internals/testing.md).
+
+Keep hard-rule definitions here; linked documents explain their application.
+
 ## A small glossary
 
 We need to be on the same page with terminology. When communicating, use this language:

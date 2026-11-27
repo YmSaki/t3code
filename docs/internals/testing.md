@@ -1,6 +1,7 @@
 # Testing
 
 Rules for writing tests, and for asking for them in review. AGENTS.md carries the same writing rules under Verifying; change both together.
+Fork-level hard rules and the Design Gate live in [AGENTS.md](../../AGENTS.md#t3codejp-governance-hard-rules); this document is the source of truth for test selection, waiting rules, and proof standards.
 
 ## What to test
 

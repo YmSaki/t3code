@@ -44,9 +44,7 @@ select known environment-local checkouts; the group itself does not store inheri
 
 ## Durable intent and side effects
 
-Orchestration state is decided as events, and projections are the source of truth once they apply
-them. The [v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and
-decides events without performing provider or filesystem work.
+Orchestration commands decide events without side effects, and persisted projections provide the authoritative view of current state once applied. The [v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and decides events without performing provider or filesystem work.
 [EventSink](../../apps/server/src/orchestration-v2/EventSink.ts) commits events, persisted projections,
 the accepted command receipt, and outbox effects in one database transaction. Subscribers receive
 events after that commit. This keeps command retries idempotent and prevents a persisted projection
