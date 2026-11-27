@@ -231,7 +231,7 @@ test("the production signing gate rejects incomplete Apple and Azure configurati
 
 test("rejects foreign repositories before inspecting release history", async () => {
   const { run, reads } = fixture({ context: { repo: { owner: "pingdotgg", repo: "t3code" } } });
-  await assert.rejects(run, /only runs in YmSaki\/t3code/);
+  await assert.rejects(run, /only runs in YmSaki\/t3codeJP\./);
   assert.deepEqual(reads, []);
 });
 

@@ -1,0 +1,117 @@
+name: T3CodeJP Linux distribution validation
+
+on:
+  push:
+    branches: [codex/linux-install-coexistence]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-linux-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify Linux coexistence, migration, update, and removal (${{ matrix.arch }})
+    if: github.repository == 'YmSaki/t3codeJP' && github.ref_type == 'branch'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            deb_arch: amd64
+            rust_target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - arch: arm64
+            deb_arch: arm64
+            rust_target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+    timeout-minutes: 50
+    env:
+      T3CODE_DESKTOP_SIGNED: "false"
+      T3CODE_TELEMETRY_ENABLED: "false"
+      T3CODE_CLERK_PUBLISHABLE_KEY: ""
+      VITE_CLERK_PUBLISHABLE_KEY: ""
+      T3CODE_RELAY_URL: ""
+      VITE_T3CODE_RELAY_URL: ""
+      NODE_OPTIONS: --max-old-space-size=4096
+      DESKTOP_ARCH: ${{ matrix.arch }}
+      DEB_ARCH: ${{ matrix.deb_arch }}
+    steps:
+      - name: Checkout source
+        shell: bash
+        env:
+          CHECKOUT_SHA: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install native build and desktop tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf libsecret-1-dev pkg-config build-essential ruby imagemagick \
+            libasound2t64 libgtk-3-0t64 libatspi2.0-0t64 libgbm1 libnotify4 libnss3 \
+            libuuid1 libxss1 libxtst6 xvfb xauth dbus-x11 x11-utils xdg-utils desktop-file-utils
+          vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Build two versions for package upgrade and AppImage replacement
+        run: |
+          set -euo pipefail
+          for version in 1.0.0 1.0.1; do
+            node scripts/build-desktop-artifact.ts --platform linux --target AppImage --arch "$DESKTOP_ARCH" \
+              --build-version "$version" --output-dir "validation-$version" --verbose
+          done
+
+      - name: Download pinned official installation
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/pingdotgg/t3code/releases/download/v0.1.12/T3-Code-0.1.12-$DEB_ARCH.deb" \
+            --output "$RUNNER_TEMP/upstream.deb"
+
+      - name: Verify installed applications in an isolated user session
+        run: |
+          set -euo pipefail
+          node_binary=$(node -p process.execPath)
+          banner="import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);"
+          scripts/node_modules/.bin/esbuild scripts/verify-linux-desktop-artifact.ts \
+            --bundle --platform=node --format=esm --target=node26 --external:playwright-core --banner:js="$banner" \
+            --outfile="$RUNNER_TEMP/linux-verifier.mjs"
+          sudo --preserve-env=CI,RUNNER_ENVIRONMENT "$node_binary" scripts/smoke-linux-installer.ts \
+            --baseline "$PWD/validation-1.0.0/T3CodeJP-1.0.0-$DEB_ARCH.deb" \
+            --candidate "$PWD/validation-1.0.1/T3CodeJP-1.0.1-$DEB_ARCH.deb" \
+            --baseline-appimage "$(find "$PWD/validation-1.0.0" -maxdepth 1 -name '*.AppImage' -print -quit)" \
+            --candidate-appimage "$(find "$PWD/validation-1.0.1" -maxdepth 1 -name '*.AppImage' -print -quit)" \
+            --upstream "$RUNNER_TEMP/upstream.deb" --output-dir /tmp/t3codejp-linux-install-proof \
+            --runtime-verifier "$RUNNER_TEMP/linux-verifier.mjs" \
+            2>&1 | tee "$RUNNER_TEMP/linux-install-proof.log"
+
+      - name: Upload native installation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-installation-evidence-${{ matrix.deb_arch }}
+          path: |
+            /tmp/t3codejp-linux-install-proof/**/*.json
+            /tmp/t3codejp-linux-install-proof/**/*.png
+            /tmp/t3codejp-linux-install-proof/**/*.txt
+            !/tmp/t3codejp-linux-install-proof/node_modules/**
+            ${{ runner.temp }}/linux-install-proof.log
+          retention-days: 7

@@ -295,6 +295,68 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
 
 const latestMigrationId = Math.max(...migrationEntries.map(([id]) => id));
 
+const upstreamMigrationNames = [
+  "WorktreePathKeyIndex",
+  "DeferredSlashCommandIndex",
+  "AgentFeedback",
+  "IssueTrackerAccounts",
+  "Workflows",
+  "SupersededRunAttemptIndex",
+  "LayoutCommandApprovals",
+  "WorkflowSkippedRuns",
+  "WorkflowRunIndexes",
+  "WorkflowRunTags",
+  "ForkHistoryMembership",
+  "WorkflowMailSender",
+] as const;
+
+// Upstream 0.1.12 and this fork allocated different migrations after the shared id 105.
+const isUpstreamMigrationHistory = (
+  rows: ReadonlyArray<{ readonly migration_id: number; readonly name: string }>,
+) => {
+  const expected = [
+    ...migrationManifest.filter(([id]) => id <= 105),
+    ...upstreamMigrationNames.map((name, index) => [106 + index, name] as const),
+  ];
+  const names = new Map(rows.map((row) => [row.migration_id, row.name]));
+  return rows.length === expected.length && expected.every(([id, name]) => names.get(id) === name);
+};
+
+const reconcileUpstreamMigrations = Effect.fn("reconcileUpstreamMigrations")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  return yield* sql.withTransaction(
+    Effect.gen(function* () {
+      const tables =
+        yield* sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'`;
+      if (tables.length === 0) return [];
+      const rows = yield* sql<{
+        readonly migration_id: number;
+        readonly name: string;
+      }>`SELECT migration_id, name FROM effect_sql_migrations`;
+      if (!isUpstreamMigrationHistory(rows)) return [];
+      const fork = migrationEntries.filter(([id]) => id >= 106);
+      for (const [id, name, migration] of fork) {
+        yield* migration.pipe(
+          Effect.mapError(
+            (cause: unknown) =>
+              new Migrator.MigrationError({
+                kind: "Failed",
+                message: `Failed to import upstream data at ${id}_${name}`,
+                cause,
+              }),
+          ),
+        );
+      }
+      yield* sql`CREATE TABLE t3codejp_upstream_migrations AS SELECT * FROM effect_sql_migrations WHERE migration_id >= 106`;
+      yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 106`;
+      for (const [id, name] of fork) {
+        yield* sql`INSERT INTO effect_sql_migrations (migration_id, name) VALUES (${id}, ${name})`;
+      }
+      return fork.map(([id, name]) => [id, name] as const);
+    }),
+  );
+});
+
 // Mirrors the Migrator, which runs only ids above the highest recorded, plus the V2-preview reconciliation.
 export const hasPendingMigrations = Effect.fn("hasPendingMigrations")(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -302,14 +364,18 @@ export const hasPendingMigrations = Effect.fn("hasPendingMigrations")(function* 
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
   `;
   if (tables.length === 0) return true;
-  const rows = yield* sql<{ readonly latestId: number | null; readonly previewRows: number }>`
-    SELECT
-      MAX(migration_id) AS latestId,
-      SUM(name = 'OrchestrationV2' AND migration_id IN (53, 54)) AS previewRows
-    FROM effect_sql_migrations
-  `;
-  const row = rows[0];
-  return (row?.latestId ?? 0) < latestMigrationId || (row?.previewRows ?? 0) > 0;
+  const rows = yield* sql<{
+    readonly migration_id: number;
+    readonly name: string;
+  }>`SELECT migration_id, name FROM effect_sql_migrations`;
+  return (
+    Math.max(0, ...rows.map((row) => row.migration_id)) < latestMigrationId ||
+    rows.some(
+      (row) =>
+        row.name === "OrchestrationV2" && (row.migration_id === 53 || row.migration_id === 54),
+    ) ||
+    isUpstreamMigrationHistory(rows)
+  );
 });
 
 const run = Migrator.make({});
@@ -328,6 +394,10 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
   // The reconcile takes the write lock; CLI startup must not contend with the server for a no-op.
   const previewMigrations = includesV2 && hasPending ? yield* reconcileV2PreviewMigration() : [];
+  const upstreamMigrations =
+    hasPending && (toMigrationInclusive === undefined || toMigrationInclusive >= latestMigrationId)
+      ? yield* reconcileUpstreamMigrations()
+      : [];
   if (includesV2) {
     yield* assertV2MigrationsCanRun(toMigrationInclusive);
   }
@@ -348,7 +418,10 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   );
   // One transaction per migration: an index build on a large database can take minutes, and a
   // restart then resumes after the last finished migration instead of rolling all of them back.
-  const executedMigrations: Array<readonly [id: number, name: string]> = [...previewMigrations];
+  const executedMigrations: Array<readonly [id: number, name: string]> = [
+    ...previewMigrations,
+    ...upstreamMigrations,
+  ];
   for (const [index, [id, name]] of pending.entries()) {
     if (latestRecordedId > 0) {
       yield* Effect.log(DATABASE_MIGRATION_PROGRESS_MESSAGE).pipe(

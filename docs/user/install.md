@@ -104,6 +104,29 @@ The `.deb` updates itself like the other desktop builds. It asks for your
 password to install each update. If your desktop has no password prompt, the
 update fails. Download the new `.deb` and install it the same way.
 
+### Keep upstream installed or move its data
+
+T3CodeJP uses separate application files, a separate desktop profile, and
+`~/.t3codejp/userdata` for its data. Upstream T3 Code uses `~/.t3/userdata`.
+You can keep both installed.
+
+To move existing threads, settings, and attachments, stop both desktop apps and
+any background servers first. Back up both data directories, then copy upstream's
+entire `userdata` directory into an empty `~/.t3codejp` directory. Leave the
+upstream copy in place. Do not copy executables or running-server state from
+outside `userdata`, or overwrite an existing T3CodeJP data directory.
+
+Import from upstream v0.1.12 is supported. Other divergent database histories
+are rejected rather than guessing which schema changes to apply. Keep the
+original backup for upstream; do not copy the migrated database back into it.
+
+If either installation uses `T3CODE_HOME`, use that installation's configured
+directory instead. A separate empty directory selected with `T3CODE_HOME` also
+lets you try the copied data before using it as your default.
+
+On Linux, removing the `t3codejp` Debian package or deleting its AppImage keeps
+your data. Back it up before deleting the data directory yourself.
+
 ### The `t3` command
 
 The desktop app includes the `t3` command-line tool. A new install sets it up
