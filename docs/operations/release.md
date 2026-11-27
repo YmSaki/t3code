@@ -123,8 +123,11 @@ are part of the native build and need matching files on the fork's hosted domain
 On a server, `T3CODE_HOSTED_APP_URL` can override its hosted Web destination at
 runtime.
 
-Create a fork-owned Vercel project with root directory `apps/web`. Add the
-three domains to the project and configure their DNS. Set the GitHub Actions
+Create a fork-owned Vercel project with root directory `apps/web` and Node.js
+24.x. Set the project's Install Command override to the `installCommand` in
+[`apps/web/vercel.ts`](../../apps/web/vercel.ts) so Vercel can install with Vite+
+before compiling the TypeScript configuration. Add the three domains to the
+project and configure their DNS. Set the GitHub Actions
 secrets `T3CODEJP_WEB_VERCEL_TOKEN`, `T3CODEJP_WEB_VERCEL_ORG_ID`, and
 `T3CODEJP_WEB_VERCEL_PROJECT_ID`. To enable Connect, set the
 [fork's Clerk and relay repository variables](./connect-setup.md#t3codejp-production).
