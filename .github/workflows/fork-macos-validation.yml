@@ -1,0 +1,181 @@
+name: T3CodeJP macOS distribution validation
+
+on:
+  push:
+    branches: [codex/macos-install-coexistence]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-macos-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify macOS ${{ matrix.arch }} coexistence and migration
+    if: github.repository_id == '1467336330' && github.ref_type == 'branch'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            rust-target: aarch64-apple-darwin
+          - runner: macos-26-intel
+            arch: x64
+            rust-target: x86_64-apple-darwin
+    env:
+      T3CODE_DESKTOP_SIGNED: "false"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      T3CODE_TELEMETRY_ENABLED: "false"
+      T3CODE_CLERK_PUBLISHABLE_KEY: ""
+      VITE_CLERK_PUBLISHABLE_KEY: ""
+      T3CODE_RELAY_URL: ""
+      VITE_T3CODE_RELAY_URL: ""
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout source
+        shell: bash
+        env:
+          CHECKOUT_SHA: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --detach FETCH_HEAD
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+
+      - name: Select the macOS 26 SDK on Apple Silicon
+        if: matrix.arch == 'arm64'
+        run: |
+          export DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer
+          test -d "$DEVELOPER_DIR"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          xcrun --sdk macosx --show-sdk-version
+          xcrun swiftc --version
+
+      - name: Fingerprint product source
+        id: product
+        run: |
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          const verificationFiles = new Set([
+            'scripts/smoke-macos-installer.ts',
+            'scripts/verify-macos-desktop-artifact.ts',
+          ]);
+          const inputs = execFileSync('git', ['ls-tree', '-r', 'HEAD'], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+            .split('\n').filter(row => !verificationFiles.has(row.split('\t')[1])).join('\n');
+          const digest = createHash('sha256').update(process.env.GITHUB_REPOSITORY).update('\0').update(inputs).digest('hex');
+          console.log(`digest=${digest}`);
+          NODE
+
+      - name: Restore test DMGs with matching product source
+        id: dmgs
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: macos-install-dmgs-v1-${{ matrix.arch }}-${{ steps.product.outputs.digest }}
+          path: |
+            validation-1.0.0/*.dmg
+            validation-1.0.1/*.dmg
+            macos-dmg-inputs.json
+
+      - name: Set up Rust
+        if: steps.dmgs.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.rust-target }}
+
+      - name: Prepare Electron
+        if: steps.dmgs.outputs.cache-hit != 'true'
+        run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Build two DMG versions for replacement update
+        if: steps.dmgs.outputs.cache-hit != 'true'
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+          PRODUCT_INPUT_DIGEST: ${{ steps.product.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for version in 1.0.0 1.0.1; do
+            node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch "$TARGET_ARCH" \
+              --build-version "$version" --output-dir "validation-$version" --verbose
+          done
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('macos-dmg-inputs.json', JSON.stringify({
+            productInputDigest: process.env.PRODUCT_INPUT_DIGEST,
+            builtFromCommit: process.env.GITHUB_SHA,
+            repository: process.env.GITHUB_REPOSITORY,
+            arch: process.env.TARGET_ARCH,
+            versions: ['1.0.0', '1.0.1'],
+          }, null, 2));
+          NODE
+
+      - name: Save test DMGs before runtime validation
+        if: steps.dmgs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: ${{ steps.dmgs.outputs.cache-primary-key }}
+          path: |
+            validation-1.0.0/*.dmg
+            validation-1.0.1/*.dmg
+            macos-dmg-inputs.json
+
+      - name: Download pinned official installation
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/pingdotgg/t3code/releases/download/v0.1.12/T3-Code-0.1.12-$TARGET_ARCH.dmg" \
+            --output "$RUNNER_TEMP/upstream.dmg"
+
+      - name: Verify installed applications and preserved data
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+          PRODUCT_INPUT_DIGEST: ${{ steps.product.outputs.digest }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const provenance = JSON.parse(readFileSync('macos-dmg-inputs.json', 'utf8'));
+          assert.equal(provenance.productInputDigest, process.env.PRODUCT_INPUT_DIGEST);
+          assert.equal(provenance.repository, process.env.GITHUB_REPOSITORY);
+          assert.equal(provenance.arch, process.env.TARGET_ARCH);
+          assert.deepEqual(provenance.versions, ['1.0.0', '1.0.1']);
+          console.log(`Validating test DMGs built at ${provenance.builtFromCommit}; product source matches, excluding verification scripts.`);
+          NODE
+          node scripts/smoke-macos-installer.ts \
+            --baseline "$(find "$PWD/validation-1.0.0" -maxdepth 1 -name '*.dmg' -print -quit)" \
+            --candidate "$(find "$PWD/validation-1.0.1" -maxdepth 1 -name '*.dmg' -print -quit)" \
+            --upstream "$RUNNER_TEMP/upstream.dmg" --arch "$TARGET_ARCH" \
+            --output-dir "$RUNNER_TEMP/macos-install-proof" \
+            2>&1 | tee "$RUNNER_TEMP/macos-install-proof.log"
+
+      - name: Upload native installation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-${{ matrix.arch }}-installation-evidence
+          path: |
+            ${{ runner.temp }}/macos-install-proof/**/*.json
+            ${{ runner.temp }}/macos-install-proof/**/*.png
+            ${{ runner.temp }}/macos-install-proof/**/*.txt
+            ${{ runner.temp }}/macos-install-proof/**/electron-main.*.log
+            !${{ runner.temp }}/macos-install-proof/Applications/**
+            !${{ runner.temp }}/macos-install-proof/mounts/**
+            ${{ runner.temp }}/macos-install-proof.log
+            macos-dmg-inputs.json
+          retention-days: 7
