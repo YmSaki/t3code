@@ -50,8 +50,8 @@ H1–H6 are hard rules for this fork. The earlier "good defaults" paragraph does
 - **H2. Preserve architectural boundaries.** Pure decisions belong in core, I/O in shell, external differences in adapters; transports stay thin and hold no domain logic.
 - **H3. Centralize configuration resolution.** Read, validate, and resolve precedence once at the startup or build boundary; pass typed values inward and never scatter env reads or ad-hoc fallbacks.
 - **H4. Fail closed across trust boundaries.** Missing required configuration, invalid values, or unsupported combinations must reject the operation rather than silently switching to another product, environment, or unsigned mode.
-- **H5. Pass the Design Gate before gated edits.** Changes matching the gate below require an agreed seven-field design brief before implementation; reuse existing agreement while its scope and assumptions hold.
-- **H6. Cohesive PRs with invariant proof.** Scope each PR to one cohesive, independently reviewable outcome and prove its affected paths and invariants at the lowest failing layer.
+- **H5. Pass the Design Gate before gated edits.** Never invent undecided requirements, specifications, or design decisions during implementation; gated changes require agreed design artifacts before edits, reusing existing agreement while its scope and assumptions hold.
+- **H6. Cohesive PRs with invariant proof.** Scope each PR to one cohesive, independently reviewable outcome and prove its affected paths and invariants at the lowest layer that fails (including integration tests for cross-component invariants).
 
 ### Design Gate
 
@@ -67,12 +67,15 @@ Before implementing a gated design, agree on the seven-field design brief. Use a
 
 ### Read when relevant
 
-- Domain, ownership, or boundary changes: [Design principles](docs/internals/design-principles.md).
+- Design philosophy, trade-offs, and principles: [Design principles](docs/internals/design-principles.md).
+- Staged design process and Design Gate workflow: [Engineering process](docs/internals/engineering-process.md).
+- Domain concepts, relationships, and modeling rules: [Domain model](docs/internals/domain-model.md).
+- Architecture, package dependencies, and durable state: [Overview](docs/internals/overview.md).
 - Product identity, releases, configuration, secrets, or fork isolation: [Product configuration](docs/internals/product-configuration.md).
-- Architecture and durable state: [Overview](docs/internals/overview.md).
 - Pure decisions and I/O boundaries: [Functional core](docs/internals/functional-core-shell.md).
 - Effect services and transport boundaries: [Effect services](docs/internals/effect-services.md).
-- Evidence and test selection: [Testing](docs/internals/testing.md).
+- Evidence, test selection, and integration proof: [Testing](docs/internals/testing.md).
+- Design and code review criteria: [Review](docs/internals/review.md).
 
 Keep hard-rule definitions here; linked documents explain their application.
 

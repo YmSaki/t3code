@@ -1,6 +1,6 @@
 # Product configuration
 
-> For maintainers. Authoritative ownership and isolation rules for T3CodeJP product identity, release configuration, runtime settings, and secrets.
+> For maintainers. Authoritative ownership and isolation rules for T3CodeJP product identity, release configuration, runtime settings, and secrets. See [Domain model](./domain-model.md#product-and-distribution-domain) for the conceptual model behind these categories.
 
 ## Sources of truth
 

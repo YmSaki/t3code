@@ -33,6 +33,18 @@ Provider-specific behavior belongs behind an adapter. Orchestration works with n
 and events, so adding a provider should not require branches throughout the domain or clients.
 See [provider constraints](./providers.md).
 
+## Package layers and allowed dependencies
+
+Dependencies flow strictly downward from applications to shared cores and contracts; reverse dependencies across layers are forbidden:
+
+- **Layer 0 (Contracts & protocol primitives):** `packages/contracts`, `packages/effect-acp` — zero internal workspace dependencies.
+- **Layer 1 (Shared utilities & domain cores):** `packages/shared`, `packages/provider-core`, `packages/source-control-core`, `packages/secret-provider-core`, `packages/ssh`, `packages/tailscale` — depend only on Layer 0 and `packages/shared`.
+- **Layer 2 (Adapters & definitions):** `packages/provider-*`, `packages/source-control-*`, `packages/secret-provider-*`, `packages/issue-tracker-*` — depend on their corresponding core, `contracts`, and `shared`; never on `client-runtime` or `apps/*`.
+- **Layer 3 (Client runtime):** `packages/client-runtime` — shared client state, connection, and domain logic; depends on `contracts`, `shared`, and Layer 1–2 definitions/cores, never on `apps/*`.
+- **Layer 4 (Applications / shells):** `apps/server` (orchestration, persistence, provider execution, transports) and `apps/{web,desktop,mobile,marketing}` (platform shells consuming `client-runtime`, `contracts`, and `shared`; never importing `apps/server` internals).
+
+Distinguish adopted architectural patterns from historical leftovers before copying existing code.
+
 ## Settings ownership
 
 Client preferences stay in the current client; environment defaults and project overrides stay
@@ -150,6 +162,12 @@ snapshot feature keeps are isolated: `@crowecawcaw/xa11y` runs only in forked No
 lazily inside `WindowsForeground.ts` for a handful of Win32 calls. macOS window lookup shells out
 to `osascript` instead of a native addon. A crash or stall in any of these must not take the app
 down, so new native capability goes in a child with a deadline, not an `import` in main.
+
+## Cross-cutting runtime policies
+
+- **Errors, retries, cancellation, and recovery:** Use typed Effect errors at service boundaries; keep command retries idempotent via durable receipts; handle interruption and cancellation cleanly, isolate crashing native/external helpers in child processes with deadlines, and retire lost provider sessions during recovery before admitting new work.
+- **External services and platform isolation:** Isolate provider protocols, forges, OS specifics, and hosted services behind adapters; keep core domain logic platform-agnostic.
+- **Backward compatibility, migration, and deprecation:** Persisted events, SQLite schemas, and RPC contracts serve independently versioned clients and stored history. State explicit compatibility windows, migration or rollback paths, and removal criteria before deprecating fields or behaviors.
 
 See the [glossary](./glossary.md) for shared terms and the
 [development runbook](../operations/development.md) for setup and checks.
