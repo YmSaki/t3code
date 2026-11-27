@@ -72,8 +72,13 @@ export function buildHostedPairingUrl(input: {
   readonly host: string;
   readonly token: string;
   readonly label?: string | null;
-}): string {
-  const url = new URL("/pair", configuredHostedAppUrl());
+}): string | null {
+  const hostedAppUrl = import.meta.env.VITE_HOSTED_APP_URL?.trim();
+  if (!hostedAppUrl && import.meta.env.VITE_REQUIRE_CONFIGURED_HOSTED_PAIRING === "true") {
+    return null;
+  }
+
+  const url = new URL("/pair", hostedAppUrl || DEFAULT_HOSTED_APP_URL);
   url.searchParams.set("host", input.host);
 
   const label = input.label?.trim();
