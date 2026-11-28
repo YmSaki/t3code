@@ -12484,6 +12484,7 @@
   "089fe71cc573d555": "Could not unsubscribe from Web Push.",
   "bb93d15282239e87": "Could not register Web Push subscription on the server.",
   "c9c79245d04c10f7": "VAPID public key is not available from this server yet.",
+  "2b48d7192525fa53": "이 브라우저에는 다른 VAPID 키를 사용하는 다른 환경의 Web Push 구독이 이미 있습니다. 여기서 활성화하면 기존 구독이 대체되어 해당 알림이 중단됩니다.",
   "84b290eeecd65007": "Could not enable browser push notifications.",
   "943ce627909b2c98": "Web Push enabled on this device",
   "efeefa9250b377b7": "T3 Code test notification",
