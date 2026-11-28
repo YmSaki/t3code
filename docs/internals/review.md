@@ -30,17 +30,17 @@ Evaluate every change against these eight dimensions in addition to functional c
 
 Block merge when any of the following holds:
 
-- Violation of `H1`–`H6` or fail-closed trust boundaries in [Product configuration](./product-configuration.md).
+- The proposed change introduces or expands a violation of `H1`–`H6` or fail-closed trust boundaries in [Product configuration](./product-configuration.md), or breaks an invariant affected by the change.
 - Undecided requirements, specifications, or design decisions invented during implementation without prior agreement (`H5`).
 - Local simplification that increases total system complexity or introduces a second source of truth.
 - Missing proof for changed behavior, failure paths, or cross-component invariants per [Testing](./testing.md).
 
 ## Technical debt baseline policy
 
-Existing rule violations are technical debt—never permanent exceptions to new rules:
+Existing rule violations are technical debt—never permanent exceptions to new rules. An unchanged violation already present on the target branch does not, by itself, block unrelated work. Apply the blocking criteria to new violations, expansion of existing violations, and regressions in affected invariants.
 
 1. **Identify individually:** Record each known violation at file/symbol granularity, not by exempting entire files or packages.
-2. **Document context:** Record the evidence location, origin, violated principle, system impact, and recommended remediation.
+2. **Document context:** Record the evidence location, origin, violated principle, system impact, and recommended remediation in the owning GitHub issue or project item. If no tracking item exists, report the violation for registration rather than creating a permanent exception. Where an automated check needs a baseline, keep its narrowly scoped entries tied to the corresponding tracking item.
 3. **Ratchet strictly:** Block any new violations and any expansion of existing violations.
 4. **Shrink on fix:** Remove resolved entries from the baseline immediately when fixed.
 5. **Exclude unmerged PRs:** Violations in unmerged PRs are never grandfathered as baseline debt; fix them before merge.

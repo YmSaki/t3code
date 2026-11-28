@@ -64,7 +64,7 @@ Apply the gate when a change would:
 - Change client/server contracts or compatibility guarantees.
 - Proceed while requirements, product specifications, or material design decisions remain undecided.
 
-Before implementing a gated design, agree on the seven-field design brief. Use an existing issue or PR when available; explicit agreement in the active conversation also counts. Any necessary PR split must be explicitly included in that agreement. Read-only investigation may continue while gated implementation waits.
+Before implementing a gated design, agree on the design artifacts required by [Engineering process](docs/internals/engineering-process.md), including explicit stage decisions for large cross-cutting changes. Use an existing issue or PR when available; explicit agreement in the active conversation also counts. Any necessary PR split must be explicitly included in that agreement. Read-only investigation may continue while gated implementation waits.
 
 ### Read when relevant
 

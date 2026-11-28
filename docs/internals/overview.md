@@ -53,9 +53,18 @@ Separate package and directory responsibilities as follows:
 - **Adapter registries / definitions** (`packages/*-definitions`): Composition and registration of adapter sets; depending on the adapters they aggregate is intentional.
 - **Client runtime** (`packages/client-runtime`): Shared Web/Desktop/Mobile connection and client domain state; must not depend on `apps/*`.
 - **Application shells** (`apps/server`, `apps/{web,desktop,mobile,marketing}`): Host/UI shells; client apps must not import `apps/server` internals.
-- **Support & non-runtime areas** (`infra/`, `scripts/`, `evals/`, `oxlint-plugin-t3code/`, `packaging/`, `packages/*-testing`): Tooling, build, and test support only; never imported by production runtime code.
+- **Hosted services** (`infra/relay`, `infra/task-cache`): Deployed runtime services with their own application boundaries and deployment wiring. Compose their dependencies through public interfaces; keep service internals out of other applications' runtime dependencies.
+- **Support & non-runtime areas** (`scripts/`, `evals/`, `oxlint-plugin-t3code/`, `packaging/`, `packages/*-testing`): Tooling, build, and test support only; never imported by production runtime code.
 
-Dependencies between packages of the same role are neither blanket-allowed nor blanket-forbidden; judge them by ownership and purpose, forbidding cross-domain coupling via shared helpers. Distinguish adopted architectural patterns from historical leftovers before copying existing code.
+Apply these dependency constraints to runtime code, including module and public subpath imports:
+
+- Domain cores depend on contracts, shared primitives, and explicit domain interfaces, never on concrete adapters, application shells, or client runtime implementations.
+- Shared utilities must not depend on concrete domain implementations or application code. Shared domain logic retains an explicit owner; unrelated domains must not depend on one another for generic helpers.
+- Adapters depend on public core, protocol, contract, and shared interfaces, not application internals or client runtime implementations. A registry or composition boundary may depend on the adapters it assembles.
+- Client runtime and client apps must not import server-only implementations, even through shared package subpaths. Application and hosted-service composition may select concrete adapters through their public interfaces.
+- Build and test dependencies do not authorize runtime coupling. Keep build artifact consumption and test fixtures at their corresponding boundaries.
+
+Dependencies between packages of the same role are neither blanket-allowed nor blanket-forbidden; judge them by ownership and purpose. Distinguish adopted architectural patterns from historical leftovers before copying existing code.
 
 ## Settings ownership
 

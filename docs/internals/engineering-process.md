@@ -49,4 +49,4 @@ Material design decisions must provide enough information to evaluate soundness 
 7. **Invariants to preserve** (`03`–`05`) — Conditions that must hold on success, failure, retry, and recovery.
 8. **Verification plan** (`07`) — Unit, integration, and runtime checks proving each invariant and failure mode.
 
-For smaller gated changes, keep each item concise; for large cross-cutting changes, expand undecided `02`–`05` stage artifacts explicitly. Do not commit temporary briefs to the repository.
+For smaller gated changes, keep each item concise; for large cross-cutting changes, expand undecided `02`–`05` stage artifacts explicitly. When the change affects persisted data, compatibility, deployment, or upgrades, agree on the applicable migration, rollout, rollback, and recovery plan before implementation. Include any agreed PR split in the design artifacts. Do not commit temporary briefs to the repository.
