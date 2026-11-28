@@ -169,6 +169,8 @@ export function resolveProviderCatalog(
 }
 
 const ManifestCacheFile = Schema.Struct({
+  /** Caches written by builds that fetched upstream lack this or differ, and must be ignored. */
+  sourceUrl: Schema.String,
   fetchedAtMs: Schema.Number,
   manifest: ModelManifestSchema,
 });
@@ -228,7 +230,7 @@ export const make = Effect.gen(function* () {
         Effect.flatMap((raw) => decodeManifestCache(raw)),
         Effect.catchCause(() => Effect.succeed(null)),
       );
-      if (fromDisk === null) return;
+      if (fromDisk === null || fromDisk.sourceUrl !== MODEL_MANIFEST_URL) return;
       if (manifestUpdatedAtMs(BUNDLED_MODEL_MANIFEST) > manifestUpdatedAtMs(fromDisk.manifest)) {
         return;
       }
@@ -252,7 +254,7 @@ export const make = Effect.gen(function* () {
     const settings = yield* settingsService.getSettings.pipe(
       Effect.catchCause(() => Effect.succeed(null)),
     );
-    if (settings !== null && !settings.enableProviderUpdateChecks) return manifest;
+    if (settings === null || !settings.enableProviderUpdateChecks) return manifest;
 
     lastAttemptMs = now;
     const fetched = yield* httpClient.get(MODEL_MANIFEST_URL).pipe(
@@ -269,7 +271,11 @@ export const make = Effect.gen(function* () {
 
     manifest = fetched;
     fetchedAtMs = now;
-    yield* encodeManifestCache({ fetchedAtMs: now, manifest: fetched }).pipe(
+    yield* encodeManifestCache({
+      sourceUrl: MODEL_MANIFEST_URL,
+      fetchedAtMs: now,
+      manifest: fetched,
+    }).pipe(
       Effect.flatMap((contents) => writeFileStringAtomically({ filePath: cachePath, contents })),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
