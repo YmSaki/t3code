@@ -1,3 +1,5 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
   WebPushError,
@@ -10,11 +12,27 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as ServerConfig from "../config.ts";
 import migrate111 from "../persistence/Migrations/111_WebPushSubscriptions.ts";
 import * as WebPushService from "./WebPushService.ts";
 import * as WebPushStore from "./WebPushStore.ts";
 
-const sqliteLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const platformLayer = Layer.mergeAll(NodeServices.layer, NodeCrypto.layer);
+
+const sqliteLayer = it.layer(
+  Layer.mergeAll(
+    NodeSqliteClient.layer({ filename: ":memory:" }),
+    ServerSecretStore.layer.pipe(
+      Layer.provide(
+        ServerConfig.layerTest(process.cwd(), { prefix: "t3-web-push-test-" }).pipe(
+          Layer.provide(platformLayer),
+        ),
+      ),
+      Layer.provide(platformLayer),
+    ),
+  ),
+);
 
 sqliteLayer("WebPushService", (it) => {
   it.effect(
