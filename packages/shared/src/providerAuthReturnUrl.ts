@@ -1,5 +1,5 @@
 import { isDesktopProtocol } from "./productIdentity.ts";
-import { isLoopbackHost } from "./preview.ts";
+import { isLoopbackHost } from "./hostClassification.ts";
 
 export function providerAuthReturnUrl(value: string | undefined): string | undefined {
   if (!value) return undefined;

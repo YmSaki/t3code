@@ -181,3 +181,16 @@ export const isWildcardHost = (host: string | undefined): boolean =>
 
 export const formatHostForUrl = (host: string): string =>
   host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+
+export const LOOPBACK_HOSTS: ReadonlySet<string> = new Set([
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "::1",
+]);
+
+export function isLoopbackHost(host: string): boolean {
+  if (LOOPBACK_HOSTS.has(host)) return true;
+  if (host === "[::1]") return true;
+  return false;
+}
