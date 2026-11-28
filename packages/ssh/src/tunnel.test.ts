@@ -311,6 +311,7 @@ describe("ssh tunnel scripts", () => {
       machine: "x86_64",
       platform: "darwin-x64",
       releaseBaseUrl: undefined,
+      failing: "archive",
       downloads: false,
     },
     {
@@ -319,6 +320,7 @@ describe("ssh tunnel scripts", () => {
       machine: "arm64",
       platform: "darwin-arm64",
       releaseBaseUrl: undefined,
+      failing: "archive",
       downloads: true,
     },
     ...[
@@ -327,27 +329,85 @@ describe("ssh tunnel scripts", () => {
       { host: "Linux x64 mirror", system: "Linux", machine: "x86_64", platform: "linux-x64" },
     ].map((host) => ({
       ...host,
-      releaseBaseUrl: "https://mirror.example/releases/download?fixture=issue67",
+      releaseBaseUrl:
+        "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret",
+      failing: "archive",
       downloads: true,
     })),
-  ])(
+    {
+      host: "Linux x64 mirror checksums",
+      system: "Linux",
+      machine: "x86_64",
+      platform: "linux-x64",
+      releaseBaseUrl:
+        "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret",
+      failing: "checksums",
+      downloads: true,
+    },
+    {
+      // A placeholder in an inserted value must not be substituted again and break its quoting.
+      host: "Linux x64 mirror with placeholder text",
+      system: "Linux",
+      machine: "x86_64",
+      platform: "linux-x64",
+      releaseBaseUrl:
+        "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret@@T3_INSTALL_SH_DISPLAY_URL@@",
+      failing: "checksums",
+      downloads: true,
+    },
+    ...(["checksums", "archive"] as const).map((failing) => ({
+      host: `Linux x64 mirror ${failing} via wget`,
+      system: "Linux",
+      machine: "x86_64",
+      platform: "linux-x64",
+      releaseBaseUrl:
+        "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret",
+      failing,
+      downloads: true,
+      fetcher: "wget" as const,
+    })),
+  ] as const)(
     "only downloads a release archive the host can run: $host",
-    ({ system, machine, platform, releaseBaseUrl, downloads }) => {
+    ({ system, machine, platform, releaseBaseUrl, failing, downloads, ...row }) => {
+      const fetcher = "fetcher" in row ? row.fetcher : "curl";
       const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-ssh-runner-"));
       try {
         const bin = NodePath.join(root, "bin");
         NodeFS.mkdirSync(bin);
         NodeFS.mkdirSync(NodePath.join(root, "home"));
+        const downloadLog = NodePath.join(root, "downloads.log");
         NodeFS.writeFileSync(
           NodePath.join(bin, "uname"),
           `#!/bin/sh\ncase "$1" in -s) echo ${system} ;; -m) echo ${machine} ;; esac\n`,
           { mode: 0o755 },
         );
-        NodeFS.writeFileSync(
-          NodePath.join(bin, "curl"),
-          '#!/bin/sh\nfor arg; do case "$arg" in http*) url="$arg" ;; esac; done\necho "download attempt: $url" >&2\ncase "$url" in *SHA256SUMS|*SHA256SUMS\\?fixture=issue67) for last; do :; done; : > "$last"; exit 0 ;; esac\necho "curl: (6) Could not resolve host" >&2\nexit 6\n',
-          { mode: 0o755 },
-        );
+        const fakes = {
+          curl: {
+            script:
+              '#!/bin/sh\nfor arg; do case "$arg" in http*) url="$arg" ;; esac; done\necho "$url" >> "$DOWNLOAD_LOG"\ncase "$url" in *"$FAIL_ASSET"*) echo "curl: (22) The requested URL returned error: 403 $url" >&2; exit 22 ;; esac\nfor last; do :; done; : > "$last"\n',
+            rawError: "curl: (22)",
+            status: 22,
+          },
+          wget: {
+            script:
+              '#!/bin/sh\nwhile [ $# -gt 0 ]; do case "$1" in http*) url="$1" ;; -O) out="$2"; shift ;; esac; shift; done\necho "$url" >> "$DOWNLOAD_LOG"\ncase "$url" in *"$FAIL_ASSET"*) echo "wget: server returned error: HTTP/1.1 403 Forbidden $url" >&2; exit 8 ;; esac\n: > "$out"\n',
+            rawError: "wget: server returned error",
+            status: 8,
+          },
+        };
+        const fake = fakes[fetcher];
+        NodeFS.writeFileSync(NodePath.join(bin, fetcher), fake.script, { mode: 0o755 });
+        // wget is only chosen when curl is missing, so give the runner just the tools it needs.
+        const hostTool = (name: string) =>
+          NodeChildProcess.spawnSync("sh", ["-c", `command -v ${name}`], {
+            encoding: "utf8",
+          }).stdout.trim();
+        const shell = hostTool("sh");
+        if (fetcher === "wget") {
+          for (const tool of ["cat", "mkdir", "mktemp", "rm", "tar"]) {
+            NodeFS.symlinkSync(hostTool(tool), NodePath.join(bin, tool));
+          }
+        }
         const runner = NodePath.join(root, "run-t3.sh");
         NodeFS.writeFileSync(
           runner,
@@ -356,26 +416,41 @@ describe("ssh tunnel scripts", () => {
             ...(releaseBaseUrl === undefined ? {} : { releaseBaseUrl }),
           }),
         );
-        const result = NodeChildProcess.spawnSync("sh", [runner, "--version"], {
+        const result = NodeChildProcess.spawnSync(shell, [runner, "--version"], {
           encoding: "utf8",
-          env: { HOME: NodePath.join(root, "home"), PATH: `${bin}:${process.env.PATH ?? ""}` },
+          env: {
+            HOME: NodePath.join(root, "home"),
+            PATH: fetcher === "wget" ? bin : `${bin}:${process.env.PATH ?? ""}`,
+            DOWNLOAD_LOG: downloadLog,
+            FAIL_ASSET: failing === "checksums" ? "/SHA256SUMS" : ".tar.gz",
+          },
         });
         assert.notEqual(result.status, 0);
         if (downloads) {
-          assert.include(result.stderr, "download attempt");
-          // A bare curl error does not tell the user that t3 itself could not be downloaded.
-          assert.include(result.stderr, ARCHIVE.archiveVersion);
-          const base =
-            releaseBaseUrl?.split("?")[0] ?? "https://github.com/YmSaki/t3codeJP/releases/download";
-          const query = releaseBaseUrl === undefined ? "" : "?fixture=issue67";
-          assert.include(result.stderr, `${base}/v${ARCHIVE.archiveVersion}/SHA256SUMS${query}`);
+          const release = `/releases/download/v${ARCHIVE.archiveVersion}`;
+          const asset =
+            failing === "checksums"
+              ? `${release}/SHA256SUMS`
+              : `${release}/t3-${ARCHIVE.archiveVersion}-${platform}.tar.gz`;
+          const mirror = releaseBaseUrl !== undefined;
+          const origin = mirror ? "https://mirror.example" : "https://github.com/YmSaki/t3codeJP";
+          const credentials = mirror ? "mirror-user:userinfo-secret@" : "";
+          const query = mirror ? releaseBaseUrl.slice(releaseBaseUrl.indexOf("?")) : "";
+          // The mirror still receives its credentials; the error output never shows them.
+          assert.include(
+            NodeFS.readFileSync(downloadLog, "utf8"),
+            `${origin.replace("://", `://${credentials}`)}${asset}${query}\n`,
+          );
+          // A bare downloader error does not tell the user that t3 itself could not be downloaded.
           assert.include(
             result.stderr,
-            `${base}/v${ARCHIVE.archiveVersion}/t3-${ARCHIVE.archiveVersion}-${platform}.tar.gz${query}`,
+            `Could not download t3 ${ARCHIVE.archiveVersion} from ${origin}${asset} (${fetcher} exited with status ${fake.status}).`,
           );
-          assert.include(result.stderr, `${base}/v${ARCHIVE.archiveVersion}/install.sh${query}`);
+          assert.notInclude(result.stderr, fake.rawError);
+          assert.include(result.stderr, `with ${origin}${release}/install.sh (`);
+          assert.notInclude(result.stderr, "secret");
         } else {
-          assert.notInclude(result.stderr, "download attempt");
+          assert.isFalse(NodeFS.existsSync(downloadLog));
           assert.include(result.stderr, "has no t3 release archive.");
         }
       } finally {
