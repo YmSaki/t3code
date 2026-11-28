@@ -1,5 +1,4 @@
 import { assert, describe, it } from "@effect/vitest";
-import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -18,6 +17,7 @@ import {
   makeInMemoryStdio,
   makeStderrTail,
   makeChildStdio,
+  Platform,
 } from "./stdio.ts";
 
 describe("Codex App Server child process termination", () => {
@@ -139,7 +139,7 @@ describe("Codex App Server stderr decoding", () => {
       const tail = yield* makeStderrTail(Stream.fromIterable(chunks));
       yield* tail.awaitDrained;
       return yield* tail.read;
-    }).pipe(Effect.provideService(HostProcess.Platform, platform));
+    }).pipe(Effect.provideService(Platform, platform));
 
   it.effect("decodes CP932 stderr on Windows", () =>
     Effect.gen(function* () {

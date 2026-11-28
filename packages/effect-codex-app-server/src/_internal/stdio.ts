@@ -1,7 +1,7 @@
 import * as NodeUtil from "node:util";
 
-import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
 import * as Fiber from "effect/Fiber";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
@@ -14,6 +14,11 @@ import { ChildProcessSpawner } from "effect/process";
 import * as CodexError from "../errors.ts";
 
 const encoder = new TextEncoder();
+
+export const Platform = Context.Reference<NodeJS.Platform>("effect-codex-app-server/Platform", {
+  // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone protocol library cannot depend on @t3tools/shared/HostProcess.
+  defaultValue: () => process.platform,
+});
 
 export const makeChildStdio = (
   handle: Pick<ChildProcessSpawner.ChildProcessHandle, "stdin" | "stdout">,
@@ -129,7 +134,7 @@ const feedStderrLine = (line: StderrLineState, segment: Uint8Array, stream: bool
 export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
   stderr: ChildProcessSpawner.ChildProcessHandle["stderr"],
 ) {
-  const platform = yield* HostProcess.Platform;
+  const platform = yield* Platform;
   // Stream each line through dual decoders so output is independent of chunk boundaries.
   const tail = yield* Ref.make({ text: "", line: makeStderrLineState(platform) });
   const drain = yield* stderr.pipe(
