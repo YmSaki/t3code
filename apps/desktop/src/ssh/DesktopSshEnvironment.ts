@@ -29,7 +29,7 @@ import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Option from "effect/Option";
-import serverPackageJson from "../../../server/package.json" with { type: "json" };
+import { SERVER_NODE_ENGINE_RANGE } from "../serverNodeEngineRange.ts";
 
 import type * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 
@@ -87,7 +87,7 @@ export const resolveDesktopSshCliRunner = (
   if (environment.isDevelopment && devRemoteEntryPath !== undefined) {
     return {
       nodeScriptPath: devRemoteEntryPath,
-      nodeEngineRange: serverPackageJson.engines.node,
+      nodeEngineRange: SERVER_NODE_ENGINE_RANGE,
     };
   }
   const releaseBaseUrl = env[CLI_RELEASE_BASE_URL_ENV]?.trim() || undefined;

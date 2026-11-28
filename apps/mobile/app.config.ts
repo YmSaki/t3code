@@ -1,6 +1,6 @@
 import type { ExpoConfig } from "expo/config";
 
-import { hostedAppRouting, hostedAppRoutingFromEnv } from "../../packages/shared/src/hostedApp.ts";
+import { resolveProductConfig } from "../../packages/shared/src/productConfig.ts";
 import {
   DESKTOP_APP_ID,
   PRODUCT_NAME,
@@ -14,7 +14,6 @@ import {
   type WebAssetBrand,
 } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
-import { mobileReleaseConfig } from "./mobileReleaseConfig.ts";
 
 type AppVariant = "development" | "preview" | "production";
 
@@ -24,7 +23,8 @@ Object.assign(process.env, repoEnv);
 process.env.EXPO_NO_TYPESCRIPT_SETUP = "1";
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
-const release = mobileReleaseConfig(repoEnv);
+const product = resolveProductConfig(repoEnv);
+const release = { ...product.mobile, fork: product.distribution === "fork" };
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
@@ -167,7 +167,7 @@ const variant = release.fork
       assets: FORK_ASSETS[APP_VARIANT],
     }
   : upstreamVariant;
-const hostedWeb = hostedAppRoutingFromEnv(repoEnv) ?? (release.fork ? null : hostedAppRouting);
+const hostedWeb = product.hostedWeb.kind === "enabled" ? product.hostedWeb : null;
 const hostedAppHost = hostedWeb ? new URL(hostedWeb.router).hostname : null;
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
@@ -526,8 +526,8 @@ const config: ExpoConfig = {
   extra: {
     appVariant: APP_VARIANT,
     // Expo serializes null config values as empty objects.
-    hostedAppUrl: hostedWeb?.router ?? "",
-    hostedAppOrigins: hostedWeb ? Object.values(hostedWeb) : [],
+    hostedAppUrl: product.links.generate ?? "",
+    hostedAppOrigins: product.links.accept,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL || undefined,

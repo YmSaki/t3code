@@ -1,5 +1,9 @@
 import type { EnvironmentId, ProjectId, RuntimeMode, ThreadId } from "@t3tools/contracts";
 
+import { utf8ByteLength } from "./String.ts";
+
+export { utf8ByteLength };
+
 const DEFAULT_WORKER_BRIEF_MAX_BYTES = 32_768;
 const BYTES_PER_ESTIMATED_TOKEN = 4;
 const TRUNCATION_NOTICE = "\n... [truncated]";
@@ -66,12 +70,6 @@ export interface WorkerBriefPromptPack {
   readonly truncatedSections: ReadonlyArray<WorkerBriefSectionKind>;
   readonly includedExcerptPaths: ReadonlyArray<string>;
   readonly omittedExcerptPaths: ReadonlyArray<string>;
-}
-
-const utf8Encoder = new TextEncoder();
-
-export function utf8ByteLength(value: string): number {
-  return utf8Encoder.encode(value).byteLength;
 }
 
 function estimateTokensFromBytes(byteLength: number): number {

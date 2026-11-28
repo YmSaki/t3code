@@ -6,7 +6,6 @@ interface ImportMetaEnv {
   readonly VITE_HTTP_URL: string;
   readonly VITE_WS_URL: string;
   readonly VITE_HOSTED_APP_URL: string;
-  readonly VITE_REQUIRE_CONFIGURED_HOSTED_PAIRING: string;
   readonly VITE_HOSTED_APP_CHANNEL: string;
   readonly VITE_RELEASE_CHANNEL: string;
   readonly VITE_CLERK_PUBLISHABLE_KEY: string;
@@ -15,6 +14,7 @@ interface ImportMetaEnv {
   readonly VITE_RELAY_OTLP_TRACES_URL: string;
   readonly VITE_RELAY_OTLP_TRACES_DATASET: string;
   readonly VITE_RELAY_OTLP_TRACES_TOKEN: string;
+  readonly VITE_GITHUB_STAR_REPOSITORY: string;
   readonly T3CODE_DESKTOP_UPDATE_REPOSITORY: string;
   readonly APP_VERSION: string;
 }

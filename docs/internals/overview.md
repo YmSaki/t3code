@@ -33,6 +33,39 @@ Provider-specific behavior belongs behind an adapter. Orchestration works with n
 and events, so adding a provider should not require branches throughout the domain or clients.
 See [provider constraints](./providers.md).
 
+## Dependency model and package roles
+
+Evaluate dependencies across three independent axes rather than conflating them in one hierarchy:
+
+- **Phase (when needed):** Runtime, build/bundle, or test.
+- **Purpose (why needed):** Wire contract, shared utility, domain logic, or adapter aggregation.
+- **Boundary (what it crosses):** Cross-workspace package, public subpath export, or intra-package module.
+
+Do not infer runtime coupling solely from `package.json` `dependencies` vs. `devDependencies`: bundled builds may pull runtime assets through `devDependencies` (for example, `apps/server` bundles `@t3tools/web` without a runtime domain dependency on Web UI internals).
+
+Separate package and directory responsibilities as follows:
+
+- **Standalone protocol libraries** (`packages/effect-acp`, `packages/effect-codex-app-server`): Independent protocol implementations with zero dependencies on product packages (`@t3tools/*`).
+- **Wire contracts** (`packages/contracts`): Zero internal workspace dependencies. Owns wire schemas and shared identifiers only; internal domain models and persistence models may define explicit translation boundaries without duplicating domain definitions.
+- **Shared utilities** (`packages/shared`): Cross-package utilities, shared platform abstractions, and multi-app pure logic. Do not place single-domain logic here, and prohibit unrelated intra-package cross-domain imports.
+- **Domain cores** (`packages/*-core`, `packages/ssh`, `packages/tailscale`): Domain-specific contracts and pure/shared foundations.
+- **Adapters** (`packages/provider-*`, `packages/source-control-*`, `packages/secret-provider-*`, `packages/issue-tracker-*`): External protocol and service integrations.
+- **Adapter registries / definitions** (`packages/*-definitions`): Composition and registration of adapter sets; depending on the adapters they aggregate is intentional.
+- **Client runtime** (`packages/client-runtime`): Shared Web/Desktop/Mobile connection and client domain state; must not depend on `apps/*`.
+- **Application shells** (`apps/server`, `apps/{web,desktop,mobile,marketing}`): Host/UI shells; client apps must not import `apps/server` internals.
+- **Hosted services** (`infra/relay`, `infra/task-cache`): Deployed runtime services with their own application boundaries and deployment wiring. Compose their dependencies through public interfaces; keep service internals out of other applications' runtime dependencies.
+- **Support & non-runtime areas** (`scripts/`, `evals/`, `oxlint-plugin-t3code/`, `packaging/`, `packages/*-testing`): Tooling, build, and test support only; never imported by production runtime code.
+
+Apply these dependency constraints to runtime code, including module and public subpath imports:
+
+- Domain cores depend on contracts, shared primitives, and explicit domain interfaces, never on concrete adapters, application shells, or client runtime implementations.
+- Shared utilities must not depend on concrete domain implementations or application code. Shared domain logic retains an explicit owner; unrelated domains must not depend on one another for generic helpers.
+- Adapters depend on public core, protocol, contract, and shared interfaces, not application internals or client runtime implementations. A registry or composition boundary may depend on the adapters it assembles.
+- Client runtime and client apps must not import server-only implementations, even through shared package subpaths. Application and hosted-service composition may select concrete adapters through their public interfaces.
+- Build and test dependencies do not authorize runtime coupling. Keep build artifact consumption and test fixtures at their corresponding boundaries.
+
+Dependencies between packages of the same role are neither blanket-allowed nor blanket-forbidden; judge them by ownership and purpose. Distinguish adopted architectural patterns from historical leftovers before copying existing code.
+
 ## Settings ownership
 
 Client preferences stay in the current client; environment defaults and project overrides stay
@@ -44,9 +77,7 @@ select known environment-local checkouts; the group itself does not store inheri
 
 ## Durable intent and side effects
 
-Orchestration state is decided as events, and projections are the source of truth once they apply
-them. The [v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and
-decides events without performing provider or filesystem work.
+Orchestration commands decide events without side effects, and persisted projections provide the authoritative view of current state once applied. The atomic transaction boundary is one individual command—not an entire turn, which spans multiple command transactions and asynchronous outbox effects over time. The [v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and decides events without performing provider or filesystem work.
 [EventSink](../../apps/server/src/orchestration-v2/EventSink.ts) commits events, persisted projections,
 the accepted command receipt, and outbox effects in one database transaction. Subscribers receive
 events after that commit. This keeps command retries idempotent and prevents a persisted projection
@@ -152,6 +183,12 @@ snapshot feature keeps are isolated: `@crowecawcaw/xa11y` runs only in forked No
 lazily inside `WindowsForeground.ts` for a handful of Win32 calls. macOS window lookup shells out
 to `osascript` instead of a native addon. A crash or stall in any of these must not take the app
 down, so new native capability goes in a child with a deadline, not an `import` in main.
+
+## Cross-cutting runtime policies
+
+- **Errors, retries, cancellation, and recovery:** Use typed Effect errors at service boundaries; keep command retries idempotent via durable receipts; handle interruption and cancellation cleanly, isolate crashing native/external helpers in child processes with deadlines, and retire lost provider sessions during recovery before admitting new work.
+- **External services and platform isolation:** Isolate provider protocols, forges, OS specifics, and hosted services behind adapters; keep core domain logic platform-agnostic.
+- **Backward compatibility, migration, and deprecation:** Persisted events, SQLite schemas, and RPC contracts serve independently versioned clients and stored history. State explicit compatibility windows, migration or rollback paths, and removal criteria before deprecating fields or behaviors.
 
 See the [glossary](./glossary.md) for shared terms and the
 [development runbook](../operations/development.md) for setup and checks.

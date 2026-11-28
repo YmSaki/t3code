@@ -3,7 +3,7 @@ import { PRODUCT_SLUG } from "@t3tools/shared/productIdentity";
 import * as NodeModule from "node:module";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { enablePreparedServerCache } from "../../../scripts/lib/server-compile-cache.ts";
+import { enablePreparedServerCache } from "./serverCompileCache.ts";
 
 // Linux /tmp is shared; macOS and Windows temp dirs are per user.
 // AppImage mounts change paths each launch, so Node's path-keyed cache would miss and accumulate copies.

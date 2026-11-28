@@ -113,7 +113,7 @@ test("fork hosted Web requires usable release assets and independent domains", a
       ...fixture(tag),
       env: { ...routing, T3CODE_WEB_NIGHTLY_DOMAIN: "nightly.app.t3.codes" },
     }),
-    /Use a fork-owned hostname/,
+    /fork-owned/,
   );
 });
 
@@ -167,7 +167,7 @@ for (const [channel, domains] of [
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stderr, /argument:--skip-domain/);
     assert.match(result.stderr, /argument:T3CODE_DESKTOP_UPDATE_REPOSITORY=YmSaki\/t3codeJP/);
-    assert.match(result.stderr, /argument:T3CODE_CONNECT_DISTRIBUTION=fork/);
+    assert.match(result.stderr, /argument:T3CODE_DISTRIBUTION=fork/);
     assert.match(result.stderr, /argument:T3CODE_RELAY_URL=https:\/\/relay\.example\.test/);
     assert.deepEqual(
       result.aliases,

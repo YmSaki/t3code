@@ -1,7 +1,10 @@
 import { matchers, type Transform, type VercelConfig } from "@vercel/config/v1";
-import { hostedAppRouting, hostedAppRoutingFromEnv } from "@t3tools/shared/hostedApp";
+import { resolveProductConfig } from "@t3tools/shared/productConfig";
 
-const routing = hostedAppRoutingFromEnv(process.env) ?? hostedAppRouting;
+const { hostedWeb: routing } = resolveProductConfig(process.env);
+if (routing.kind === "disabled") {
+  throw new Error("Hosted Web deployment requires the three hosted Web settings.");
+}
 const routerHost = new URL(routing.router).hostname;
 const HOSTED_WEB_CHANNEL_COOKIE = "t3code_web_channel";
 const CLEAN_CHANNEL_QUERY_TRANSFORMS = [

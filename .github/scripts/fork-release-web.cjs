@@ -1,21 +1,17 @@
-const { hostedAppRoutingFromEnv } = require("../../packages/shared/src/hostedApp.ts");
+const { resolveProductConfig } = require("../../packages/shared/src/productConfig.ts");
 const { assertCommitOnDefaultBranch } = require("./check-nightly-release.cjs");
 const { forkReleaseCliAssets } = require("./fork-release-assets.cjs");
 
 const RELEASE_TAG = /^v([1-9]\d*(?:\.(?:0|[1-9]\d*)){2}(-nightly\.\d{8}\.[1-9]\d*)?)$/;
 
 function resolveForkWebRouting(env) {
-  const routing = hostedAppRoutingFromEnv(env);
-  if (!routing) return null;
-  const routerDomain = new URL(routing.router).hostname;
-  const latestDomain = new URL(routing.stable).hostname;
-  const nightlyDomain = new URL(routing.nightly).hostname;
-  for (const host of [routerDomain, latestDomain, nightlyDomain]) {
-    if (host === "t3.codes" || host.endsWith(".t3.codes") || host.endsWith(".")) {
-      throw new Error(`Use a fork-owned hostname for hosted Web: ${host}.`);
-    }
-  }
-  return { routerUrl: routing.router, latestDomain, nightlyDomain };
+  const { hostedWeb } = resolveProductConfig({ ...env, T3CODE_DISTRIBUTION: "fork" });
+  if (hostedWeb.kind === "disabled") return null;
+  return {
+    routerUrl: hostedWeb.router,
+    latestDomain: new URL(hostedWeb.stable).hostname,
+    nightlyDomain: new URL(hostedWeb.nightly).hostname,
+  };
 }
 
 async function planForkWebRelease({ github, context, tag, expectedSha, env }) {

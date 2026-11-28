@@ -39,7 +39,7 @@ jobs:
     env:
       T3CODE_TELEMETRY_CHANNEL: dev
       T3CODE_TELEMETRY_ENABLED: "false"
-      T3CODE_CONNECT_DISTRIBUTION: fork
+      T3CODE_DISTRIBUTION: fork
       T3CODE_CLERK_PUBLISHABLE_KEY: ${{ !inputs.validate_update && vars.T3CODE_CLERK_PUBLISHABLE_KEY || '' }}
       T3CODE_CLERK_JWT_TEMPLATE: ${{ !inputs.validate_update && vars.T3CODE_CLERK_JWT_TEMPLATE || '' }}
       T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ !inputs.validate_update && vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID || '' }}

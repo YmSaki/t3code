@@ -5,6 +5,7 @@ import type { MFunctionType } from "gt-i18n/types";
 
 import {
   formatHostedThreadLink,
+  threadShareLink,
   formatThreadLink,
   guessThreadLinkRef,
   hostedThreadLink,
@@ -12,6 +13,7 @@ import {
   threadLinkCandidates,
   threadLinkRefs,
 } from "./threadLinks.ts";
+import { resolveProductConfig, toPublicProductConfig } from "./productConfig.ts";
 import { relabelThreadLinks } from "./threadLinksCopy.ts";
 
 const ref = (environmentId: string, threadId = "chat-1") => ({
@@ -216,19 +218,30 @@ describe("thread links", () => {
 describe("hosted thread links", () => {
   it("shares fork URLs and reads old links alongside all configured channel origins", async () => {
     vi.resetModules();
-    const routing = {
-      router: "https://fork.example.test",
-      stable: "https://stable.fork.example.test",
-      nightly: "https://nightly.fork.example.test",
-    };
-    vi.stubGlobal("__T3CODE_BUILD_HOSTED_APP_ROUTING__", routing);
+    const config = resolveProductConfig({
+      T3CODE_DISTRIBUTION: "fork",
+      T3CODE_WEB_ROUTER_URL: "https://fork.example.test",
+      T3CODE_WEB_LATEST_DOMAIN: "stable.fork.example.test",
+      T3CODE_WEB_NIGHTLY_DOMAIN: "nightly.fork.example.test",
+    });
+    const routing = config.hostedWeb.kind === "enabled" ? config.hostedWeb : null!;
+    vi.stubGlobal("__T3CODE_BUILD_PRODUCT_CONFIG__", toPublicProductConfig(config));
     try {
       const links = await import("./threadLinks.ts");
       const { buildNewThreadLink, promptLinkAppPath } = await import("./promptLinks.ts");
       const thread = ref("remote", "tracked");
-      expect(links.hostedThreadLink(thread)).toBe(`${routing.router}/threads/remote/tracked`);
-      expect(buildNewThreadLink({ prompt: "go" })).toBe(`${routing.router}/new?prompt=go`);
-      for (const origin of [...Object.values(routing), "https://app.t3.codes"]) {
+      expect(links.hostedThreadLink(thread, routing.router)).toBe(
+        `${routing.router}/threads/remote/tracked`,
+      );
+      expect(buildNewThreadLink({ prompt: "go", origin: routing.router })).toBe(
+        `${routing.router}/new?prompt=go`,
+      );
+      for (const origin of [
+        routing.router,
+        routing.stable,
+        routing.nightly,
+        "https://app.t3.codes",
+      ]) {
         const href = `${origin}/threads/remote/tracked`;
         expect(links.parseThreadLinkHref(href)).toEqual(thread);
         expect(links.threadLinkRefs(`Open [this thread](${href}).`, local)).toEqual([thread]);
@@ -245,9 +258,16 @@ describe("hosted thread links", () => {
     }
   });
 
+  it("shares the in-app link, never an upstream URL, when the product has no hosted Web", () => {
+    const config = resolveProductConfig({ T3CODE_DISTRIBUTION: "fork" });
+    expect(config.links.generate).toBeNull();
+    expect(threadShareLink(ref("e", "t1"), config.links.generate)).toBe("t3-thread://v2/e/t1");
+    expect(formatHostedThreadLink(ref("e", "t1"), "Fix", null)).toBe("[Fix](t3-thread://v2/e/t1)");
+  });
+
   it("escapes every id character a sentence or path could claim, and reads it back", () => {
     const thread = ref("env.1", "thread:delegated/mcp%3A1.");
-    const link = hostedThreadLink(thread);
+    const link = hostedThreadLink(thread, "https://app.t3.codes");
     expect(link).toBe("https://app.t3.codes/threads/env%2E1/thread%3Adelegated%2Fmcp%253A1%2E");
     expect(parseThreadLinkHref(link)).toEqual(thread);
     expect(hostedThreadLink(thread, "https://preview.t3.codes/")).toMatch(
@@ -267,10 +287,12 @@ describe("hosted thread links", () => {
   });
 
   it("writes a copied link a reader can follow, labeled when it has a title", () => {
-    expect(formatHostedThreadLink(ref("e", "t1"), "Fix [ci]")).toBe(
+    expect(formatHostedThreadLink(ref("e", "t1"), "Fix [ci]", "https://app.t3.codes")).toBe(
       "[Fix ci](https://app.t3.codes/threads/e/t1)",
     );
-    expect(formatHostedThreadLink(ref("e", "t1"), " ")).toBe("https://app.t3.codes/threads/e/t1");
+    expect(formatHostedThreadLink(ref("e", "t1"), " ", "https://app.t3.codes")).toBe(
+      "https://app.t3.codes/threads/e/t1",
+    );
   });
 
   it("titles hosted links in every Markdown form and writes them as v2 links", () => {

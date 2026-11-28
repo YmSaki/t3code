@@ -1,7 +1,6 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import appleAppSiteAssociation from "../web/public/.well-known/apple-app-site-association.json";
@@ -15,6 +14,7 @@ vi.mock("../../scripts/lib/public-config.ts", () => ({
       Object.entries(process.env).filter(
         ([key]) =>
           key === "APP_VARIANT" ||
+          key === "T3CODE_DISTRIBUTION" ||
           key.startsWith("T3CODE_WEB_") ||
           key.startsWith("T3CODE_MOBILE_") ||
           key.startsWith("T3CODE_IOS_PERSONAL_TEAM"),
@@ -27,6 +27,7 @@ afterEach(() => {
 });
 
 it("uses the fork router in native associations and the link settings sent to JavaScript", async () => {
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
   vi.stubEnv("T3CODE_WEB_ROUTER_URL", "https://fork.example.test");
   vi.stubEnv("T3CODE_WEB_LATEST_DOMAIN", "stable.fork.example.test");
   vi.stubEnv("T3CODE_WEB_NIGHTLY_DOMAIN", "nightly.fork.example.test");
@@ -41,6 +42,10 @@ it("uses the fork router in native associations and the link settings sent to Ja
       "https://fork.example.test",
       "https://stable.fork.example.test",
       "https://nightly.fork.example.test",
+      // Accepted for pasted links only; generation uses hostedAppUrl.
+      "https://app.t3.codes",
+      "https://latest.app.t3.codes",
+      "https://nightly.app.t3.codes",
     ],
   });
 });
@@ -67,7 +72,7 @@ it.each([
   expect(config.ios?.bundleIdentifier).toBe(identifier);
   expect(config.android?.package).toBe(identifier);
   // Copied thread links open this app only while app.t3.codes lists it.
-  const host = new URL(DEFAULT_HOSTED_APP_URL).host;
+  const host = "app.t3.codes";
   expect(config.ios?.associatedDomains).toContain(`applinks:${host}`);
   expect(appleAppSiteAssociation.applinks.details[0]?.appIDs).toContain(
     `${config.ios?.appleTeamId}.${identifier}`,
@@ -86,7 +91,7 @@ it.each([
 ])(
   "isolates the fork's %s app, uses fork icons, and disables OTA without a fork project",
   async (appVariant, id, scheme, brandDir) => {
-    vi.stubEnv("T3CODE_MOBILE_DISTRIBUTION", "fork");
+    vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
     const config = await loadConfig(appVariant);
     expect(config.ios?.bundleIdentifier).toBe(id);
     expect(config.ios?.appleTeamId).toBeUndefined();
@@ -165,9 +170,16 @@ it.each([
   ["fork-publisher", "d763fcb8-d37c-41ea-a773-b54a0ab4a454", "own Expo account and EAS project"],
   [undefined, undefined, "OTA updates require a fork EAS project"],
 ])("rejects an incomplete or upstream fork OTA configuration", async (owner, project, error) => {
-  vi.stubEnv("T3CODE_MOBILE_DISTRIBUTION", "fork");
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
   vi.stubEnv("T3CODE_MOBILE_EAS_OWNER", owner);
   vi.stubEnv("T3CODE_MOBILE_EAS_PROJECT_ID", project);
   vi.stubEnv("T3CODE_MOBILE_UPDATES_ENABLED", "1");
   await expect(loadConfig("production")).rejects.toThrow(error);
+});
+
+it("rejects fork settings in an upstream build, matching the release workflows", async () => {
+  vi.stubEnv("T3CODE_WEB_ROUTER_URL", "https://fork.example.test");
+  vi.stubEnv("T3CODE_WEB_LATEST_DOMAIN", "stable.fork.example.test");
+  vi.stubEnv("T3CODE_WEB_NIGHTLY_DOMAIN", "nightly.fork.example.test");
+  await expect(loadConfig("production")).rejects.toThrow("T3CODE_DISTRIBUTION=fork");
 });
