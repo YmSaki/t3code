@@ -1,7 +1,14 @@
 const {
-  resolveForkConnectConfig,
-  resolveForkRelayClientTracingConfig,
-} = require("../../scripts/lib/public-config.ts");
+  requireTelemetrySurface,
+  resolveProductConfig,
+} = require("../../packages/shared/src/productConfig.ts");
+
+function resolveForkConnectConfig(env) {
+  const { connect } = resolveProductConfig({ ...env, T3CODE_DISTRIBUTION: "fork" });
+  return connect.kind === "enabled"
+    ? connect
+    : { clerkPublishableKey: "", clerkJwtTemplate: "", clerkCliOAuthClientId: "", relayUrl: "" };
+}
 
 function resolveForkRelayDeployConfig(env) {
   const connect = resolveForkConnectConfig(env);
@@ -54,27 +61,15 @@ function resolveForkRelayDeployConfig(env) {
 }
 
 function resolveForkClientObservability(env) {
-  const enabled = env.T3CODE_RELAY_OBSERVABILITY_ENABLED?.trim() === "true";
-  const connect = resolveForkConnectConfig(env);
-  if (!enabled) {
-    return {
-      enabled: false,
-      tracesUrl: "",
-      tracesDataset: "",
-      tracesToken: "",
-    };
+  const { telemetry } = resolveProductConfig({ ...env, T3CODE_DISTRIBUTION: "fork" });
+  if (telemetry.kind !== "enabled") {
+    return { enabled: false, tracesUrl: "", tracesDataset: "", tracesToken: "" };
   }
-  if (!connect.relayUrl) {
-    throw new Error("Configure fork Connect settings before enabling relay monitoring.");
-  }
-  const tracing = resolveForkRelayClientTracingConfig(env, { requireConfigured: true });
-  return {
-    enabled: true,
-    ...tracing,
-  };
+  return { enabled: true, ...requireTelemetrySurface(telemetry, "relayClient") };
 }
 
 module.exports = {
+  resolveForkConnectConfig,
   resolveForkClientObservability,
   resolveForkRelayDeployConfig,
 };

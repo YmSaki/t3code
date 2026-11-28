@@ -27,7 +27,7 @@ vi.mock("expo-constants", () => ({
     expoConfig: {
       extra: {
         hostedAppUrl: "https://fork.example.test",
-        hostedAppOrigins: ["https://nightly.fork.example.test"],
+        hostedAppOrigins: ["https://nightly.fork.example.test", "https://app.t3.codes"],
       },
     },
   },

@@ -114,7 +114,7 @@ Set these three GitHub Actions repository variables for the fork's hosted Web, D
 - `T3CODE_WEB_LATEST_DOMAIN` is the Stable deployment's hostname.
 - `T3CODE_WEB_NIGHTLY_DOMAIN` is the Nightly deployment's hostname.
 
-Use distinct fork-owned domains and set all three together. Connect sign-in opens
+Set `T3CODE_DISTRIBUTION=fork` for every fork build; fork-only settings are rejected in an upstream build. Use distinct fork-owned domains and set all three together. Without them the fork has no hosted Web: links are not generated and pairing stays on the server. Connect sign-in opens
 the fork's hosted Web, so configure these domains before enabling Connect in a
 fork release. Rebuild Desktop and CLI when the origins change.
 The router is also the origin used for copied thread and prompt links. Rebuild
@@ -154,7 +154,7 @@ set `T3CODE_MOBILE_APPLE_TEAM_ID` to the signing team's ID and select the fork's
 App Store Connect record when submitting. If Connect is configured, set
 `T3CODE_MOBILE_CLERK_DOMAIN` to the fork's Clerk hostname for iOS associations.
 
-Set `T3CODE_MOBILE_DISTRIBUTION=fork` in the shell for the EAS commands. From `apps/mobile`,
+Set `T3CODE_DISTRIBUTION=fork` in the shell for the EAS commands. From `apps/mobile`,
 build Android with `eas build --platform android --profile fork-android`
 and distribute the resulting APK. Build iOS with `eas build --platform ios --profile fork-ios`,
 then submit the resulting build with `eas submit --platform ios --profile fork-ios --id <build-id>`.
@@ -168,7 +168,7 @@ users receive. The Web build publishes link associations for the fork's producti
 app; a platform without signing settings keeps its links in the browser.
 
 For JavaScript-only changes, use `eas update --environment production --channel production`
-against the fork project with `T3CODE_MOBILE_DISTRIBUTION=fork` and the same build settings.
+against the fork project with `T3CODE_DISTRIBUTION=fork` and the same build settings.
 The fingerprint policy delivers updates to matching native builds. Build and distribute a
 new APK or TestFlight build when native configuration changes. Local fork builds without
 an EAS project have OTA disabled.
@@ -597,9 +597,7 @@ Required GitHub Actions secrets:
 Optional GitHub Actions variables:
 
 - `VERCEL_TEAM_SLUG`: overrides the Vercel CLI scope when the team slug is preferred over the `VERCEL_ORG_ID` secret.
-- `T3CODE_WEB_ROUTER_URL`: defaults to `https://app.t3.codes`.
-- `T3CODE_WEB_LATEST_DOMAIN`: defaults to `latest.app.t3.codes`.
-- `T3CODE_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.t3.codes`.
+- `T3CODE_WEB_ROUTER_URL`, `T3CODE_WEB_LATEST_DOMAIN`, `T3CODE_WEB_NIGHTLY_DOMAIN`: set only for a fork (`T3CODE_DISTRIBUTION=fork`), all three together. Without them an upstream build uses the official domains and a fork has no hosted Web.
 
 Required Vercel domains:
 

@@ -1,6 +1,9 @@
 import type { ExpoConfig } from "expo/config";
 
-import { hostedAppRouting, hostedAppRoutingFromEnv } from "../../packages/shared/src/hostedApp.ts";
+import {
+  requireTelemetrySurface,
+  resolveProductConfig,
+} from "../../packages/shared/src/productConfig.ts";
 import {
   DESKTOP_APP_ID,
   PRODUCT_NAME,
@@ -8,17 +11,18 @@ import {
 } from "../../packages/shared/src/productIdentity.ts";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
-import { mobileReleaseConfig } from "./mobileReleaseConfig.ts";
 
 type AppVariant = "development" | "preview" | "production";
 
-const repoEnv = loadRepoEnv();
+const repoEnv = loadRepoEnv({ surface: "mobile" });
 Object.assign(process.env, repoEnv);
 // Expo's TypeScript setup otherwise installs `typescript` on every start; we typecheck with tsrs.
 process.env.EXPO_NO_TYPESCRIPT_SETUP = "1";
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
-const release = mobileReleaseConfig(repoEnv);
+const product = resolveProductConfig(repoEnv);
+const release = { ...product.mobile, fork: product.distribution === "fork" };
+requireTelemetrySurface(product.telemetry, "mobile");
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
@@ -29,8 +33,7 @@ const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 // Compiled into the native project. Without a relay, Observe's native side could dispatch to
 // Expo's own ingest before observe.ts turns it off; `.invalid` never resolves (RFC 6761).
-const observeEnabled =
-  !release.fork || repoEnv.T3CODE_RELAY_OBSERVABILITY_ENABLED?.trim() === "true";
+const observeEnabled = product.telemetry.kind !== "disabled";
 const observeEndpointUrl =
   observeEnabled && repoEnv.T3CODE_RELAY_URL?.trim()
     ? new URL("/v1/mobile/observe", repoEnv.T3CODE_RELAY_URL.trim()).toString()
@@ -140,7 +143,7 @@ const variant = release.fork
       androidPackage: forkBundleId,
     }
   : upstreamVariant;
-const hostedWeb = hostedAppRoutingFromEnv(repoEnv) ?? (release.fork ? null : hostedAppRouting);
+const hostedWeb = product.hostedWeb.kind === "enabled" ? product.hostedWeb : null;
 const hostedAppHost = hostedWeb ? new URL(hostedWeb.router).hostname : null;
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
@@ -499,8 +502,8 @@ const config: ExpoConfig = {
   extra: {
     appVariant: APP_VARIANT,
     // Expo serializes null config values as empty objects.
-    hostedAppUrl: hostedWeb?.router ?? "",
-    hostedAppOrigins: hostedWeb ? Object.values(hostedWeb) : [],
+    hostedAppUrl: product.links.generate ?? "",
+    hostedAppOrigins: product.links.accept,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL || undefined,

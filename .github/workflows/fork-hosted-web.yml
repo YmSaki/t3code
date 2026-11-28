@@ -103,7 +103,7 @@ jobs:
           git -C release-source fetch --no-tags --depth=1 origin "$RELEASE_SHA"
           git -C release-source sparse-checkout set --no-cone '/*' '!/.repos/'
           git -C release-source -c checkout.workers=0 checkout --detach FETCH_HEAD
-          if ! git -C release-source grep -q hostedAppRoutingFromEnv HEAD -- apps/web/vercel.ts; then
+          if ! git -C release-source grep -q resolveProductConfig HEAD -- apps/web/vercel.ts; then
             printf '%s\n' 'The release predates support for fork hosted Web domains.' >&2
             exit 1
           fi

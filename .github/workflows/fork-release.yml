@@ -128,8 +128,7 @@ jobs:
               core.notice(plan.reason);
               return;
             }
-            const { resolveForkConnectConfig } = require('./scripts/lib/public-config.ts');
-            const { resolveForkClientObservability } = require('./.github/scripts/fork-release-connect.cjs');
+            const { resolveForkConnectConfig, resolveForkClientObservability } = require('./.github/scripts/fork-release-connect.cjs');
             const { resolveForkWebRouting } = require('./.github/scripts/fork-release-web.cjs');
             const connect = resolveForkConnectConfig(process.env);
             const observability = resolveForkClientObservability(process.env);
@@ -228,7 +227,7 @@ jobs:
       T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
       T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
       T3CODE_TELEMETRY_ENABLED: "false"
-      T3CODE_CONNECT_DISTRIBUTION: fork
+      T3CODE_DISTRIBUTION: fork
       T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
       T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
       T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}

@@ -27,7 +27,7 @@ deployment_output="$(
     "${vercel_args[@]}" \
     --build-env "APP_VERSION=$APP_VERSION" \
     --build-env "T3CODE_DESKTOP_UPDATE_REPOSITORY=$GITHUB_REPOSITORY" \
-    --build-env "T3CODE_CONNECT_DISTRIBUTION=fork" \
+    --build-env "T3CODE_DISTRIBUTION=fork" \
     --build-env "T3CODE_CLERK_PUBLISHABLE_KEY=$T3CODE_CLERK_PUBLISHABLE_KEY" \
     --build-env "T3CODE_CLERK_JWT_TEMPLATE=$T3CODE_CLERK_JWT_TEMPLATE" \
     --build-env "T3CODE_CLERK_CLI_OAUTH_CLIENT_ID=$T3CODE_CLERK_CLI_OAUTH_CLIENT_ID" \

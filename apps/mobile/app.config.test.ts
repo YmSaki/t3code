@@ -1,4 +1,3 @@
-import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import appleAppSiteAssociation from "../web/public/.well-known/apple-app-site-association.json";
@@ -12,9 +11,11 @@ vi.mock("../../scripts/lib/public-config.ts", () => ({
       Object.entries(process.env).filter(
         ([key]) =>
           key === "APP_VARIANT" ||
+          key === "T3CODE_DISTRIBUTION" ||
           key.startsWith("T3CODE_WEB_") ||
           key.startsWith("T3CODE_MOBILE_") ||
           key.startsWith("T3CODE_RELAY_") ||
+          key.startsWith("T3CODE_CLERK_") ||
           key.startsWith("EXPO_PUBLIC_OTLP_") ||
           key.startsWith("T3CODE_IOS_PERSONAL_TEAM"),
       ),
@@ -26,6 +27,7 @@ afterEach(() => {
 });
 
 it("uses the fork router in native associations and the link settings sent to JavaScript", async () => {
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
   vi.stubEnv("T3CODE_WEB_ROUTER_URL", "https://fork.example.test");
   vi.stubEnv("T3CODE_WEB_LATEST_DOMAIN", "stable.fork.example.test");
   vi.stubEnv("T3CODE_WEB_NIGHTLY_DOMAIN", "nightly.fork.example.test");
@@ -40,6 +42,10 @@ it("uses the fork router in native associations and the link settings sent to Ja
       "https://fork.example.test",
       "https://stable.fork.example.test",
       "https://nightly.fork.example.test",
+      // Accepted for pasted links only; generation uses hostedAppUrl.
+      "https://app.t3.codes",
+      "https://latest.app.t3.codes",
+      "https://nightly.app.t3.codes",
     ],
   });
 });
@@ -66,7 +72,7 @@ it.each([
   expect(config.ios?.bundleIdentifier).toBe(identifier);
   expect(config.android?.package).toBe(identifier);
   // Copied thread links open this app only while app.t3.codes lists it.
-  const host = new URL(DEFAULT_HOSTED_APP_URL).host;
+  const host = "app.t3.codes";
   expect(config.ios?.associatedDomains).toContain(`applinks:${host}`);
   expect(appleAppSiteAssociation.applinks.details[0]?.appIDs).toContain(
     `${config.ios?.appleTeamId}.${identifier}`,
@@ -84,7 +90,7 @@ it.each([
 ])(
   "isolates the fork's %s app and disables OTA without a fork project",
   async (appVariant, id, scheme) => {
-    vi.stubEnv("T3CODE_MOBILE_DISTRIBUTION", "fork");
+    vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
     const config = await loadConfig(appVariant);
     expect(config.ios?.bundleIdentifier).toBe(id);
     expect(config.ios?.appleTeamId).toBeUndefined();
@@ -106,9 +112,16 @@ it.each([
   },
 );
 
-it("does not fall back to upstream Axiom or enable Observe when fork monitoring is disabled", async () => {
-  vi.stubEnv("T3CODE_MOBILE_DISTRIBUTION", "fork");
+function stubForkConnect() {
+  vi.stubEnv("T3CODE_CLERK_PUBLISHABLE_KEY", `pk_live_${btoa("accounts.fork.example.test$")}`);
+  vi.stubEnv("T3CODE_CLERK_JWT_TEMPLATE", "template");
+  vi.stubEnv("T3CODE_CLERK_CLI_OAUTH_CLIENT_ID", "client");
   vi.stubEnv("T3CODE_RELAY_URL", "https://relay.fork.example.test");
+}
+
+it("does not fall back to upstream Axiom or enable Observe when fork monitoring is disabled", async () => {
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
+  stubForkConnect();
   const config = await loadConfig("production");
   expect(config.extra?.observability).toEqual({
     tracesUrl: null,
@@ -119,8 +132,11 @@ it("does not fall back to upstream Axiom or enable Observe when fork monitoring 
 });
 
 it("wires fork OTLP tracing and Observe when fork monitoring is explicitly enabled", async () => {
-  vi.stubEnv("T3CODE_MOBILE_DISTRIBUTION", "fork");
-  vi.stubEnv("T3CODE_RELAY_URL", "https://relay.fork.example.test");
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
+  stubForkConnect();
+  vi.stubEnv("T3CODE_MOBILE_OTLP_TRACES_URL", "https://traces.fork.example.test/v1/traces");
+  vi.stubEnv("T3CODE_MOBILE_OTLP_TRACES_DATASET", "fork-mobile-traces");
+  vi.stubEnv("T3CODE_MOBILE_OTLP_TRACES_TOKEN", "fork-mobile-token");
   vi.stubEnv("T3CODE_RELAY_OBSERVABILITY_ENABLED", "true");
   vi.stubEnv("EXPO_PUBLIC_OTLP_TRACES_URL", "https://traces.fork.example.test/v1/traces");
   vi.stubEnv("EXPO_PUBLIC_OTLP_TRACES_DATASET", "fork-mobile-traces");
@@ -158,9 +174,16 @@ it.each([
   ["fork-publisher", "d763fcb8-d37c-41ea-a773-b54a0ab4a454", "own Expo account and EAS project"],
   [undefined, undefined, "OTA updates require a fork EAS project"],
 ])("rejects an incomplete or upstream fork OTA configuration", async (owner, project, error) => {
-  vi.stubEnv("T3CODE_MOBILE_DISTRIBUTION", "fork");
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
   vi.stubEnv("T3CODE_MOBILE_EAS_OWNER", owner);
   vi.stubEnv("T3CODE_MOBILE_EAS_PROJECT_ID", project);
   vi.stubEnv("T3CODE_MOBILE_UPDATES_ENABLED", "1");
   await expect(loadConfig("production")).rejects.toThrow(error);
+});
+
+it("rejects fork settings in an upstream build, matching the release workflows", async () => {
+  vi.stubEnv("T3CODE_WEB_ROUTER_URL", "https://fork.example.test");
+  vi.stubEnv("T3CODE_WEB_LATEST_DOMAIN", "stable.fork.example.test");
+  vi.stubEnv("T3CODE_WEB_NIGHTLY_DOMAIN", "nightly.fork.example.test");
+  await expect(loadConfig("production")).rejects.toThrow("T3CODE_DISTRIBUTION=fork");
 });

@@ -1,7 +1,9 @@
 import type { BrowserSearchEngine } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
-import { isLocalLoopbackHost } from "./hostClassification.ts";
+import { isLocalLoopbackHost, isLoopbackHost, LOOPBACK_HOSTS } from "./hostClassification.ts";
+
+export { isLoopbackHost };
 
 const TAB_ID_PREFIX = "tab_";
 let nextPreviewTabSequence = 0;
@@ -40,8 +42,6 @@ export function newPreviewTabId(): string {
   return `${TAB_ID_PREFIX}${nextPreviewTabSequence.toString(36)}`;
 }
 
-const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
-
 export const LSOF_LOCAL_HOST_TOKENS: ReadonlySet<string> = new Set([
   ...LOOPBACK_HOSTS,
   "*",
@@ -50,12 +50,6 @@ export const LSOF_LOCAL_HOST_TOKENS: ReadonlySet<string> = new Set([
 ]);
 
 const LOOPBACK_PREFIX_PATTERN = /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(?::|\/|$)/i;
-
-export function isLoopbackHost(host: string): boolean {
-  if (LOOPBACK_HOSTS.has(host)) return true;
-  if (host === "[::1]") return true;
-  return false;
-}
 
 export class PreviewUrlNormalizationError extends Schema.TaggedError<PreviewUrlNormalizationError>()(
   "PreviewUrlNormalizationError",

@@ -68,38 +68,36 @@ describe("loadRepoEnv", () => {
       EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: upstreamKey,
       VITE_T3CODE_RELAY_URL: "https://relay.t3.codes",
     };
-    expect(build({ T3CODE_CONNECT_DISTRIBUTION: "fork", ...existingAliases })).toMatchObject({
+    expect(build({ T3CODE_DISTRIBUTION: "fork", ...existingAliases })).toMatchObject({
       VITE_CLERK_PUBLISHABLE_KEY: "",
       EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "",
       VITE_T3CODE_RELAY_URL: "",
     });
-    expect(
-      build({ T3CODE_MOBILE_DISTRIBUTION: "fork", ...existingAliases, ...canonical }),
-    ).toMatchObject({
+    expect(build({ T3CODE_DISTRIBUTION: "fork", ...existingAliases, ...canonical })).toMatchObject({
       VITE_CLERK_PUBLISHABLE_KEY: forkKey,
       EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: forkKey,
       VITE_T3CODE_RELAY_URL: "https://relay.fork.example.test",
     });
     expect(() =>
-      build({ T3CODE_CONNECT_DISTRIBUTION: "fork", T3CODE_RELAY_URL: canonical.T3CODE_RELAY_URL }),
+      build({ T3CODE_DISTRIBUTION: "fork", T3CODE_RELAY_URL: canonical.T3CODE_RELAY_URL }),
     ).toThrow(/all four Connect settings/);
     expect(() =>
       build({
-        T3CODE_MOBILE_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         ...canonical,
         T3CODE_CLERK_PUBLISHABLE_KEY: upstreamKey,
       }),
     ).toThrow(/fork-owned Clerk/);
     expect(() =>
       build({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         ...canonical,
         T3CODE_RELAY_URL: "https://relay.t3.codes.",
       }),
-    ).toThrow(/fork-owned HTTPS relay/);
+    ).toThrow(/fork-owned HTTPS/);
     expect(() =>
       build({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         ...canonical,
         T3CODE_CLERK_PASSKEY_RP_DOMAINS: "accounts.fork.example.test, clerk.t3.codes",
       }),
@@ -134,8 +132,7 @@ describe("loadRepoEnv", () => {
 
     expect(
       build({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
-        T3CODE_MOBILE_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         T3CODE_RELAY_OBSERVABILITY_ENABLED: "false",
         ...canonical,
         ...leaked,
@@ -159,7 +156,7 @@ describe("loadRepoEnv", () => {
     const buildClean = (baseEnv: Record<string, string>) =>
       loadRepoEnv({ baseEnv, repoRoot: cleanRoot });
 
-    expect(buildClean({ T3CODE_CONNECT_DISTRIBUTION: "fork", ...leaked })).toMatchObject({
+    expect(buildClean({ T3CODE_DISTRIBUTION: "fork", ...leaked })).toMatchObject({
       VITE_RELAY_OTLP_TRACES_URL: "",
       VITE_RELAY_OTLP_TRACES_DATASET: "",
       VITE_RELAY_OTLP_TRACES_TOKEN: "",
@@ -170,21 +167,21 @@ describe("loadRepoEnv", () => {
 
     expect(() =>
       buildClean({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         T3CODE_RELAY_OBSERVABILITY_ENABLED: "maybe",
       }),
     ).toThrow(/T3CODE_RELAY_OBSERVABILITY_ENABLED must be true or false/);
 
     expect(() =>
       buildClean({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         T3CODE_RELAY_OBSERVABILITY_ENABLED: "true",
       }),
     ).toThrow(/Configure fork Connect settings before enabling relay monitoring/);
 
     expect(() =>
       buildClean({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         T3CODE_RELAY_OBSERVABILITY_ENABLED: "true",
         ...canonical,
         T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://traces.fork.example.test/v1/traces",
@@ -195,7 +192,7 @@ describe("loadRepoEnv", () => {
 
     expect(() =>
       buildClean({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         ...canonical,
         T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "http://traces.fork.example.test/v1/traces",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "fork-traces",
@@ -205,7 +202,7 @@ describe("loadRepoEnv", () => {
 
     expect(() =>
       buildClean({
-        T3CODE_MOBILE_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         ...canonical,
         T3CODE_MOBILE_OTLP_TRACES_URL: "https://traces.t3.codes/v1/traces",
         T3CODE_MOBILE_OTLP_TRACES_DATASET: "mobile-traces",
@@ -215,7 +212,7 @@ describe("loadRepoEnv", () => {
 
     expect(
       buildClean({
-        T3CODE_CONNECT_DISTRIBUTION: "fork",
+        T3CODE_DISTRIBUTION: "fork",
         T3CODE_RELAY_OBSERVABILITY_ENABLED: "true",
         ...canonical,
         T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://traces.fork.example.test/v1/traces",

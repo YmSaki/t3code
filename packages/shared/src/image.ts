@@ -1,3 +1,7 @@
+import { GENERIC_MIME_TYPES } from "./mimeType.ts";
+
+export { GENERIC_MIME_TYPES };
+
 // Match PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES so unsupported images remain sendable as files.
 const IMAGE_MIME_TYPE_BY_EXTENSION = new Map([
   ["gif", "image/gif"],
@@ -8,15 +12,6 @@ const IMAGE_MIME_TYPE_BY_EXTENSION = new Map([
 ]);
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set(IMAGE_MIME_TYPE_BY_EXTENSION.values());
-
-export const GENERIC_MIME_TYPES = new Set([
-  "application/octet-stream",
-  "binary/octet-stream",
-  "application/unknown",
-  // macOS and Windows label TypeScript `.ts` files as MPEG transport streams, which browsers can't play.
-  "video/mp2t",
-  "video/vnd.dlna.mpeg-tts",
-]);
 
 export function isSvgAttachment(attachment: {
   readonly name: string;

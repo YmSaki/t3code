@@ -23,7 +23,6 @@ describe("hostedPairing", () => {
   });
 
   it("prefers hash tokens so generated hosted links do not put credentials in search params", () => {
-    vi.stubEnv("VITE_REQUIRE_CONFIGURED_HOSTED_PAIRING", "true");
     vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.t3.codes");
 
     const url = new URL(
@@ -43,7 +42,6 @@ describe("hostedPairing", () => {
   });
 
   it("leaves pairing on the server when a fork has no hosted Web URL", () => {
-    vi.stubEnv("VITE_REQUIRE_CONFIGURED_HOSTED_PAIRING", "true");
     vi.stubEnv("VITE_HOSTED_APP_URL", "");
 
     expect(
