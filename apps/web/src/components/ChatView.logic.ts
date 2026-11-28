@@ -42,6 +42,9 @@ import {
   type ThreadContextRecord,
   type EnvironmentContextRecord,
   type ResponseContextRecord,
+  type MessageDispatchMode,
+  type ThreadEnvMode,
+  UNFINISHED_RUN_STATUSES,
   type ThreadId,
   type ThreadLinkedPullRequest,
   type RunId,
@@ -93,8 +96,6 @@ import {
   reviewCommentContextLabel,
   terminalContextReference,
 } from "../lib/composerContextRecords";
-import type { ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
-import type { DraftThreadEnvMode } from "../composerDraftStore";
 import { type ComposerSubmissionIntent } from "../composer-logic";
 import type { ReviewCommentContext } from "../reviewCommentContext";
 import { derivePhase, type TimelineEntry } from "../session-logic";
@@ -715,11 +716,11 @@ export { readFileAsDataUrl } from "../lib/imageCompression";
 export { resolveSendEnvMode } from "@t3tools/shared/projectSettings";
 
 export function resolveBackgroundDraftWorkspaceOptions(input: {
-  envMode: DraftThreadEnvMode;
+  envMode: ThreadEnvMode;
   branch: string | null;
   startFromOrigin: boolean;
 }): {
-  envMode: DraftThreadEnvMode;
+  envMode: ThreadEnvMode;
   branch: string | null;
   worktreePath: null;
   startFromOrigin: boolean;
@@ -1444,7 +1445,7 @@ export function planComposerTurn(input: {
   readonly sendQueuesBehindSetup: boolean;
   readonly isServerThread: boolean;
   readonly activeMessageCount: number;
-  readonly sendEnvMode: DraftThreadEnvMode;
+  readonly sendEnvMode: ThreadEnvMode;
   readonly worktreePath: string | null;
   readonly activeThreadBranch: string | null;
   /** False for a plain folder that tracks repositories: each starts from its own default branch. */
@@ -1456,7 +1457,7 @@ export function planComposerTurn(input: {
   readonly resumeCompactionTokens: number | null;
   readonly keepFullHistory: boolean;
   readonly phase: SessionPhase;
-  readonly dispatchMode: ComposerDispatchMode;
+  readonly dispatchMode: MessageDispatchMode;
   /** The turn starts a new provider session, so it neither compacts first nor steers. */
   readonly freshContext: boolean;
 }) {
@@ -1627,7 +1628,9 @@ export function presentThreadShellFromProjection(
 }
 
 // Excludes `waiting`: that is post-terminal checkpoint drain, so its agent turn is over.
-const LIVE_RUN_STATUSES = new Set(["queued", "preparing", "starting", "running"]);
+const LIVE_RUN_STATUSES: ReadonlySet<string> = new Set(
+  UNFINISHED_RUN_STATUSES.filter((status) => status !== "waiting"),
+);
 
 /**
  * Background work the provider still runs after an earlier run ended. It

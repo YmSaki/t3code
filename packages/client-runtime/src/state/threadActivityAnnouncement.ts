@@ -1,4 +1,9 @@
-import type { OrchestrationV2Run, OrchestrationV2RunStatus, RunId } from "@t3tools/contracts";
+import {
+  isActiveRunStatus,
+  type OrchestrationV2Run,
+  type OrchestrationV2RunStatus,
+  type RunId,
+} from "@t3tools/contracts";
 import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import { mFallback, msg } from "gt-i18n";
 import type { MFunctionType } from "gt-i18n/types";
@@ -35,13 +40,6 @@ export interface ThreadAnnouncementMemory {
   /** The run shown while idle belongs to the last turn, even if it is still settling. */
   readonly idleRunId: RunId | null;
 }
-
-const ACTIVE_RUN_STATUSES: ReadonlySet<OrchestrationV2RunStatus | null> = new Set([
-  "preparing",
-  "starting",
-  "running",
-  "waiting",
-]);
 
 const STARTING_RUN_STATUSES: ReadonlySet<OrchestrationV2RunStatus | null> = new Set([
   "queued",
@@ -114,9 +112,7 @@ export function nextThreadAnnouncement(
     idle && !STARTING_RUN_STATUSES.has(next.runStatus) ? next.runId : (previous?.idleRunId ?? null);
   // A run doing new work; the run left over from the last turn doesn't count.
   const newRunId =
-    !idle && ACTIVE_RUN_STATUSES.has(next.runStatus) && next.runId !== idleRunId
-      ? next.runId
-      : null;
+    !idle && isActiveRunStatus(next.runStatus) && next.runId !== idleRunId ? next.runId : null;
 
   if (previous === null) {
     return {

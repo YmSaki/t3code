@@ -28,6 +28,7 @@ import {
   type ServerProvider,
   type ScopedProjectRef,
   type ScopedThreadRef,
+  ThreadEnvMode,
   ThreadId,
   SnapShotSource,
 } from "@t3tools/contracts";
@@ -118,8 +119,6 @@ const isResponseContextRecord = Schema.is(ResponseContextRecord);
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
 const COMPOSER_DRAFT_STORAGE_VERSION = 9;
-const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
-export type DraftThreadEnvMode = typeof DraftThreadEnvModeSchema.Type;
 
 export const DraftId = Schema.String.pipe(Schema.brand("DraftId"));
 export type DraftId = typeof DraftId.Type;
@@ -415,7 +414,7 @@ const PersistedDraftThreadState = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
-  envMode: DraftThreadEnvModeSchema,
+  envMode: ThreadEnvMode,
   startFromOrigin: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   checkoutPullRequest: Schema.optionalKey(
     Schema.Struct({ url: Schema.String, branch: Schema.String }),
@@ -515,7 +514,7 @@ export interface DraftSessionState {
   interactionMode: ProviderInteractionMode;
   branch: string | null;
   worktreePath: string | null;
-  envMode: DraftThreadEnvMode;
+  envMode: ThreadEnvMode;
   startFromOrigin: boolean;
   /** Linked to the thread when the draft is sent on this branch. */
   checkoutPullRequest?: DraftCheckoutPullRequest;
@@ -590,7 +589,7 @@ interface ComposerDraftStoreState {
       branch?: string | null;
       worktreePath?: string | null;
       createdAt?: string;
-      envMode?: DraftThreadEnvMode;
+      envMode?: ThreadEnvMode;
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
@@ -607,7 +606,7 @@ interface ComposerDraftStoreState {
       branch?: string | null;
       worktreePath?: string | null;
       createdAt?: string;
-      envMode?: DraftThreadEnvMode;
+      envMode?: ThreadEnvMode;
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
@@ -623,7 +622,7 @@ interface ComposerDraftStoreState {
       worktreePath?: string | null;
       projectRef?: ScopedProjectRef;
       createdAt?: string;
-      envMode?: DraftThreadEnvMode;
+      envMode?: ThreadEnvMode;
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
@@ -1548,7 +1547,7 @@ function normalizePersistedTerminalContextDraft(
 function normalizeDraftThreadEnvMode(
   value: unknown,
   fallbackWorktreePath: string | null,
-): DraftThreadEnvMode {
+): ThreadEnvMode {
   if (value === "local" || value === "worktree") {
     return value;
   }
@@ -1727,7 +1726,7 @@ function createDraftThreadState(
     branch?: string | null;
     worktreePath?: string | null;
     createdAt?: string;
-    envMode?: DraftThreadEnvMode;
+    envMode?: ThreadEnvMode;
     startFromOrigin?: boolean;
     runtimeMode?: RuntimeMode;
     interactionMode?: ProviderInteractionMode;

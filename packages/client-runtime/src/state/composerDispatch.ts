@@ -1,10 +1,10 @@
+import type { MessageDispatchMode } from "@t3tools/contracts";
 import { isClearComposerCommand, parseSideChatCommand } from "@t3tools/shared/composerTrigger";
 import { isUsageLimitsCommand } from "@t3tools/shared/usageLimits";
 
 import { parseCodexFeedbackCommand } from "./threadFeedback.ts";
 
-export type ComposerDispatchMode = "auto" | "queue" | "steer" | "restart";
-export type ActiveTurnComposerAction = Exclude<ComposerDispatchMode, "auto">;
+export type ActiveTurnComposerAction = Exclude<MessageDispatchMode, "auto">;
 
 export function resolveComposerDispatchMode(input: {
   readonly running: boolean;
@@ -12,7 +12,7 @@ export function resolveComposerDispatchMode(input: {
   readonly activeTurnDefault?: ActiveTurnComposerAction;
   /** False while the active turn cannot take steering input, such as an explicit /compact. */
   readonly canSteer?: boolean;
-}): ComposerDispatchMode {
+}): MessageDispatchMode {
   if (!input.running) return "auto";
   if (input.canSteer === false) return "queue";
   const defaultAction = input.activeTurnDefault ?? "steer";

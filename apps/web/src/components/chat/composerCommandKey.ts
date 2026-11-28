@@ -1,9 +1,6 @@
 import type { ChatComposerProps } from "./ChatComposer";
 import { type ComposerCommandItem } from "./ComposerCommandMenu";
-import {
-  type ComposerDispatchMode,
-  resolveComposerDispatchMode,
-} from "@t3tools/client-runtime/state/composer-dispatch";
+import { resolveComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
 import { type ComposerPromptEditorHandle } from "../ComposerPromptEditorTiptap";
 import {
   type ComposerPromptHistoryMentions,
@@ -21,6 +18,7 @@ import { type PendingUserInput } from "../../session-logic";
 import { promptSuggestionToAccept } from "./usePromptSuggestion";
 import {
   type EnvironmentContextRecord,
+  type MessageDispatchMode,
   type PreviewAnnotationPayload,
   type ThreadContextRecord,
 } from "@t3tools/contracts";
@@ -93,7 +91,7 @@ export function composerCommandKeyHandler(input: {
   ) => boolean;
   readonly submitComposer: (
     event: undefined,
-    dispatchMode: ComposerDispatchMode,
+    dispatchMode: MessageDispatchMode,
     submissionIntent: ComposerSubmissionIntent,
   ) => void;
   /** Predicted next prompt that Tab fills into an empty composer; Escape dismisses it. */

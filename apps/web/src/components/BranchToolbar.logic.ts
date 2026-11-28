@@ -4,6 +4,7 @@ import {
   type EnvironmentMachineKind,
   type VcsRef,
   type ProjectId,
+  type ThreadEnvMode,
   type WorktreeSubmodules,
 } from "@t3tools/contracts";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
@@ -39,9 +40,6 @@ export interface EnvironmentOption {
 /** "Add to another machine" stays muted until hovered: easy to find, quieter than the machines. */
 export const ADD_TO_MACHINE_LABEL_CLASS =
   "flex min-w-0 items-center gap-1.5 opacity-55 in-data-highlighted:opacity-100 in-data-popup-open:opacity-100";
-
-export const EnvMode = Schema.Literals(["local", "worktree"]);
-export type EnvMode = typeof EnvMode.Type;
 
 const GENERIC_LOCAL_ENVIRONMENT_LABELS = new Set(["local", "local environment"]);
 
@@ -109,7 +107,7 @@ export function resolveContextStripLabelsCompact(input: {
     : input.neededWidth > input.availableWidth;
 }
 
-export function resolveEnvModeLabel(mode: EnvMode, resolve: MessageResolver = m): string {
+export function resolveEnvModeLabel(mode: ThreadEnvMode, resolve: MessageResolver = m): string {
   return mode === "worktree" ? resolve(msg("New worktree")) : resolve(msg("Current checkout"));
 }
 
@@ -130,7 +128,7 @@ export function resolveCurrentWorkspaceLabel(
 
 export function resolveLockedWorkspaceLabel(
   activeWorktreePath: string | null,
-  effectiveEnvMode: EnvMode,
+  effectiveEnvMode: ThreadEnvMode,
   resolve: MessageResolver = m,
 ): string {
   if (activeWorktreePath)
@@ -190,9 +188,9 @@ export function resolvePreviousWorktreeLabel(
 export function resolveEffectiveEnvMode(input: {
   activeWorktreePath: string | null;
   hasServerThread: boolean;
-  draftThreadEnvMode: EnvMode | undefined;
+  draftThreadEnvMode: ThreadEnvMode | undefined;
   preparingWorktree?: boolean;
-}): EnvMode {
+}): ThreadEnvMode {
   const { activeWorktreePath, hasServerThread, draftThreadEnvMode, preparingWorktree } = input;
   if (!hasServerThread) {
     if (activeWorktreePath) {
@@ -206,8 +204,8 @@ export function resolveEffectiveEnvMode(input: {
 export function resolveDraftEnvModeAfterBranchChange(input: {
   nextWorktreePath: string | null;
   currentWorktreePath: string | null;
-  effectiveEnvMode: EnvMode;
-}): EnvMode {
+  effectiveEnvMode: ThreadEnvMode;
+}): ThreadEnvMode {
   const { nextWorktreePath, currentWorktreePath, effectiveEnvMode } = input;
   if (nextWorktreePath) {
     return "worktree";
@@ -219,7 +217,7 @@ export function resolveDraftEnvModeAfterBranchChange(input: {
 }
 
 export function resolveBranchToolbarValue(input: {
-  envMode: EnvMode;
+  envMode: ThreadEnvMode;
   activeWorktreePath: string | null;
   activeThreadBranch: string | null;
   currentGitBranch: string | null;
@@ -274,7 +272,7 @@ export function resolveDefaultWorktreeBaseBranch(
 export function resolveBranchTriggerLabel(
   input: {
     activeWorktreePath: string | null;
-    effectiveEnvMode: EnvMode;
+    effectiveEnvMode: ThreadEnvMode;
     resolvedActiveBranch: string | null;
     resolvedActiveBranchIsRemote: boolean | null;
     startFromOrigin: boolean;
@@ -308,7 +306,7 @@ export function resolveBranchToolbarPrBranch(input: {
 }
 
 export function resolveLocalCheckoutBranchMismatch(input: {
-  effectiveEnvMode: EnvMode;
+  effectiveEnvMode: ThreadEnvMode;
   activeWorktreePath: string | null;
   activeThreadBranch: string | null;
   currentGitBranch: string | null;
