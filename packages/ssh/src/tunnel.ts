@@ -268,12 +268,11 @@ function applyScriptPlaceholders(
   template: string,
   replacements: Readonly<Record<string, string>>,
 ): string {
-  let result = template;
-  for (const [token, value] of Object.entries(replacements)) {
-    // A replacer function keeps `$$` and other `$` patterns in the value literal.
-    result = result.replaceAll(`@@${token}@@`, () => value);
-  }
-  return result;
+  // One pass, so an inserted value (a mirror URL, say) is never rescanned for placeholders.
+  return template.replace(
+    /@@([A-Z0-9_]+)@@/gu,
+    (match, token: string) => replacements[token] ?? match,
+  );
 }
 
 const REMOTE_PICK_PORT_SCRIPT = `const fs = require("node:fs");
@@ -546,12 +545,13 @@ if ! t3_runtime_ready; then
   fi
   T3_STAGING="$(mktemp -d "$HOME/${DEFAULT_HOME_DIRECTORY}/runtime/versions/.staging-XXXXXX")"
   trap 'rm -rf "$T3_STAGING" "$T3_LOCK"' EXIT
+  # Downloader stderr can echo the signed URL, so drop it and report only its exit status.
   t3_fetch() {
-    if command -v curl >/dev/null 2>&1; then curl -fsSL --connect-timeout 30 --max-time "$3" "$1" -o "$2"
-    elif command -v wget >/dev/null 2>&1; then wget -q --timeout=30 --tries=1 "$1" -O "$2"
+    if command -v curl >/dev/null 2>&1; then T3_FETCH_TOOL=curl; curl -fsSL --connect-timeout 30 --max-time "$3" "$1" -o "$2" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then T3_FETCH_TOOL=wget; wget -q --timeout=30 --tries=1 "$1" -O "$2" 2>/dev/null
     else printf 'Remote host needs curl or wget to download %s.\\n' "$T3_ARCHIVE" >&2; exit 1
     fi || {
-      printf 'Could not download t3 %s from %s. If this host cannot reach it, install t3 %s on it with %s (T3CODE_VERSION=%s; T3CODE_RELEASE_BASE_URL selects a mirror).\\n' "$T3_ARCHIVE_VERSION" "$4" "$T3_ARCHIVE_VERSION" "$T3_INSTALL_SH_DISPLAY_URL" "$T3_ARCHIVE_VERSION" >&2
+      printf 'Could not download t3 %s from %s (%s exited with status %s). If this host cannot reach it, install t3 %s on it with %s (T3CODE_VERSION=%s; T3CODE_RELEASE_BASE_URL selects a mirror).\\n' "$T3_ARCHIVE_VERSION" "$4" "$T3_FETCH_TOOL" "$?" "$T3_ARCHIVE_VERSION" "$T3_INSTALL_SH_DISPLAY_URL" "$T3_ARCHIVE_VERSION" >&2
       exit 1
     }
   }

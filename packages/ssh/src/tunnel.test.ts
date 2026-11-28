@@ -311,6 +311,7 @@ describe("ssh tunnel scripts", () => {
       machine: "x86_64",
       platform: "darwin-x64",
       releaseBaseUrl: undefined,
+      failing: "archive",
       downloads: false,
     },
     {
@@ -319,6 +320,7 @@ describe("ssh tunnel scripts", () => {
       machine: "arm64",
       platform: "darwin-arm64",
       releaseBaseUrl: undefined,
+      failing: "archive",
       downloads: true,
     },
     ...[
@@ -329,11 +331,33 @@ describe("ssh tunnel scripts", () => {
       ...host,
       releaseBaseUrl:
         "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret",
+      failing: "archive",
       downloads: true,
     })),
-  ])(
+    {
+      host: "Linux x64 mirror checksums",
+      system: "Linux",
+      machine: "x86_64",
+      platform: "linux-x64",
+      releaseBaseUrl:
+        "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret",
+      failing: "checksums",
+      downloads: true,
+    },
+    {
+      // A placeholder in an inserted value must not be substituted again and break its quoting.
+      host: "Linux x64 mirror with placeholder text",
+      system: "Linux",
+      machine: "x86_64",
+      platform: "linux-x64",
+      releaseBaseUrl:
+        "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret@@T3_INSTALL_SH_DISPLAY_URL@@",
+      failing: "checksums",
+      downloads: true,
+    },
+  ] as const)(
     "only downloads a release archive the host can run: $host",
-    ({ system, machine, platform, releaseBaseUrl, downloads }) => {
+    ({ system, machine, platform, releaseBaseUrl, failing, downloads }) => {
       const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-ssh-runner-"));
       try {
         const bin = NodePath.join(root, "bin");
@@ -347,7 +371,7 @@ describe("ssh tunnel scripts", () => {
         );
         NodeFS.writeFileSync(
           NodePath.join(bin, "curl"),
-          '#!/bin/sh\nfor arg; do case "$arg" in http*) url="$arg" ;; esac; done\necho "$url" >> "$DOWNLOAD_LOG"\ncase "$url" in *SHA256SUMS|*SHA256SUMS\\?*) for last; do :; done; : > "$last"; exit 0 ;; esac\necho "curl: (6) Could not resolve host" >&2\nexit 6\n',
+          '#!/bin/sh\nfor arg; do case "$arg" in http*) url="$arg" ;; esac; done\necho "$url" >> "$DOWNLOAD_LOG"\ncase "$url" in *"$FAIL_ASSET"*) echo "curl: (22) The requested URL returned error: 403 $url" >&2; exit 22 ;; esac\nfor last; do :; done; : > "$last"\n',
           { mode: 0o755 },
         );
         const runner = NodePath.join(root, "run-t3.sh");
@@ -364,26 +388,31 @@ describe("ssh tunnel scripts", () => {
             HOME: NodePath.join(root, "home"),
             PATH: `${bin}:${process.env.PATH ?? ""}`,
             DOWNLOAD_LOG: downloadLog,
+            FAIL_ASSET: failing === "checksums" ? "/SHA256SUMS" : ".tar.gz",
           },
         });
         assert.notEqual(result.status, 0);
         if (downloads) {
           const release = `/releases/download/v${ARCHIVE.archiveVersion}`;
-          const archive = `${release}/t3-${ARCHIVE.archiveVersion}-${platform}.tar.gz`;
+          const asset =
+            failing === "checksums"
+              ? `${release}/SHA256SUMS`
+              : `${release}/t3-${ARCHIVE.archiveVersion}-${platform}.tar.gz`;
           const mirror = releaseBaseUrl !== undefined;
           const origin = mirror ? "https://mirror.example" : "https://github.com/YmSaki/t3codeJP";
           const credentials = mirror ? "mirror-user:userinfo-secret@" : "";
-          const query = mirror ? "?token=query-secret" : "";
+          const query = mirror ? releaseBaseUrl.slice(releaseBaseUrl.indexOf("?")) : "";
           // The mirror still receives its credentials; the error output never shows them.
           assert.include(
             NodeFS.readFileSync(downloadLog, "utf8"),
-            `${origin.replace("://", `://${credentials}`)}${archive}${query}\n`,
+            `${origin.replace("://", `://${credentials}`)}${asset}${query}\n`,
           );
           // A bare curl error does not tell the user that t3 itself could not be downloaded.
           assert.include(
             result.stderr,
-            `Could not download t3 ${ARCHIVE.archiveVersion} from ${origin}${archive}.`,
+            `Could not download t3 ${ARCHIVE.archiveVersion} from ${origin}${asset} (curl exited with status 22).`,
           );
+          assert.notInclude(result.stderr, "curl: (22)");
           assert.include(result.stderr, `with ${origin}${release}/install.sh (`);
           assert.notInclude(result.stderr, "secret");
         } else {
