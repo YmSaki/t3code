@@ -112,4 +112,26 @@ describe("mergeProviderInstanceEnvironment", () => {
       });
     }),
   );
+
+  it.effect("drops inherited T3CODE_ and VITE_ variables, with or without instance variables", () =>
+    Effect.gen(function* () {
+      const baseEnv = {
+        T3CODE_AUTH_TOKEN: "secret",
+        t3code_home: "/home/.t3",
+        VITE_WS_URL: "ws://localhost",
+        PATH: "/bin",
+      };
+
+      expect(yield* mergeProviderInstanceEnvironment(undefined, baseEnv)).toEqual({
+        PATH: "/bin",
+      });
+      expect(
+        yield* mergeProviderInstanceEnvironment(
+          [{ name: "CUSTOM_VALUE", value: "1", sensitive: false }],
+          baseEnv,
+        ),
+      ).toEqual({ PATH: "/bin", CUSTOM_VALUE: "1" });
+      expect(baseEnv.T3CODE_AUTH_TOKEN).toBe("secret");
+    }),
+  );
 });
