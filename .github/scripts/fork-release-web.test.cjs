@@ -119,7 +119,7 @@ test("fork hosted Web requires usable release assets and independent domains", a
 
 const deploymentUrl = "https://fork-deployment.vercel.app";
 
-function runDeployment(channel, output, status = 0) {
+function runDeployment(channel, output, status = 0, extraEnv = {}) {
   const shell = `vp() {
     if [[ $3 == deploy ]]; then
       shift 3
@@ -148,6 +148,7 @@ function runDeployment(channel, output, status = 0) {
       VITE_HOSTED_APP_CHANNEL: channel,
       MOCK_OUTPUT: output,
       MOCK_STATUS: String(status),
+      ...extraEnv,
     },
   });
   assert.ifError(result.error);
@@ -169,12 +170,31 @@ for (const [channel, domains] of [
     assert.match(result.stderr, /argument:T3CODE_DESKTOP_UPDATE_REPOSITORY=YmSaki\/t3codeJP/);
     assert.match(result.stderr, /argument:T3CODE_CONNECT_DISTRIBUTION=fork/);
     assert.match(result.stderr, /argument:T3CODE_RELAY_URL=https:\/\/relay\.example\.test/);
+    assert.match(result.stderr, /argument:T3CODE_RELAY_OBSERVABILITY_ENABLED=false/);
+    assert.match(result.stderr, /argument:T3CODE_RELAY_CLIENT_OTLP_TRACES_URL=\r?\n/);
     assert.deepEqual(
       result.aliases,
       domains.map((domain) => `${deploymentUrl}:${domain}`),
     );
   });
 }
+
+test("fork hosted Web forwards client tracing settings when monitoring is enabled", () => {
+  const result = runDeployment("latest", deploymentUrl, 0, {
+    T3CODE_RELAY_OBSERVABILITY_ENABLED: "true",
+    T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://traces.fork.example.test/v1/traces",
+    T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "fork-traces",
+    T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "fork-token",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /argument:T3CODE_RELAY_OBSERVABILITY_ENABLED=true/);
+  assert.match(
+    result.stderr,
+    /argument:T3CODE_RELAY_CLIENT_OTLP_TRACES_URL=https:\/\/traces\.fork\.example\.test\/v1\/traces/,
+  );
+  assert.match(result.stderr, /argument:T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET=fork-traces/);
+  assert.match(result.stderr, /argument:T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=fork-token/);
+});
 
 test("fork hosted Web never promotes a failed or ambiguous build", () => {
   for (const [output, status] of [

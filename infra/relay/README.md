@@ -84,10 +84,12 @@ vp run --filter t3code-relay deploy
 ```
 
 The stack provisions the Cloudflare Worker and queues, managed endpoint resources, database
-connectivity, and relay tracing resources. Copy [`infra/relay/.env.example`](./.env.example) to
+connectivity, and optional Axiom tracing resources. Copy [`infra/relay/.env.example`](./.env.example) to
 `infra/relay/.env` and fill in the deployment-specific values before deploying. Alchemy loads that
 file from the relay directory. Runtime secrets include Clerk, APNs, and optional FCM credentials. Set
-`APNS_ENABLED=false` for an Android-only development deployment without Apple credentials. Production adopts
+`APNS_ENABLED=false` for an Android-only development deployment without Apple credentials, and set
+`RELAY_OBSERVABILITY_ENABLED=false` to skip Axiom datasets, alerts, dashboards, and mobile
+telemetry forwarding without Axiom credentials. Production adopts
 the configured API and tunnel DNS zones as retained Cloudflare resources. Personal stages reference
 the production-owned zones.
 
@@ -131,14 +133,14 @@ The repository must define these Actions variables shared by relay deployments:
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `PLANETSCALE_ORGANIZATION`
-- `AXIOM_ORG_ID`
+- `AXIOM_ORG_ID` when relay observability is enabled (upstream default, or fork with `T3CODEJP_RELAY_OBSERVABILITY_ENABLED=true`)
 
 The repository must define these Actions secrets shared by relay deployments:
 
 - `CLOUDFLARE_API_TOKEN`
 - `PLANETSCALE_API_TOKEN_ID`
 - `PLANETSCALE_API_TOKEN`
-- `AXIOM_TOKEN`
+- `AXIOM_TOKEN` when relay observability is enabled
 
 The `production` GitHub environment must define these Actions variables:
 

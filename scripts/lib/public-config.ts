@@ -31,13 +31,45 @@ export function loadRepoEnv({
   const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
   const env = { ...rootEnv, ...localEnv, ...baseEnv };
-  const forkConnect =
-    env.T3CODE_CONNECT_DISTRIBUTION?.trim() === "fork" ||
-    env.T3CODE_MOBILE_DISTRIBUTION?.trim() === "fork";
-  const config = {
-    ...resolvePublicConfig(baseEnv, localEnv, rootEnv),
-    ...(forkConnect ? resolveForkConnectConfig(env) : {}),
-  };
+  const isForkConnect = env.T3CODE_CONNECT_DISTRIBUTION?.trim() === "fork";
+  const isForkMobile = env.T3CODE_MOBILE_DISTRIBUTION?.trim() === "fork";
+  const forkConnect = isForkConnect || isForkMobile;
+  const rawObservabilityEnabled = env.T3CODE_RELAY_OBSERVABILITY_ENABLED?.trim();
+  if (
+    forkConnect &&
+    rawObservabilityEnabled !== undefined &&
+    rawObservabilityEnabled !== "" &&
+    rawObservabilityEnabled !== "true" &&
+    rawObservabilityEnabled !== "false"
+  ) {
+    throw new Error("T3CODE_RELAY_OBSERVABILITY_ENABLED must be true or false.");
+  }
+  const observabilityEnabled = rawObservabilityEnabled === "true";
+
+  let config: T3CodePublicConfig;
+  if (forkConnect) {
+    const connect = resolveForkConnectConfig(env);
+    if (observabilityEnabled && !connect.relayUrl) {
+      throw new Error("Configure fork Connect settings before enabling relay monitoring.");
+    }
+    const clientTracing = resolveForkRelayClientTracingConfig(env, {
+      requireConfigured: isForkConnect && observabilityEnabled,
+    });
+    const mobileTracing = resolveForkMobileTracingConfig(env, {
+      requireConfigured: isForkMobile && observabilityEnabled,
+    });
+    config = {
+      ...connect,
+      mobileOtlpTracesUrl: mobileTracing.tracesUrl,
+      mobileOtlpTracesDataset: mobileTracing.tracesDataset,
+      mobileOtlpTracesToken: mobileTracing.tracesToken,
+      relayClientOtlpTracesUrl: clientTracing.tracesUrl,
+      relayClientOtlpTracesDataset: clientTracing.tracesDataset,
+      relayClientOtlpTracesToken: clientTracing.tracesToken,
+    };
+  } else {
+    config = resolvePublicConfig(baseEnv, localEnv, rootEnv);
+  }
 
   return {
     ...env,
@@ -67,37 +99,37 @@ export function loadRepoEnv({
           VITE_T3CODE_RELAY_URL: config.relayUrl,
         }
       : {}),
-    ...(config.mobileOtlpTracesUrl
+    ...(forkConnect || config.mobileOtlpTracesUrl
       ? {
           T3CODE_MOBILE_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
           EXPO_PUBLIC_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
         }
       : {}),
-    ...(config.mobileOtlpTracesDataset
+    ...(forkConnect || config.mobileOtlpTracesDataset
       ? {
           T3CODE_MOBILE_OTLP_TRACES_DATASET: config.mobileOtlpTracesDataset,
           EXPO_PUBLIC_OTLP_TRACES_DATASET: config.mobileOtlpTracesDataset,
         }
       : {}),
-    ...(config.mobileOtlpTracesToken
+    ...(forkConnect || config.mobileOtlpTracesToken
       ? {
           T3CODE_MOBILE_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
           EXPO_PUBLIC_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
         }
       : {}),
-    ...(config.relayClientOtlpTracesUrl
+    ...(forkConnect || config.relayClientOtlpTracesUrl
       ? {
           T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
           VITE_RELAY_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
         }
       : {}),
-    ...(config.relayClientOtlpTracesDataset
+    ...(forkConnect || config.relayClientOtlpTracesDataset
       ? {
           T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
           VITE_RELAY_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
         }
       : {}),
-    ...(config.relayClientOtlpTracesToken
+    ...(forkConnect || config.relayClientOtlpTracesToken
       ? {
           T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
           VITE_RELAY_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
@@ -155,6 +187,81 @@ export function resolveForkConnectConfig(env: Environment) {
     clerkCliOAuthClientId,
     relayUrl: relayUrl.origin,
   };
+}
+
+interface ForkTracingConfigSpec {
+  readonly urlKey: string;
+  readonly datasetKey: string;
+  readonly tokenKey: string;
+  readonly tokenConfiguredKey?: string;
+  readonly requireConfigured: boolean;
+}
+
+function resolveForkOtlpTracingConfig(
+  env: Environment,
+  { urlKey, datasetKey, tokenKey, tokenConfiguredKey, requireConfigured }: ForkTracingConfigSpec,
+) {
+  if (!requireConfigured && env.T3CODE_RELAY_OBSERVABILITY_ENABLED?.trim() === "false") {
+    return { tracesUrl: "", tracesDataset: "", tracesToken: "" };
+  }
+
+  const tracesUrl = env[urlKey]?.trim() ?? "";
+  const tracesDataset = env[datasetKey]?.trim() ?? "";
+  const tracesToken = env[tokenKey]?.trim() ?? "";
+  const tokenConfigured =
+    Boolean(tracesToken) ||
+    (tokenConfiguredKey !== undefined && env[tokenConfiguredKey]?.trim() === "true");
+
+  if (!requireConfigured && !tracesUrl && !tracesDataset && !tokenConfigured) {
+    return { tracesUrl: "", tracesDataset: "", tracesToken: "" };
+  }
+
+  const missing = [
+    ...(tracesUrl ? [] : [urlKey]),
+    ...(tracesDataset ? [] : [datasetKey]),
+    ...(tokenConfigured ? [] : [tokenKey]),
+  ];
+  if (missing.length > 0) {
+    throw new Error(`Missing fork tracing configuration: ${missing.join(", ")}.`);
+  }
+
+  const parsedUrl = URL.parse(tracesUrl);
+  if (
+    !parsedUrl ||
+    parsedUrl.protocol !== "https:" ||
+    parsedUrl.username ||
+    parsedUrl.password ||
+    isUpstreamConnectHost(parsedUrl.hostname)
+  ) {
+    throw new Error(`${urlKey} must be a non-upstream HTTPS URL.`);
+  }
+
+  return { tracesUrl: parsedUrl.toString(), tracesDataset, tracesToken };
+}
+
+export function resolveForkRelayClientTracingConfig(
+  env: Environment,
+  { requireConfigured = false }: { readonly requireConfigured?: boolean } = {},
+) {
+  return resolveForkOtlpTracingConfig(env, {
+    urlKey: "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL",
+    datasetKey: "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET",
+    tokenKey: "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN",
+    tokenConfiguredKey: "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN_CONFIGURED",
+    requireConfigured,
+  });
+}
+
+function resolveForkMobileTracingConfig(
+  env: Environment,
+  { requireConfigured = false }: { readonly requireConfigured?: boolean } = {},
+) {
+  return resolveForkOtlpTracingConfig(env, {
+    urlKey: "T3CODE_MOBILE_OTLP_TRACES_URL",
+    datasetKey: "T3CODE_MOBILE_OTLP_TRACES_DATASET",
+    tokenKey: "T3CODE_MOBILE_OTLP_TRACES_TOKEN",
+    requireConfigured,
+  });
 }
 
 function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {

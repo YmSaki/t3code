@@ -328,6 +328,15 @@ const make = Effect.gen(function* () {
 
 export const layer = Layer.effect(MobileTelemetry, make);
 
+export const layerDisabled = Layer.succeed(
+  MobileTelemetry,
+  MobileTelemetry.of({
+    handle: Effect.fn("MobileTelemetry.handleDisabled")(() =>
+      Effect.succeed(errorResponse(503, "mobile_telemetry_disabled")),
+    ),
+  }),
+);
+
 /** Raw so the body is read once, capped. */
 export const layerApi = HttpApiBuilder.group(
   RelayApi,
