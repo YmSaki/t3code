@@ -155,16 +155,34 @@ const SIDE_EFFECT = "<side-effect>";
 const IMPORT =
   /\b(?:import|export)\s+(?:type\s+)?((?:(?!\b(?:import|export)\b)(?:[\w$*\s,{}]|\/\/[^\n]*|\/\*[\s\S]*?\*\/))*?)\s*\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']|\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*[,)]/g;
 
-// Imported names, not local aliases; namespace, re-export-all and dynamic imports are "*".
-const symbolsOf = (source: string) => {
-  const clause = source.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
+const COMMENT = /\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
+
+// A namespace import records the members it reads, plus "*" when the namespace is used whole.
+const namespaceSymbols = (name: string, body: string) => {
+  const escaped = name.replace(/\$/g, "\\$");
+  const uses = [
+    ...body.matchAll(new RegExp(`(?<![.\\w$])${escaped}(?![\\w$])(?:\\s*\\.\\s*([\\w$]+))?`, "g")),
+  ];
+  const members = new Set(uses.flatMap((use) => (use[1] === undefined ? [] : [use[1]])));
+  // The import clause itself is one bare use.
+  const whole = uses.filter((use) => use[1] === undefined).length > 1 || members.size === 0;
+  return [...members, ...(whole ? ["*"] : [])];
+};
+
+// Imported names, not local aliases; re-export-all and dynamic imports are "*".
+const symbolsOf = (source: string, body: string, isExport: boolean) => {
+  const clause = source.replace(COMMENT, "");
   const named = /\{([^}]*)\}/.exec(clause)?.[1] ?? "";
   const head = clause
     .replace(/\{[^}]*\}/, "")
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => (part.startsWith("*") ? "*" : "default"));
+    .flatMap((part) => {
+      if (!part.startsWith("*")) return ["default"];
+      const alias = /^\*\s*as\s+([\w$]+)$/.exec(part)?.[1];
+      return isExport || alias === undefined ? ["*"] : namespaceSymbols(alias, body);
+    });
   const names = named
     .split(",")
     .map(
@@ -179,14 +197,32 @@ const symbolsOf = (source: string) => {
   return symbols.length > 0 ? symbols : [SIDE_EFFECT];
 };
 
-const importsOf = (source: string) =>
-  [...source.matchAll(IMPORT)].map((match) =>
+const importsOf = (source: string) => {
+  // Strings go too, so a specifier such as "pkg/Name" is not a use of the namespace `Name`.
+  const body = source.replace(
+    /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+    "",
+  );
+  return [...source.matchAll(IMPORT)].map((match) =>
     match[2] !== undefined
-      ? { specifier: match[2], symbols: symbolsOf(match[1] ?? "") }
+      ? {
+          specifier: match[2],
+          symbols: symbolsOf(match[1] ?? "", body, match[0].startsWith("export")),
+        }
       : match[3] !== undefined
         ? { specifier: match[3], symbols: [SIDE_EFFECT] }
         : { specifier: match[4] ?? "", symbols: ["*"] },
   );
+};
+
+// Astro components import only in their frontmatter and script blocks; the template is markup.
+const codeOf = (file: string, content: string) =>
+  file.endsWith(".astro")
+    ? [
+        /^\s*---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1] ?? "",
+        ...[...content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((match) => match[1]),
+      ].join("\n")
+    : content;
 
 const packageNameOf = (specifier: string) =>
   specifier
@@ -196,7 +232,7 @@ const packageNameOf = (specifier: string) =>
 
 const TEST_FILE =
   /(^|\/)(test|tests|__tests__|fixtures|testFixtures|testkit|integration)\/|\.(test|spec|testkit)\.[cm]?[jt]sx?$|\.test\.py$/;
-const CODE_FILE = /\.[cm]?[jt]sx?$/;
+const CODE_FILE = /\.(?:[cm]?[jt]sx?|astro)$/;
 // Package-root configs and tool or Expo plugin directories; everything else in a package ships.
 const BUILD_FILE = /^[^/]+$|^(scripts|plugins)\//;
 const CLIENT_FILE = /^(apps\/web|apps\/mobile|packages\/client-runtime)\//;
@@ -288,7 +324,7 @@ const sourceImports = (files: ReadonlyMap<string, string>) => {
     if (!from || !CODE_FILE.test(file)) continue;
     const field = phaseOf(from, file);
     if (!field) continue;
-    for (const { specifier, symbols } of importsOf(content)) {
+    for (const { specifier, symbols } of importsOf(codeOf(file, content))) {
       const target = resolveImport(file, specifier);
       if (!target || target.pkg === from) continue;
       used.add(`${from.name} -> ${specifier}`);
@@ -505,7 +541,7 @@ describe("rules", () => {
   });
 
   it("collects imported names from every import form", () => {
-    const source = `import type {\n  A, // why\n  /* x */ type B as C,\n} from "a";\nexport {\n  b,\n} from 'b';\nimport "c";\nconst d = await import("d", { with: { type: "json" } });\nrequire("e");\nimport F, * as G from "f";\nexport * from "g";`;
+    const source = `import type {\n  A, // why\n  /* x */ type B as C,\n} from "a";\nexport {\n  b,\n} from 'b';\nimport "c";\nconst d = await import("d", { with: { type: "json" } });\nrequire("e");\nimport F, * as G from "f";\nexport * from "g";\nimport * as H from "h";\nimport * as I from "i";\nexport * as J from "j";\nH.x(H . y, I, z.H.w); // H.comment`;
     expect(importsOf(source)).toEqual([
       { specifier: "a", symbols: ["A", "B"] },
       { specifier: "b", symbols: ["b"] },
@@ -514,15 +550,49 @@ describe("rules", () => {
       { specifier: "e", symbols: ["*"] },
       { specifier: "f", symbols: ["default", "*"] },
       { specifier: "g", symbols: ["*"] },
+      { specifier: "h", symbols: ["x", "y"] },
+      { specifier: "i", symbols: ["*"] },
+      { specifier: "j", symbols: ["*"] },
     ]);
   });
 
-  it("fails a baselined file that borrows another symbol through the same specifier", () => {
-    const file = "packages/source-control-bitbucket/src/server/BitbucketApi.ts";
-    const specifier = "@t3tools/provider-core/server/collectStreamText";
-    const injected = `import { decodeUtf8 } from "${specifier}";\n${text(file)}`;
+  it("fails a baselined namespace import that reads another member", () => {
+    const file = "packages/effect-codex-app-server/src/_internal/stdio.ts";
+    const specifier = "@t3tools/shared/HostProcess";
+    const injected = `${text(file)}\nexport const other = HostProcess.OtherSymbol;\n`;
     expect(edgeRatchet(withFile(file, injected)).regressions).toEqual([
-      `@t3tools/source-control-bitbucket -> @t3tools/provider-core | ${file} -> ${specifier} | decodeUtf8 (baseline 0, now 1): the source-control domain must not depend on the provider domain`,
+      `effect-codex-app-server -> @t3tools/shared | ${file} -> ${specifier} | OtherSymbol (baseline 0, now 1): protocol must not depend on shared`,
+    ]);
+  });
+
+  it.each([
+    [
+      "frontmatter",
+      `---\nimport { x } from "../../../server/src/ws";\n---\n<p>{x}</p>`,
+      ["app must not depend on app"],
+    ],
+    [
+      "a script block",
+      `---\n---\n<script>\n  import { x } from "@t3tools/web/x";\n</script>`,
+      ["app must not depend on app"],
+    ],
+    [
+      "valid imports, ignoring template text",
+      `---\nimport { x } from "../lib/site";\nimport { y } from "@t3tools/contracts";\n---\n<p>import { z } from "t3/src/ws";</p>`,
+      [],
+    ],
+  ] as const)("scans .astro %s", (_, content, reasons) => {
+    expect([
+      ...sourceImports(withFile("apps/marketing/src/pages/a.astro", content)).violations.values(),
+    ]).toEqual(reasons);
+  });
+
+  it("fails a baselined file that borrows another symbol through the same specifier", () => {
+    const file = "infra/relay/src/http/Api.test.ts";
+    const specifier = "@t3tools/client-runtime/relay";
+    const injected = `import { relayOther } from "${specifier}";\n${text(file)}`;
+    expect(edgeRatchet(withFile(file, injected)).regressions).toEqual([
+      `t3code-relay -> @t3tools/client-runtime | ${file} -> ${specifier} | relayOther (baseline 0, now 1): hosted must not depend on client-runtime`,
     ]);
   });
 

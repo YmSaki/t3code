@@ -12,12 +12,10 @@ export const ALLOWED_CROSS_DOMAIN_IMPORTS: ReadonlySet<string> = new Set([
   "@t3tools/issue-tracker-linear -> @t3tools/source-control-core/server/IssueTrackerHost",
 ]);
 
-const GENERIC_PROVIDER_HELPER =
-  "Borrows a generic helper from provider-core; unrelated domains must not depend on one another for generic helpers (overview.md). Move the helper to its own owner.";
-
 export const PACKAGE_EDGE_BASELINE: ReadonlyArray<{
   readonly edge: string;
-  // "file -> specifier" to the imported names ("*" for namespace or dynamic imports).
+  // "file -> specifier" to the imported names; a namespace import lists the members it reads,
+  // and "*" marks a namespace used whole or a dynamic import.
   readonly imports: Readonly<Record<string, ReadonlyArray<string>>>;
   readonly reason: string;
   readonly tracking?: Tracking;
@@ -27,9 +25,9 @@ export const PACKAGE_EDGE_BASELINE: ReadonlyArray<{
     imports: {
       "packages/effect-codex-app-server/package.json -> @t3tools/shared": ["dependencies"],
       "packages/effect-codex-app-server/src/_internal/stdio.test.ts -> @t3tools/shared/HostProcess":
-        ["*"],
+        ["Platform"],
       "packages/effect-codex-app-server/src/_internal/stdio.ts -> @t3tools/shared/HostProcess": [
-        "*",
+        "Platform",
       ],
     },
     reason: "Standalone protocol libraries must have zero product package dependencies.",
@@ -37,102 +35,13 @@ export const PACKAGE_EDGE_BASELINE: ReadonlyArray<{
   {
     edge: "t3code-relay -> @t3tools/client-runtime",
     imports: {
-      "infra/relay/package.json -> @t3tools/client-runtime": ["dependencies"],
-      "infra/relay/src/environments/EnvironmentConnector.ts -> @t3tools/client-runtime/rpc": [
-        "makeEnvironmentHttpApiClient",
-      ],
+      "infra/relay/package.json -> @t3tools/client-runtime": ["devDependencies"],
       "infra/relay/src/http/Api.test.ts -> @t3tools/client-runtime/relay": [
         "relayProtectedErrorMessage",
       ],
     },
     reason:
       "A hosted service depends on the client runtime; the shared wire pieces belong to contracts or shared.",
-  },
-  {
-    edge: "@t3tools/secret-provider-onepassword -> @t3tools/provider-core",
-    imports: {
-      "packages/secret-provider-onepassword/package.json -> @t3tools/provider-core": [
-        "dependencies",
-      ],
-      "packages/secret-provider-onepassword/src/server/driver.ts -> @t3tools/provider-core/server/snapshotProbe":
-        ["spawnAndCollect"],
-    },
-    reason: GENERIC_PROVIDER_HELPER,
-  },
-  {
-    edge: "@t3tools/source-control-bitbucket -> @t3tools/provider-core",
-    imports: {
-      "packages/source-control-bitbucket/package.json -> @t3tools/provider-core": ["dependencies"],
-      "packages/source-control-bitbucket/src/server/BitbucketApi.ts -> @t3tools/provider-core/server/collectStreamText":
-        ["collectUint8StreamText"],
-    },
-    reason: GENERIC_PROVIDER_HELPER,
-  },
-  {
-    edge: "@t3tools/source-control-cursor-origin -> @t3tools/provider-core",
-    imports: {
-      "packages/source-control-cursor-origin/package.json -> @t3tools/provider-core": [
-        "dependencies",
-      ],
-      "packages/source-control-cursor-origin/src/server/OriginCli.ts -> @t3tools/provider-core/server/collectStreamText":
-        ["collectUint8StreamText"],
-    },
-    reason: GENERIC_PROVIDER_HELPER,
-  },
-  {
-    edge: "@t3tools/source-control-forgejo -> @t3tools/provider-core",
-    imports: {
-      "packages/source-control-forgejo/package.json -> @t3tools/provider-core": ["dependencies"],
-      "packages/source-control-forgejo/src/server/ForgejoCli.ts -> @t3tools/provider-core/server/collectStreamText":
-        ["collectUint8StreamText"],
-    },
-    reason: GENERIC_PROVIDER_HELPER,
-  },
-  {
-    edge: "@t3tools/source-control-gitcafe -> @t3tools/provider-core",
-    imports: {
-      "packages/source-control-gitcafe/package.json -> @t3tools/provider-core": ["dependencies"],
-      "packages/source-control-gitcafe/src/server/GitCafePullRequestProvider.ts -> @t3tools/provider-core/server/randomUuid":
-        ["randomUuidV4"],
-      "packages/source-control-gitcafe/src/server/GitCafeSourceControlProvider.ts -> @t3tools/provider-core/server/randomUuid":
-        ["randomUuidV4"],
-    },
-    reason: GENERIC_PROVIDER_HELPER,
-  },
-  {
-    edge: "@t3tools/source-control-github -> @t3tools/provider-core",
-    imports: {
-      "packages/source-control-github/package.json -> @t3tools/provider-core": ["dependencies"],
-      "packages/source-control-github/src/server/GitHubRest.ts -> @t3tools/provider-core/server/collectStreamText":
-        ["collectUint8StreamText"],
-      "packages/source-control-github/src/server/gitHubGraphQlClient.ts -> @t3tools/provider-core/server/collectStreamText":
-        ["collectUint8StreamChunks", "decodeUtf8"],
-    },
-    reason: GENERIC_PROVIDER_HELPER,
-  },
-  {
-    edge: "@t3tools/desktop -> t3",
-    imports: {
-      "apps/desktop/src/backend/DesktopBackendConfiguration.ts -> ../../../server/package.json": [
-        "default",
-      ],
-      "apps/desktop/src/ssh/DesktopSshEnvironment.ts -> ../../../server/package.json": ["default"],
-    },
-    reason:
-      "The desktop runtime reads the server's package.json by relative path instead of a public interface.",
-  },
-  {
-    edge: "@t3tools/desktop -> @t3tools/scripts",
-    imports: {
-      "apps/desktop/src/compileCache.ts -> ../../../scripts/lib/server-compile-cache.ts": [
-        "enablePreparedServerCache",
-      ],
-      "apps/desktop/src/serverCompileCache.ts -> ../../../scripts/lib/server-compile-cache.ts": [
-        "generatePreparedServerCache",
-      ],
-    },
-    reason:
-      "Desktop runtime code imports support code from scripts/lib (overview.md: support code is never imported by production runtime code).",
   },
   {
     edge: "@t3tools/mobile -> @t3tools/web",
@@ -273,37 +182,20 @@ export const UPSTREAM_REFERENCE_BASELINE: ReadonlyArray<{
     refs: { "t3.codes": 1 },
     reason: BRAND,
   },
-  {
-    file: "apps/server/src/provider/ModelManifest.ts",
-    refs: { "pingdotgg/t3code": 1 },
-    reason: REPOSITORY,
-    tracking: ["#72"],
-  },
   { file: "apps/server/src/push/WebPushStore.ts", refs: { "t3.codes": 1 }, reason: BRAND },
   {
-    file: "apps/server/src/telemetry/AnalyticsService.ts",
-    refs: { "ingest.t3.codes": 1 },
-    reason: HOSTED,
-    tracking: ["#57"],
-  },
-  {
     file: "apps/server/src/triage/TriageService.ts",
-    refs: { "pingdotgg/t3code": 1, "app.t3.codes": 1 },
-    reason: REPOSITORY,
+    refs: { "app.t3.codes": 1 },
+    reason: HOSTED,
     tracking: ["#71"],
   },
   {
     file: "apps/server/src/triage/triagePrompt.ts",
-    refs: { "pingdotgg/t3code": 7, "app.t3.codes": 1 },
-    reason: REPOSITORY,
+    refs: { "app.t3.codes": 1 },
+    reason: HOSTED,
     tracking: ["#71"],
   },
   { file: "apps/web/src/branding.ts", refs: { "t3.codes": 1 }, reason: HOSTED },
-  {
-    file: "apps/web/src/components/desktopUpdate.logic.ts",
-    refs: { "pingdotgg/t3code": 1 },
-    reason: REPOSITORY,
-  },
   {
     file: "apps/web/src/components/settings/MultipleAccountsNote.tsx",
     refs: { "pingdotgg/t3code": 1 },
