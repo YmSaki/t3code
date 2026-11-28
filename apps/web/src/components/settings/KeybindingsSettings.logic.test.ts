@@ -25,11 +25,14 @@ describe("KeybindingsSettings.logic", () => {
       { command: "terminal.toggle", key: "mod+j" },
       { command: "terminal.toggle", key: "mod+k", when: "terminalFocus" },
     ]);
-    const before = buildKeybindingRows(bindings);
-    const after = buildKeybindingRows([
-      ...bindings.slice(1),
-      ...compileResolvedKeybindingsConfig([{ command: "chat.new", key: "mod+shift+n" }]),
-    ]);
+    const before = buildKeybindingRows(bindings, "Linux x86_64");
+    const after = buildKeybindingRows(
+      [
+        ...bindings.slice(1),
+        ...compileResolvedKeybindingsConfig([{ command: "chat.new", key: "mod+shift+n" }]),
+      ],
+      "Linux x86_64",
+    );
 
     expect(after.filter((row) => row.command === "terminal.toggle").map((row) => row.id)).toEqual(
       before.filter((row) => row.command === "terminal.toggle").map((row) => row.id),
@@ -47,7 +50,7 @@ describe("KeybindingsSettings.logic", () => {
       { command: "terminal.toggle", key: "mod+j", when: "terminalFocus" },
       { command: "chat.new", key: "mod+esc", when: "terminalFocus" },
     ]);
-    const rows = buildKeybindingRows(bindings);
+    const rows = buildKeybindingRows(bindings, "Linux x86_64");
     expect(rows.map(({ command, key, when }) => ({ command, key, when }))).toEqual([
       { command: "chat.new", key: "mod+esc", when: "terminalFocus" },
       { command: "terminal.toggle", key: "mod+esc", when: "terminalFocus" },
@@ -56,7 +59,7 @@ describe("KeybindingsSettings.logic", () => {
     ]);
     expect(new Set(rows.map((row) => row.id)).size).toBe(4);
     expect(rows.find((row) => row.command === "chat.new")?.conflicts).toEqual(["Terminal: Toggle"]);
-    expect(buildKeybindingRows(bindings.slice(1)).map((row) => row.id)).toEqual(
+    expect(buildKeybindingRows(bindings.slice(1), "Linux x86_64").map((row) => row.id)).toEqual(
       rows.map((row) => row.id),
     );
   });
@@ -311,53 +314,60 @@ describe("KeybindingsSettings.logic", () => {
   });
 
   it("reports conflicting shortcuts that share an active when context", () => {
-    const rows = buildKeybindingRows([
-      {
-        command: "chat.new",
-        shortcut: {
-          key: "n",
-          modKey: true,
-          metaKey: false,
-          ctrlKey: false,
-          altKey: false,
-          shiftKey: false,
+    const rows = buildKeybindingRows(
+      [
+        {
+          command: "chat.new",
+          shortcut: {
+            key: "n",
+            modKey: true,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: false,
+            shiftKey: false,
+          },
+          whenAst: {
+            type: "not",
+            node: { type: "identifier", name: "terminalFocus" },
+          },
         },
-        whenAst: {
-          type: "not",
-          node: { type: "identifier", name: "terminalFocus" },
+        {
+          command: "chat.newLocal",
+          shortcut: {
+            key: "n",
+            modKey: true,
+            metaKey: false,
+            ctrlKey: false,
+            altKey: false,
+            shiftKey: false,
+          },
+          whenAst: {
+            type: "not",
+            node: { type: "identifier", name: "terminalFocus" },
+          },
         },
-      },
-      {
-        command: "chat.newLocal",
-        shortcut: {
-          key: "n",
-          modKey: true,
-          metaKey: false,
-          ctrlKey: false,
-          altKey: false,
-          shiftKey: false,
-        },
-        whenAst: {
-          type: "not",
-          node: { type: "identifier", name: "terminalFocus" },
-        },
-      },
-    ] satisfies ResolvedKeybindingsConfig);
+      ] satisfies ResolvedKeybindingsConfig,
+      "Linux x86_64",
+    );
 
     expect(rows[0]?.conflicts).toEqual(["Chat: New Local"]);
-    const disabledRows = buildKeybindingRows([
-      rows[0]!.binding,
-      { ...rows[1]!.binding, whenAst: { type: "identifier", name: "false" } },
-    ]);
+    const disabledRows = buildKeybindingRows(
+      [rows[0]!.binding, { ...rows[1]!.binding, whenAst: { type: "identifier", name: "false" } }],
+      "Linux x86_64",
+    );
     expect(disabledRows.find((row) => row.when === "false")?.previewLabels).toEqual([]);
     expect(disabledRows.map((row) => row.conflicts)).toEqual([[], []]);
 
     expect(
-      keybindingConflictLabels(rows, {
-        rowId: rows[0]?.id ?? "",
-        key: "mod+n",
-        when: "",
-      }),
+      keybindingConflictLabels(
+        rows,
+        {
+          rowId: rows[0]?.id ?? "",
+          key: "mod+n",
+          when: "",
+        },
+        "Linux x86_64",
+      ),
     ).toEqual(["Chat: New Local"]);
   });
 

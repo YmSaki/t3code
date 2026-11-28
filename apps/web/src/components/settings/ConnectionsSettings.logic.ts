@@ -248,6 +248,7 @@ export function parseManualDesktopSshTarget(
 
 export function parsePairingUrlFields(
   input: string,
+  currentOrigin: string,
 ): { readonly host: string; readonly pairingCode: string } | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
@@ -257,7 +258,7 @@ export function parsePairingUrlFields(
       /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
         ? trimmed
         : `https://${trimmed}`;
-    const url = new URL(urlLikeInput, window.location.origin);
+    const url = new URL(urlLikeInput, currentOrigin);
     const hostedPairingRequest = readHostedPairingRequest(url);
     if (hostedPairingRequest) {
       return {
@@ -282,12 +283,13 @@ export function parseRemotePairingFields(
     readonly host: string;
     readonly pairingCode: string;
   },
+  currentOrigin: string,
   resolve: MessageResolver = m,
 ): {
   readonly host: string;
   readonly pairingCode: string;
 } {
-  const parsedPairingUrl = parsePairingUrlFields(input.host);
+  const parsedPairingUrl = parsePairingUrlFields(input.host, currentOrigin);
   if (parsedPairingUrl) return parsedPairingUrl;
 
   const host = input.host.trim();
@@ -451,7 +453,7 @@ export function resolveAdvertisedEndpointPairingUrl(
 
 export function resolveCurrentOriginPairingUrl(
   credential: string,
-  currentHref: string = window.location.href,
+  currentHref: string,
 ): string | null {
   const url = new URL("/pair", currentHref);
   // The packaged desktop window loads from t3code://app, which no other device can open.

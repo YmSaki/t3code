@@ -168,7 +168,9 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   const [qrEndpointId, setQrEndpointId] = useState<string | null>(null);
   const qrPanelId = useId();
 
-  const currentOriginPairingUrl = credential ? resolveCurrentOriginPairingUrl(credential) : null;
+  const currentOriginPairingUrl = credential
+    ? resolveCurrentOriginPairingUrl(credential, window.location.href)
+    : null;
   const hostedPairingUrl =
     credential && endpointUrl != null && endpointUrl !== ""
       ? resolveHostedPairingUrl(endpointUrl, credential)

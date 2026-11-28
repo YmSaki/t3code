@@ -14,6 +14,7 @@ import * as Cause from "effect/Cause";
 import { useContext, useRef, useState } from "react";
 import { T, useGT, useMessages } from "gt-react";
 
+import { isElectron } from "../../env";
 import { useClientSettings, updateClientSettings } from "../../hooks/useSettings";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";
 import {
@@ -140,7 +141,7 @@ export function SnapShotSettings() {
       ? latestShortcutCheck
       : { status: "idle", availability: null };
   const shortcutCheckIdRef = useRef(0);
-  const unavailableMessage = snapShotUnavailableMessage(Boolean(bridge), messages);
+  const unavailableMessage = snapShotUnavailableMessage(Boolean(bridge), isElectron, messages);
   const captureAvailable = Boolean(bridge) && state !== null && state.mode !== "unavailable";
   const feedbackUnavailable = snapShotFeedbackUnavailableMessage(state, messages);
   const managedShortcut = state?.linuxBackend === "niri" || state?.linuxBackend === "hyprland";

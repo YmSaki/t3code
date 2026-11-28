@@ -15,6 +15,7 @@ import {
   type EditorChoice,
   type EditorDescriptor,
   choiceFromPreset,
+  createEditorKeySource,
   definitionFromDraft,
   descriptorFromPreset,
   descriptorsFromCapabilities,
@@ -48,7 +49,8 @@ export function CustomModelEditor({
 }: CustomModelEditorProps) {
   const gt = useGT();
   const m = useMessages();
-  const [draft, setDraft] = useState<CustomModelDraft>(() => draftFromDefinition(entry));
+  const [newKey] = useState(createEditorKeySource);
+  const [draft, setDraft] = useState<CustomModelDraft>(() => draftFromDefinition(entry, newKey));
   const [error, setError] = useState<string | null>(null);
   const updateDraft = (next: SetStateAction<CustomModelDraft>) => {
     onDraftChange();
@@ -120,7 +122,7 @@ export function CustomModelEditor({
       id: preset.id,
       label: preset.label,
       type: preset.type,
-      choices: (preset.choices ?? []).map(choiceFromPreset),
+      choices: (preset.choices ?? []).map((choice) => choiceFromPreset(choice, newKey)),
       currentBooleanValue: undefined,
       description: undefined,
     });
@@ -133,7 +135,7 @@ export function CustomModelEditor({
     setError(null);
     updateDraft((current) => ({
       ...current,
-      descriptors: descriptorsFromCapabilities(model.capabilities, driverKind),
+      descriptors: descriptorsFromCapabilities(model.capabilities, driverKind, newKey),
     }));
   };
 
@@ -292,7 +294,7 @@ export function CustomModelEditor({
             className="-ml-2 self-start"
             onClick={() =>
               updateDescriptor(descriptor.key, {
-                choices: [...descriptor.choices, emptyEditorChoice()],
+                choices: [...descriptor.choices, emptyEditorChoice(newKey)],
               })
             }
           >
@@ -374,7 +376,7 @@ export function CustomModelEditor({
                 size="xs"
                 variant="ghost-muted"
                 className={cn("-ml-2 first:ml-0")}
-                onClick={() => addDescriptor(descriptorFromPreset(preset))}
+                onClick={() => addDescriptor(descriptorFromPreset(preset, newKey))}
               >
                 <PlusIcon className="size-3" />
                 {preset.label}
@@ -384,7 +386,7 @@ export function CustomModelEditor({
             type="button"
             size="xs"
             variant="ghost-muted"
-            onClick={() => addDescriptor(emptyEditorDescriptor())}
+            onClick={() => addDescriptor(emptyEditorDescriptor(newKey))}
           >
             <PlusIcon className="size-3" />
             <T>Custom option</T>

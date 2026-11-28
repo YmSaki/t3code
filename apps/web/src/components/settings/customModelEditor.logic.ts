@@ -135,41 +135,53 @@ export const DESCRIPTOR_PRESETS_BY_KIND: Partial<
   ],
 };
 
-let nextKey = 0;
-function newEditorKey(): string {
-  nextKey += 1;
-  return `k${nextKey}`;
-}
-
-export function choiceFromPreset(choice: {
-  id: string;
-  label: string;
-  isDefault?: boolean;
-}): EditorChoice {
-  return { key: newEditorKey(), id: choice.id, label: choice.label, isDefault: !!choice.isDefault };
-}
-
-export function descriptorFromPreset(preset: DescriptorPreset): EditorDescriptor {
-  return {
-    key: newEditorKey(),
-    type: preset.type,
-    id: preset.id,
-    label: preset.label,
-    choices: (preset.choices ?? []).map(choiceFromPreset),
+/** Keys only need to be unique within one editor draft, so each editor owns its own source. */
+export function createEditorKeySource(): () => string {
+  let nextKey = 0;
+  return () => {
+    nextKey += 1;
+    return `k${nextKey}`;
   };
 }
 
-export function emptyEditorDescriptor(): EditorDescriptor {
-  return { key: newEditorKey(), type: "select", id: "", label: "", choices: [] };
+export function choiceFromPreset(
+  choice: {
+    id: string;
+    label: string;
+    isDefault?: boolean;
+  },
+  newKey: () => string,
+): EditorChoice {
+  return { key: newKey(), id: choice.id, label: choice.label, isDefault: !!choice.isDefault };
 }
 
-export function emptyEditorChoice(): EditorChoice {
-  return { key: newEditorKey(), id: "", label: "", isDefault: false };
+export function descriptorFromPreset(
+  preset: DescriptorPreset,
+  newKey: () => string,
+): EditorDescriptor {
+  return {
+    key: newKey(),
+    type: preset.type,
+    id: preset.id,
+    label: preset.label,
+    choices: (preset.choices ?? []).map((choice) => choiceFromPreset(choice, newKey)),
+  };
+}
+
+export function emptyEditorDescriptor(newKey: () => string): EditorDescriptor {
+  return { key: newKey(), type: "select", id: "", label: "", choices: [] };
+}
+
+export function emptyEditorChoice(newKey: () => string): EditorChoice {
+  return { key: newKey(), id: "", label: "", isDefault: false };
 }
 
 /** Custom entries lack runtime profiles for prompt-injected choices, so do not store them as ordinary
  * options. */
-function descriptorToEditor(descriptor: ProviderOptionDescriptor): EditorDescriptor {
+function descriptorToEditor(
+  descriptor: ProviderOptionDescriptor,
+  newKey: () => string,
+): EditorDescriptor {
   const promptInjected = new Set(
     descriptor.type === "select" ? (descriptor.promptInjectedValues ?? []) : [],
   );
@@ -181,7 +193,7 @@ function descriptorToEditor(descriptor: ProviderOptionDescriptor): EditorDescrip
     choices.find((option) => option.id === descriptor.currentValue) ??
     choices.find((option) => option.isDefault);
   return {
-    key: newEditorKey(),
+    key: newKey(),
     type: descriptor.type,
     id: descriptor.id,
     label: descriptor.label,
@@ -190,7 +202,7 @@ function descriptorToEditor(descriptor: ProviderOptionDescriptor): EditorDescrip
       ? { currentBooleanValue: descriptor.currentValue }
       : {}),
     choices: choices.map((option) => ({
-      key: newEditorKey(),
+      key: newKey(),
       id: option.id,
       label: option.label,
       ...(option.description !== undefined ? { description: option.description } : {}),
@@ -199,11 +211,16 @@ function descriptorToEditor(descriptor: ProviderOptionDescriptor): EditorDescrip
   };
 }
 
-export function draftFromDefinition(entry: CustomModelDefinition): CustomModelDraft {
+export function draftFromDefinition(
+  entry: CustomModelDefinition,
+  newKey: () => string,
+): CustomModelDraft {
   return {
     slug: entry.slug,
     name: entry.name === entry.slug ? "" : entry.name,
-    descriptors: (entry.capabilities?.optionDescriptors ?? []).map(descriptorToEditor),
+    descriptors: (entry.capabilities?.optionDescriptors ?? []).map((descriptor) =>
+      descriptorToEditor(descriptor, newKey),
+    ),
   };
 }
 
@@ -211,10 +228,11 @@ export function draftFromDefinition(entry: CustomModelDefinition): CustomModelDr
 export function descriptorsFromCapabilities(
   capabilities: ModelCapabilities | null | undefined,
   driverKind: ProviderDriverKind | null,
+  newKey: () => string,
 ): EditorDescriptor[] {
   return (capabilities?.optionDescriptors ?? [])
     .filter((descriptor) => driverKind !== "claudeAgent" || descriptor.id !== "contextWindow")
-    .map(descriptorToEditor);
+    .map((descriptor) => descriptorToEditor(descriptor, newKey));
 }
 
 export function validateDraft(
