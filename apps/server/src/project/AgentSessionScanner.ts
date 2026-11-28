@@ -33,6 +33,7 @@ import { splitsSurrogatePair } from "@t3tools/shared/assistantCitations";
 import { isBareGitConfig, parseOriginUrlFromGitConfig } from "@t3tools/shared/git";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
+import { DEFAULT_HOME_DIRECTORY } from "@t3tools/shared/productIdentity";
 import { repositoryPathFromRemoteUrl } from "@t3tools/source-control-core/server/SourceControlProvider";
 
 import * as ServerConfig from "../config.ts";
@@ -827,7 +828,7 @@ function isT3ManagedWorktree(
   const normalized = normalizeForWorktreeMatch(candidatePath, caseFold);
   return (
     normalized.startsWith(normalizeForWorktreeMatch(worktreesDir, caseFold)) ||
-    normalized.includes("/.t3/worktrees/")
+    normalized.includes(`/${DEFAULT_HOME_DIRECTORY}/worktrees/`)
   );
 }
 
