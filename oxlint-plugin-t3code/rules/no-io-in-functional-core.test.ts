@@ -245,6 +245,30 @@ describe(RULE_NAME, () => {
     );
 
     core.invalid(
+      "reports globals destructured from globalThis with string-literal computed keys",
+      `
+        const { ["localStorage"]: storage } = globalThis;
+        const { ["setTimeout"]: delay } = globalThis;
+        export const read = () => storage.getItem("key");
+        export const wait = () => delay(() => undefined, 1);
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 2),
+    );
+
+    core.invalid(
+      "reports globals whose names are reused only by type declarations",
+      `
+        type Date = string;
+        interface performance {}
+        type globalThis = string;
+        export const now = () => Date.now();
+        export const elapsed = () => performance.now();
+        export const id = () => globalThis.crypto.randomUUID();
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 3),
+    );
+
+    core.invalid(
       "reports module-level let and var",
       `
         let counter = 0;

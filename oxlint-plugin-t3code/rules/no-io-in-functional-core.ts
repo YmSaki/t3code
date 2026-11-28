@@ -70,6 +70,10 @@ const stringLiteralValue = (node: unknown): Option.Option<string> =>
       : Option.none(),
   );
 
+// TS-ESLint tags type aliases, interfaces, and type parameters "Type"; they never shadow a value.
+const isValueVariable = (variable: Variable) =>
+  variable.defs.length === 0 || variable.defs.some((def) => (def.type as string) !== "Type");
+
 const isTypeQuery = (identifier: ESTree.Node) => {
   let parent = identifier.parent;
   while (parent?.type === "TSQualifiedName") parent = parent.parent;
@@ -93,7 +97,7 @@ export default defineRule({
       let scope: Scope | null = context.sourceCode.getScope(identifier);
       for (; scope !== null; scope = scope.upper) {
         const variable = scope.set.get(identifier.name);
-        if (variable !== undefined) return Option.some(variable);
+        if (variable !== undefined && isValueVariable(variable)) return Option.some(variable);
       }
       return Option.none();
     };
@@ -124,7 +128,8 @@ export default defineRule({
         return Option.none();
       const binding = def.name.parent;
       const property = binding?.type === "AssignmentPattern" ? binding.parent : binding;
-      if (property?.type !== "Property" || property.parent !== def.node.id || property.computed)
+      if (property?.type !== "Property" || property.parent !== def.node.id) return Option.none();
+      if (property.computed && Option.isNone(stringLiteralValue(property.key)))
         return Option.none();
       return getPropertyName(property.key);
     };
