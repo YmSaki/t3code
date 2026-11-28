@@ -16,7 +16,8 @@ import {
   formatComposerContextHref,
   parseComposerContextHref,
 } from "@t3tools/shared/composerContextReferences";
-import { hasThreadLinks, parseThreadLinkHref } from "@t3tools/shared/threadLinks";
+import { hasThreadLinks, parseThreadLinkHref, scanThreadLinks } from "@t3tools/shared/threadLinks";
+import { mobileThreadLinkMatcher } from "./hostedApp";
 import { EXTENSIONLESS_FILE_NAMES } from "@t3tools/shared/markdownLinks";
 
 export function enrichedContextLinkPresentation(
@@ -41,7 +42,7 @@ export function enrichedContextLinkPresentation(
 export function enrichedThreadLinkPresentation(
   href: string,
 ): { accent?: string; icon: ContextChipIconRef } | undefined {
-  if (!parseThreadLinkHref(href)) return undefined;
+  if (!parseThreadLinkHref(href, mobileThreadLinkMatcher)) return undefined;
   const presentation = contextChipPresentation("thread");
   return {
     ...(presentation.accent ? { accent: presentation.accent } : {}),
@@ -62,17 +63,14 @@ export function threadChipTargets(
   records?: ReadonlyArray<ComposerContextRecord>,
 ): ReadonlyArray<ThreadChipTarget> {
   const targets = new Map<string, ThreadChipTarget>();
-  if (hasThreadLinks(markdown)) {
-    for (const [, href = ""] of markdown.matchAll(/\]\(<?(t3-thread:\/\/v[12]\/[^\s>)]+)>?\)/g)) {
-      const link = parseThreadLinkHref(href);
-      if (link) {
-        targets.set(href, {
-          href,
-          environmentId: link.environmentId ?? environmentId,
-          threadId: link.threadId,
-          link: true,
-        });
-      }
+  if (hasThreadLinks(markdown, mobileThreadLinkMatcher)) {
+    for (const { href, link } of scanThreadLinks(markdown, mobileThreadLinkMatcher)) {
+      targets.set(href, {
+        href,
+        environmentId: link.environmentId ?? environmentId,
+        threadId: link.threadId,
+        link: true,
+      });
     }
   }
   for (const record of records ?? []) {

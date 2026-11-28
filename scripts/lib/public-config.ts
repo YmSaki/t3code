@@ -4,6 +4,8 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
+import { resolveProductConfig } from "@t3tools/shared/productConfig";
+
 export interface T3CodePublicConfig {
   readonly clerkPublishableKey: string | undefined;
   readonly clerkJwtTemplate: string | undefined;
@@ -30,33 +32,51 @@ export function loadRepoEnv({
 } = {}): Record<string, string | undefined> {
   const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
-  const config = resolvePublicConfig(baseEnv, localEnv, rootEnv);
+  const env = { ...rootEnv, ...localEnv, ...baseEnv };
+  const { connect } = resolveProductConfig(env);
+  const forkConnect = connect.kind !== "unmanaged";
+  const config = {
+    ...resolvePublicConfig(baseEnv, localEnv, rootEnv),
+    ...(connect.kind === "enabled"
+      ? {
+          clerkPublishableKey: connect.clerkPublishableKey,
+          clerkJwtTemplate: connect.clerkJwtTemplate,
+          clerkCliOAuthClientId: connect.clerkCliOAuthClientId,
+          relayUrl: connect.relayUrl,
+        }
+      : connect.kind === "disabled"
+        ? {
+            clerkPublishableKey: "",
+            clerkJwtTemplate: "",
+            clerkCliOAuthClientId: "",
+            relayUrl: "",
+          }
+        : {}),
+  };
 
   return {
-    ...rootEnv,
-    ...localEnv,
-    ...baseEnv,
-    ...(config.clerkPublishableKey
+    ...env,
+    ...(forkConnect || config.clerkPublishableKey
       ? {
           T3CODE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
           VITE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
           EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
         }
       : {}),
-    ...(config.clerkJwtTemplate
+    ...(forkConnect || config.clerkJwtTemplate
       ? {
           T3CODE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
           VITE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
           EXPO_PUBLIC_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
         }
       : {}),
-    ...(config.clerkCliOAuthClientId
+    ...(forkConnect || config.clerkCliOAuthClientId
       ? {
           T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
           VITE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
         }
       : {}),
-    ...(config.relayUrl
+    ...(forkConnect || config.relayUrl
       ? {
           T3CODE_RELAY_URL: config.relayUrl,
           VITE_T3CODE_RELAY_URL: config.relayUrl,

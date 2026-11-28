@@ -206,8 +206,6 @@ test("the production signing gate rejects incomplete Apple and Azure configurati
       "APPLE_API_KEY_ID",
       "APPLE_API_ISSUER",
       "APPLE_TEAM_ID",
-      "MACOS_PROVISIONING_PROFILE",
-      "CLERK_PASSKEY_RP_DOMAINS",
       "AZURE_TENANT_ID",
       "AZURE_CLIENT_ID",
       "AZURE_CLIENT_SECRET",
@@ -218,6 +216,21 @@ test("the production signing gate rejects incomplete Apple and Azure configurati
     ].map((key) => [key, "fixture-value"]),
   );
   assert.doesNotThrow(() => assertForkReleaseSigningConfiguration(config));
+  for (const passkeys of [
+    { T3CODE_CLERK_PUBLISHABLE_KEY: "fork-publishable-key" },
+    { CLERK_PASSKEY_RP_DOMAINS: "clerk.fork.example.test" },
+  ]) {
+    assert.throws(() => assertForkReleaseSigningConfiguration({ ...config, ...passkeys }), {
+      message: /missing fork release signing configuration: MACOS_PROVISIONING_PROFILE/i,
+    });
+    assert.doesNotThrow(() =>
+      assertForkReleaseSigningConfiguration({
+        ...config,
+        ...passkeys,
+        MACOS_PROVISIONING_PROFILE: "fixture-value",
+      }),
+    );
+  }
   assert.throws(() => assertForkReleaseSigningConfiguration({}), {
     message: `Missing fork release signing configuration: ${Object.keys(config).join(", ")}.`,
   });

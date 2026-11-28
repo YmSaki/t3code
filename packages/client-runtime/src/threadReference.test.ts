@@ -78,7 +78,11 @@ describe("resolveThreadReferenceCopyTarget", () => {
   });
 
   it("copies a thread chip that pastes back as the same thread on its machine", () => {
-    const target = resolveThreadReferenceCopyTarget({ ...thread, linkedPullRequestUrl: null });
+    const target = resolveThreadReferenceCopyTarget({
+      ...thread,
+      linkedPullRequestUrl: null,
+      hostedAppUrl: "https://app.t3.codes",
+    });
 
     expect(target).toMatchObject({
       kind: "thread",
@@ -112,4 +116,13 @@ describe("resolveThreadReferenceCopyTarget", () => {
         ?.value,
     ).toBe("https://preview.t3.codes/threads/env-1/thread-1");
   });
+});
+
+it("copies the in-app thread link when the product has no hosted Web", () => {
+  const target = resolveThreadReferenceCopyTarget({
+    threadRef: { environmentId: EnvironmentId.make("env-1"), threadId: ThreadId.make("thread-1") },
+    title: "Fix",
+    hostedAppUrl: null,
+  });
+  expect(target!.value).toBe("t3-thread://v2/env-1/thread-1");
 });

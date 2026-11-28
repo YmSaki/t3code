@@ -10,8 +10,8 @@ import org.json.JSONArray
 
 internal object T3ComposerClipboard {
   // Pasted thread links become chips in JS; packages/shared/src/threadLinks.ts parses them.
-  fun hasThreadLink(text: String): Boolean =
-    text.contains("t3-thread://v2/") || text.contains("https://app.t3.codes/threads/")
+  fun hasThreadLink(text: String, hostedPrefixes: List<String>): Boolean =
+    text.contains("t3-thread://v2/") || hostedPrefixes.any { text.contains(it) }
 
   fun write(context: Context, text: String, fragment: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -83,6 +83,9 @@ class T3ComposerEditorModule : Module() {
       }
       Prop("clipboardFragment") { view: T3ComposerEditorView, fragment: String ->
         view.setClipboardFragment(fragment)
+      }
+      Prop("hostedThreadLinkPrefixes") { view: T3ComposerEditorView, prefixes: List<String> ->
+        view.setHostedThreadLinkPrefixes(prefixes)
       }
       Prop("placeholder") { view: T3ComposerEditorView, placeholder: String ->
         view.setPlaceholder(placeholder)

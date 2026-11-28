@@ -1,4 +1,5 @@
 import AgentActivity, { type AgentActivityProps } from "../../widgets/AgentActivity";
+import { mobileAppScheme } from "../../lib/appScheme";
 
 export function dismissEndedAgentLiveActivities() {
   AgentActivity.dismissEnded();
@@ -9,5 +10,5 @@ export function getAgentLiveActivities() {
 }
 
 export function startAgentLiveActivity(props: AgentActivityProps, staleDate?: Date) {
-  return AgentActivity.start(props, undefined, staleDate);
+  return AgentActivity.start({ ...props, appScheme: mobileAppScheme() }, undefined, staleDate);
 }

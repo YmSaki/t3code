@@ -38,7 +38,7 @@ import {
   MissingMacPasskeyProvisioningProfileError,
   packWindowsServerAsar,
   preflightWindowsDesktopBuild,
-  renderMacPasskeyEntitlements,
+  renderMacSigningEntitlements,
   resolveMacFileExclusions,
   resolveMacWebAuthnEntitlements,
   resolveMacPasskeySigningConfiguration,
@@ -601,6 +601,28 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         (mac.mac as { protocols: Array<{ schemes: string[] }> }).protocols[0]?.schemes,
         ["t3codejp"],
       );
+    }),
+  );
+
+  it.effect("keeps the bundled WSL archive outside the compressed NSIS payload", () =>
+    Effect.gen(function* () {
+      const createWindowsConfig = (wslRuntimeBundled: boolean) =>
+        createBuildConfig(
+          "win",
+          "nsis",
+          "1.0.0",
+          false,
+          false,
+          undefined,
+          undefined,
+          wslRuntimeBundled,
+        );
+      const bundled = yield* createWindowsConfig(true);
+      const unbundled = yield* createWindowsConfig(false);
+      assert.propertyVal(bundled, "compression", "store");
+      assert.notProperty(unbundled, "compression");
+      assert.deepNestedPropertyVal(bundled, "nsis.preCompressedFileExtensions", [".tar.gz"]);
+      assert.notNestedProperty(unbundled, "nsis.preCompressedFileExtensions");
     }),
   );
 
@@ -1696,6 +1718,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
   });
 
+  it("prepares Developer ID signing with only the base entitlements when no profile is configured", () => {
+    const configuration = resolveMacPasskeySigningConfiguration({
+      T3CODE_APPLE_TEAM_ID: "ABC1234567",
+    });
+    assert.isUndefined(configuration);
+
+    const entitlements = renderMacSigningEntitlements(configuration, undefined);
+    assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
+    assert.include(entitlements, "<key>com.apple.security.device.camera</key>");
+    assert.include(entitlements, "<key>com.apple.security.device.audio-input</key>");
+    assert.notInclude(entitlements, "com.apple.application-identifier");
+    assert.notInclude(entitlements, "com.apple.developer.associated-domains");
+    assert.notInclude(entitlements, "keychain-access-groups");
+    assert.notInclude(entitlements, "com.apple.developer.web-browser.public-key-credential");
+  });
+
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {
     const configuration = resolveMacPasskeySigningConfiguration({
       T3CODE_APPLE_TEAM_ID: "ABC1234567",
@@ -1703,7 +1741,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       T3CODE_CLERK_PASSKEY_RP_DOMAINS:
         " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
     });
-    const entitlements = renderMacPasskeyEntitlements(configuration, {
+    assert.isDefined(configuration);
+    const entitlements = renderMacSigningEntitlements(configuration, {
       touchIdKeychainAccessGroup: undefined,
       browserPasskeys: false,
     });
@@ -1723,7 +1762,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("grants in-app browser passkey entitlements only when the provisioning profile does", () => {
-    const configuration = { appId: "com.t3tools.t3code", teamId: "ABC1234567" };
+    const configuration = resolveMacPasskeySigningConfiguration({
+      T3CODE_APPLE_TEAM_ID: "ABC1234567",
+      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+    });
+    assert.isDefined(configuration);
     const profile = (entitlements: string, outside = "") =>
       `0\x82\x1f\x9a\x06\t*\x86H<?xml version="1.0"?><plist version="1.0"><dict>${outside}<key>Entitlements</key><dict>${entitlements}</dict></dict></plist>\x00\x01`;
     const teamWildcardGroups = `<key>keychain-access-groups</key>
@@ -1765,13 +1808,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         configuration,
       ),
       {
-        touchIdKeychainAccessGroup: "ABC1234567.com.t3tools.t3code.webauthn",
+        touchIdKeychainAccessGroup: "ABC1234567.io.github.ymsaki.t3codejp.webauthn",
         browserPasskeys: true,
       },
     );
 
-    const entitlements = renderMacPasskeyEntitlements(
-      { ...configuration, rpDomains: ["clerk.example.com"], provisioningProfilePath: "" },
+    const entitlements = renderMacSigningEntitlements(
+      configuration,
       resolveMacWebAuthnEntitlements(
         profile(
           `${teamWildcardGroups}<key>com.apple.developer.web-browser.public-key-credential</key><true/>`,
@@ -1781,12 +1824,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     );
     assert.match(
       entitlements,
-      /<key>keychain-access-groups<\/key>\s*<array>\s*<string>ABC1234567\.com\.t3tools\.t3code\.webauthn<\/string>\s*<\/array>/u,
+      /<key>keychain-access-groups<\/key>\s*<array>\s*<string>ABC1234567\.io\.github\.ymsaki\.t3codejp\.webauthn<\/string>\s*<\/array>/u,
     );
     assert.match(
       entitlements,
       /<key>com\.apple\.developer\.web-browser\.public-key-credential<\/key>\s*<true\/>/u,
     );
+    assert.notInclude(entitlements, "com.apple.developer.associated-domains");
   });
 
   it("rejects incomplete macOS passkey signing configuration", () => {

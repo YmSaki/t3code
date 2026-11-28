@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import type { ComposerContextId, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
   enrichedLinkVariantPattern,
@@ -11,6 +11,10 @@ import {
   ENRICHED_INLINE_FILE_LINK_REGEX,
   threadChipTargets,
 } from "./enrichedLinkPresentation";
+
+vi.mock("expo-constants", () => ({
+  default: { expoConfig: { extra: { hostedAppUrl: "https://fork.example.test" } } },
+}));
 
 describe("Enriched link presentation", () => {
   it("recognizes file-shaped code without turning commands or URLs into links", () => {
@@ -166,6 +170,13 @@ describe("Enriched link presentation", () => {
         threadId: "thread_a",
         link: true,
       },
+    ]);
+  });
+
+  it("recognizes a thread link on the mobile build's hosted domain", () => {
+    const href = "https://fork.example.test/threads/env-there/thread_a";
+    expect(threadChipTargets("env-here" as EnvironmentId, `See [A](${href}).`)).toEqual([
+      { href, environmentId: "env-there", threadId: "thread_a", link: true },
     ]);
   });
 });

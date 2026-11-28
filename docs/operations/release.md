@@ -12,15 +12,18 @@ publish the upstream npm package, AUR packages, marketing site, or Discord annou
 
 Publication is disabled unless the repository variable `T3CODEJP_RELEASE_PUBLISH` is
 `true`. With it unset, scheduled runs skip and manual runs retain validated Actions
-artifacts without creating a GitHub Release. Stable and Nightly publication require
+artifacts without creating a GitHub Release. Stable and Nightly desktop releases require
 macOS Developer ID signing and notarization and Windows Azure Trusted Signing. Set the
-Apple and Azure Actions secrets described in the upstream signing sections below, using
-fork-owned credentials and a macOS provisioning profile for `io.github.ymsaki.t3codejp`.
-Set the Actions variables `APPLE_TEAM_ID` and `CLERK_PASSKEY_RP_DOMAINS` to the fork's
-Apple team ID and fork-owned RP domain configuration required by the macOS packager.
+Apple and Azure Actions secrets in the signing sections below, using fork-owned
+credentials. Set the Actions variable `APPLE_TEAM_ID` to the fork's Apple team ID.
+A signed build that uses Clerk or in-app browser passkeys needs a macOS provisioning
+profile for `io.github.ymsaki.t3codejp`. The packager derives the Clerk passkey
+domain from the fork's publishable key. To override it, set `CLERK_PASSKEY_RP_DOMAINS`
+to a comma-separated list of fork-owned domains.
 Preflight reports missing configuration by name and stops before any build starts.
 Each macOS installer must contain a valid Developer ID signature for that team and a
-stapled notarization ticket.
+stapled notarization ticket. The Windows verification runner checks the embedded
+Authenticode signature of the installer that will be published.
 
 To verify signing before enabling publication, dispatch `nightly` from `main` with
 `validate_signing` enabled. This run performs signing and retains the results as Actions
@@ -81,7 +84,8 @@ maintainer's final release operation after review.
 
 ### Distribution boundaries
 
-The distribution targets match upstream:
+See [Install T3CodeJP](../user/install.md) for the user-facing downloads and
+supported platforms. Release builds use these distribution paths:
 
 | Surface            | Targets                                             | Distribution boundary                                                                      |
 | ------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -104,6 +108,71 @@ configuration prerequisites, not services inherited from the official app. Do no
 disabled; enabling it requires an explicit fork Clerk and relay configuration. Client
 tracing is optional and must not require Axiom credentials while disabled.
 
+Set these three GitHub Actions repository variables for the fork's hosted Web, Desktop, and CLI builds:
+
+- `T3CODE_WEB_ROUTER_URL` is the HTTPS origin users visit, such as `https://app.example.com`.
+- `T3CODE_WEB_LATEST_DOMAIN` is the Stable deployment's hostname.
+- `T3CODE_WEB_NIGHTLY_DOMAIN` is the Nightly deployment's hostname.
+
+Set `T3CODE_DISTRIBUTION=fork` for every fork build; fork-only settings are rejected in an upstream build. Use distinct fork-owned domains and set all three together. Without them the fork has no hosted Web: links are not generated and pairing stays on the server. Connect sign-in opens
+the fork's hosted Web, so configure these domains before enabling Connect in a
+fork release. Rebuild Desktop and CLI when the origins change.
+The router is also the origin used for copied thread and prompt links. Rebuild
+mobile when the router's hostname changes. Its iOS and Android link associations
+are part of the native build and need matching files on the fork's hosted domain.
+On a server, `T3CODE_HOSTED_APP_URL` can override its hosted Web destination at
+runtime.
+
+Create a fork-owned Vercel project with root directory `apps/web` and Node.js
+24.x. Set the project's Install Command override to the `installCommand` in
+[`apps/web/vercel.ts`](../../apps/web/vercel.ts) so Vercel can install with Vite+
+before compiling the TypeScript configuration. Add the three domains to the
+project and configure their DNS. Set the GitHub Actions
+secrets `T3CODEJP_WEB_VERCEL_TOKEN`, `T3CODEJP_WEB_VERCEL_ORG_ID`, and
+`T3CODEJP_WEB_VERCEL_PROJECT_ID`. To enable Connect, set the
+[fork's Clerk and relay repository variables](./connect-setup.md#t3codejp-production).
+
+Set the repository variable `T3CODEJP_WEB_PUBLISH=true` to deploy automatically
+after a fork Stable or Nightly GitHub Release succeeds. For initial deployment,
+a retry, or a rollback, run **Deploy fork hosted Web** from `main` with the
+published release tag. The workflow checks for all CLI archives, installer
+scripts, release metadata, and checksums, then builds the Web client from the
+release commit. After the Vercel build succeeds, Stable updates the Stable
+domain and router. Nightly updates its own domain.
+
+### Fork mobile builds and updates
+
+Use the `fork-android` EAS profile for a signed APK and the `fork-ios` profile
+for TestFlight. These builds use `io.github.ymsaki.t3codejp` and the
+`t3codejp` URL scheme. The upstream app can stay installed alongside the fork.
+Keep the fork's Android signing key for later APK updates.
+
+Create a fork-owned EAS project with slug `t3codejp`. Set
+`T3CODE_MOBILE_EAS_OWNER` and `T3CODE_MOBILE_EAS_PROJECT_ID` in the
+build environment and in the fork EAS project's production environment. For iOS,
+set `T3CODE_MOBILE_APPLE_TEAM_ID` to the signing team's ID and select the fork's
+App Store Connect record when submitting. If Connect is configured, set
+`T3CODE_MOBILE_CLERK_DOMAIN` to the fork's Clerk hostname for iOS associations.
+
+Set `T3CODE_DISTRIBUTION=fork` in the shell for the EAS commands. From `apps/mobile`,
+build Android with `eas build --platform android --profile fork-android`
+and distribute the resulting APK. Build iOS with `eas build --platform ios --profile fork-ios`,
+then submit the resulting build with `eas submit --platform ios --profile fork-ios --id <build-id>`.
+Set `T3CODE_MOBILE_VERSION` for the intended public version. Use the fork App Store Connect
+record and add the build to its TestFlight group.
+
+For the fork Web deployment, set `T3CODE_MOBILE_APPLE_TEAM_ID` and
+`T3CODE_MOBILE_ANDROID_CERT_SHA256` in the Vercel build environment. The Android
+value is the colon-delimited SHA-256 fingerprint of the key that signs the APK
+users receive. The Web build publishes link associations for the fork's production
+app; a platform without signing settings keeps its links in the browser.
+
+For JavaScript-only changes, use `eas update --environment production --channel production`
+against the fork project with `T3CODE_DISTRIBUTION=fork` and the same build settings.
+The fingerprint policy delivers updates to matching native builds. Build and distribute a
+new APK or TestFlight build when native configuration changes. Local fork builds without
+an EAS project have OTA disabled.
+
 ### Installation identity and existing data
 
 The fork's application ID is `io.github.ymsaki.t3codejp`, its URL scheme is
@@ -124,25 +193,36 @@ official Connect account or its linked environments.
 
 ### Compatibility and recovery
 
-Version equality across upstream and fork is not a compatibility guarantee. Web,
-desktop, and mobile negotiate the orchestration protocol; different protocol versions
-are rejected. Matching protocols are necessary but do not prove that a particular
-cross-version feature or update path has been verified. Record the tested
-client/server combinations for each release, including local, direct remote, and
-fork Connect connections where supported.
+Check both upgrade orders when shipping a client and server separately. Record
+the two build versions, connection mode, and protocol in the release evidence.
+For a matching protocol, pair and read a saved thread over each connection mode
+the release supports. A matching protocol allows a connection but leaves
+individual features and update routes to be tested.
 
-Before an upgrade or channel switch, stop active agent work and retain both the exact
-previous installer/archive and a consistent backup of its data home. The target
-runtime's database preflight must pass before switching. `--allow-downgrade` permits
-an older version number; it does not undo database migrations or bypass that check.
+| Combination                                                                            | Release check                                                                                                                     |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop with its bundled server                                                        | Start the packaged app and open a saved thread.                                                                                   |
+| Bundled web with its matching server                                                   | Pair in a fresh browser session and open a saved thread.                                                                          |
+| Fork desktop, web, or mobile with a different fork server version on the same protocol | Check older client with newer server and newer client with older server. Repeat for Stable and Nightly when both are available.   |
+| Client and server on different protocols                                               | Verify the client points to the side that needs updating. A protocol-2 server returns HTTP 426 to a protocol-1 WebSocket request. |
+| Upstream and fork on the same protocol                                                 | Record any direct connection results as interoperability checks. Each product has its own release and Connect configuration.      |
 
-If an update fails, first retain the failed installation's logs and data separately.
-To restore a previous release, stop the application and its background service,
-restore that release's matching data backup into the fork home, then reinstall and
-start the retained version. Check saved threads and settings and reconnect clients.
-Do not overlay an old database on a running server or mix a new database with old
-userdata files. A rollback loses changes made after the backup; keep the failed
-version's copy until recovery has been checked.
+For a desktop or standalone server release, test the
+[restore steps](../user/updating.md#restore-a-previous-version-and-its-data)
+with a stopped home that contains threads, settings, and attachments. Keep the
+previous installer or archive and verify the restored version reads the same
+data before reconnecting clients. Keep the updated home separately and check
+that it still contains work done since the backup. When a release adds a database migration,
+check that the older runtime's service preflight refuses the upgraded database
+and accepts the restored backup. Check a failed download separately, while the
+previous service is still running.
+
+Hosted web recovery should redeploy the last build that passed the server
+compatibility checks. Try a fresh tab against the restored deployment. For
+mobile, verify that the bundled web client remains usable while a compatible
+native build is prepared. Track production recovery for these paths with the
+[hosted web deployment](https://github.com/YmSaki/t3codeJP/issues/49) and
+[mobile distribution](https://github.com/YmSaki/t3codeJP/issues/50).
 
 ## Upstream release workflow reference
 
@@ -517,9 +597,7 @@ Required GitHub Actions secrets:
 Optional GitHub Actions variables:
 
 - `VERCEL_TEAM_SLUG`: overrides the Vercel CLI scope when the team slug is preferred over the `VERCEL_ORG_ID` secret.
-- `T3CODE_WEB_ROUTER_URL`: defaults to `https://app.t3.codes`.
-- `T3CODE_WEB_LATEST_DOMAIN`: defaults to `latest.app.t3.codes`.
-- `T3CODE_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.t3.codes`.
+- `T3CODE_WEB_ROUTER_URL`, `T3CODE_WEB_LATEST_DOMAIN`, `T3CODE_WEB_NIGHTLY_DOMAIN`: set only for a fork (`T3CODE_DISTRIBUTION=fork`), all three together. Without them an upstream build uses the official domains and a fork has no hosted Web.
 
 Required Vercel domains:
 
@@ -763,7 +841,9 @@ Required secrets used by the workflow:
 - `APPLE_API_KEY`
 - `APPLE_API_KEY_ID`
 - `APPLE_API_ISSUER`
-- `MACOS_PROVISIONING_PROFILE` (base64-encoded provisioning profile with Associated Domains)
+
+Set `MACOS_PROVISIONING_PROFILE` to the base64-encoded Developer ID provisioning profile
+when shipping Clerk passkeys or enabling in-app browser passkey entitlements.
 
 Required repository variables:
 
@@ -778,22 +858,21 @@ Checklist:
 
 1. Apple Developer account access:
    - Team has rights to create Developer ID certificates.
-2. Create an explicit App ID for `com.t3tools.t3code` and enable Associated Domains.
-3. Create a `Developer ID Application` certificate and a compatible provisioning profile for that
-   App ID with Associated Domains enabled.
-4. Export the certificate + private key as `.p12` from Keychain.
-5. Base64-encode the `.p12` and store as `CSC_LINK`.
-6. Base64-encode the provisioning profile and store it as `MACOS_PROVISIONING_PROFILE`.
-7. Store the `.p12` export password as `CSC_KEY_PASSWORD`, and set `APPLE_TEAM_ID` to the
+2. Create a `Developer ID Application` certificate and export it with its private key as a
+   `.p12` from Keychain.
+3. Base64-encode the `.p12` and store as `CSC_LINK`.
+4. Store the `.p12` export password as `CSC_KEY_PASSWORD`, and set `APPLE_TEAM_ID` to the
    10-character Apple Developer Team ID.
-8. In App Store Connect, create an API key (Team key).
-9. Add API key values:
+5. In App Store Connect, create an API key (Team key) and add its values:
    - `APPLE_API_KEY`: contents of the downloaded `.p8`
    - `APPLE_API_KEY_ID`: Key ID
    - `APPLE_API_ISSUER`: Issuer ID
-10. Complete the Clerk Native API and AASA setup in [T3 Connect setup](./connect-setup.md#desktop-passkeys).
-11. Re-run a tag release and confirm macOS artifacts are signed/notarized and contain the expected
-    `com.apple.developer.associated-domains` entitlement.
+6. If shipping passkeys, create a Developer ID provisioning profile for the app ID with the
+   required capabilities, then base64-encode and store it as `MACOS_PROVISIONING_PROFILE`.
+   For Clerk, enable Associated Domains and complete the Native API and AASA setup in
+   [T3 Connect setup](./connect-setup.md#desktop-passkeys).
+7. Run the release validation and confirm that the macOS artifacts are signed and notarized.
+   If shipping Clerk passkeys, also check the `com.apple.developer.associated-domains` entitlement.
 
 Notes:
 

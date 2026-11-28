@@ -1,14 +1,19 @@
+import { hostedAppAuthOrigins } from "./hostedApp.ts";
 import { isDesktopProtocol } from "./productIdentity.ts";
 import { isLoopbackHost } from "./hostClassification.ts";
 
-export function providerAuthReturnUrl(value: string | undefined): string | undefined {
+export function providerAuthReturnUrl(
+  value: string | undefined,
+  hostedOrigins: readonly string[] = hostedAppAuthOrigins,
+): string | undefined {
   if (!value) return undefined;
   try {
     const url = new URL(value);
     const desktop = isDesktopProtocol(url.protocol) && url.host === "app";
     const web =
       ["http:", "https:"].includes(url.protocol) &&
-      (isLoopbackHost(url.hostname) || url.origin === "https://app.t3.codes");
+      (isLoopbackHost(url.hostname) ||
+        (url.protocol === "https:" && hostedOrigins.includes(url.origin)));
     if (
       url.username ||
       url.password ||

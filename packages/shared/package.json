@@ -511,6 +511,14 @@
       "types": "./src/providerAuthReturnUrl.ts",
       "import": "./src/providerAuthReturnUrl.ts"
     },
+    "./productConfig": {
+      "types": "./src/productConfig.ts",
+      "import": "./src/productConfig.ts"
+    },
+    "./hostedApp": {
+      "types": "./src/hostedApp.ts",
+      "import": "./src/hostedApp.ts"
+    },
     "./codexAuthCallback": {
       "types": "./src/codexAuthCallback.ts",
       "import": "./src/codexAuthCallback.ts"

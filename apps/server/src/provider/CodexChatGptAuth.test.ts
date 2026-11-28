@@ -11,6 +11,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
@@ -686,7 +687,7 @@ it.effect(
       Effect.gen(function* () {
         const h = yield* makeHarness;
         h.setReturnUrl(
-          "http://localhost:7001/settings/providers?instanceId=codex_work&code=secret-code",
+          "https://fork.example.test/settings/providers?instanceId=codex_work&code=secret-code",
         );
         yield* h.signIn;
         assert.isTrue(Option.isSome(yield* h.auth.read));
@@ -698,7 +699,7 @@ it.effect(
         assert.include(response.body, "You're signed in".replace("'", "&#39;"));
         assert.include(
           response.body,
-          'content="1;url=http://localhost:7001/settings/providers?instanceId=codex_work"',
+          'content="1;url=https://fork.example.test/settings/providers?instanceId=codex_work"',
         );
         assert.notInclude(response.body, "secret-code");
         assert.include(response.body, 'history.replaceState(null,"","/auth/callback")');
@@ -706,6 +707,12 @@ it.effect(
         assert.notInclude(response.body, "initial-access");
         assert.notInclude(response.body, "hidden@example.test");
       }),
+    ).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({ env: { T3CODE_HOSTED_APP_URL: "https://fork.example.test" } }),
+        ),
+      ),
     ),
 );
 it.effect(

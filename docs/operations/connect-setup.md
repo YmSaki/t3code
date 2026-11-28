@@ -6,8 +6,8 @@ provisioning instructions.
 
 ## Public application configuration
 
-T3 Connect is disabled in a fresh clone. To build against the production deployment, copy the
-repository-root example:
+T3 Connect is disabled in a fresh clone. To build against the upstream production deployment,
+copy the repository-root example:
 
 ```sh
 cp .env.example .env
@@ -33,6 +33,42 @@ Bundled servers also accept runtime overrides for operator-managed deployments.
 Copy `infra/relay/.env.example` to `infra/relay/.env` for relay deployment settings.
 Deploy `prod` before personal stages because it owns the retained database that their branches
 depend on. The stack's `PublishClientConfig` action writes the resulting relay URL back to the root `.env`.
+
+## T3CodeJP production
+
+Use a separate Clerk instance and fork-owned Cloudflare, PlanetScale, and Axiom resources. Add
+the four public application settings above as GitHub **repository variables** for T3CodeJP.
+The Desktop, standalone CLI and hosted Web release jobs all read them there. Set the same values
+in the fork Expo project's production environment for mobile builds and OTA updates.
+Set all four together. Leaving them empty disables Connect in the release builds.
+
+Register the fork's hosted Web origins in Clerk. For the production app, register
+`t3codejp://app/` and the Desktop origin `t3codejp://app`. Register
+`clerk://io.github.ymsaki.t3codejp.callback` for Android sign-in and
+`io.github.ymsaki.t3codejp` with the fork Apple Team ID for iOS and macOS passkeys.
+Configure the JWT template, CLI OAuth application, and [sign-up restrictions](#restricting-sign-ups)
+below before allowing users to sign in.
+
+Follow the [relay CI setup](../../infra/relay/README.md#deployment-ci) for the provider
+credentials and the `production` environment. Set `RELAY_API_ZONE_NAME`,
+`RELAY_TUNNEL_ZONE_NAME`, `CLERK_JWT_AUDIENCE`, and `CLERK_SECRET_KEY` there.
+The fork deploy derives the Worker hostname from `T3CODE_RELAY_URL` and gets the
+Clerk publishable key from the repository variable. Enable deployments by setting
+`T3CODEJP_RELAY_DEPLOY=true` at the repository level. Pushes to `main` then
+deploy `prod`. Dispatch **Deploy T3 Connect relay** on `main` after changing
+provider variables or credentials.
+
+The relay uses the fork's Axiom project for monitoring. Leave the APNs switch,
+FCM credentials, and T3 Chat link credential unset for an initial deployment without push
+notifications or T3 Chat linking. To enable APNs later, configure the fork's Apple credentials
+and set `T3CODEJP_RELAY_APNS_ENABLED=true`.
+
+To move an existing environment, keep a direct pairing route to the host. While it still
+uses the old deployment, sign out of Connect on the host or run `t3 connect logout`
+for a CLI-managed host. Install the fork build and follow the
+[data migration instructions](./release.md#installation-identity-and-existing-data).
+Sign into the fork's Connect account on the host, enable Connect again, and sign into that
+account on each client. Approve devices again if the host requires approval.
 
 ## CLI OAuth application
 

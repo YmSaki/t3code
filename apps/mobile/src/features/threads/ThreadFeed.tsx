@@ -86,7 +86,8 @@ import {
 } from "@t3tools/contracts";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
-import { hasThreadLinks, hostedThreadLink, parseThreadLinkHref } from "@t3tools/shared/threadLinks";
+import { hasThreadLinks, parseThreadLinkHref } from "@t3tools/shared/threadLinks";
+import { mobileThreadShareUrl, mobileThreadLinkMatcher } from "../../lib/hostedApp";
 import { PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
 import {
   parseComposerContextHref,
@@ -1331,7 +1332,9 @@ const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
   const liveMarkdown = useLiveThreadLinkLabels(
     props.markdown,
     props.environmentId,
-    useLinkedEnvironments(hasThreadLinks(props.markdown) ? props.environmentId : null),
+    useLinkedEnvironments(
+      hasThreadLinks(props.markdown, mobileThreadLinkMatcher) ? props.environmentId : null,
+    ),
   );
   const [quoteSelection, setQuoteSelection] = useState<{
     markdown: string;
@@ -2830,7 +2833,9 @@ function UserMessageContent(props: UserMessageContentProps) {
   const liveText = useLiveThreadLinkLabels(
     props.text,
     props.environmentId,
-    useLinkedEnvironments(hasThreadLinks(props.text) ? props.environmentId : null),
+    useLinkedEnvironments(
+      hasThreadLinks(props.text, mobileThreadLinkMatcher) ? props.environmentId : null,
+    ),
   );
   const threadIcons = useThreadChipIcons(props.environmentId, liveText, props.context?.records);
   const text = replaceComposerContextReferences(liveText, (ref) => {
@@ -3320,7 +3325,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     });
   };
   const resolveLinkedThread = (href: string) => {
-    const link = parseThreadLinkHref(href);
+    const link = parseThreadLinkHref(href, mobileThreadLinkMatcher);
     if (!link) return null;
     const resolved = resolveThreadLink(
       (atom) => appAtomRegistry.get(atom),
@@ -3464,7 +3469,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       );
       return;
     }
-    if (parseThreadLinkHref(href)) {
+    if (parseThreadLinkHref(href, mobileThreadLinkMatcher)) {
       const target = resolveLinkedThread(href);
       if (target) openThreadLink(target);
       return;
@@ -3612,7 +3617,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       const thread = resolveLinkedThread(href);
       if (thread) {
         if (actionId === "open-thread") onMarkdownLinkPress(href);
-        else if (actionId === "copy-thread-link") copyTextWithHaptic(hostedThreadLink(thread));
+        else if (actionId === "copy-thread-link") copyTextWithHaptic(mobileThreadShareUrl(thread));
         return;
       }
       const deviceUrl = deviceLoopbackUrl(href);

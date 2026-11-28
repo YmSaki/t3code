@@ -15,10 +15,8 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import * as HttpEffect from "effect/http/HttpEffect";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
-import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
-
 import * as CloudLink from "../cloud/CloudLink.ts";
-import { agentApprovalAppUrlConfig } from "../cloud/publicConfig.ts";
+import { agentApprovalAppUrlConfig, defaultAgentApprovalAppUrl } from "../cloud/publicConfig.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as McpOAuth from "./McpOAuth.ts";
 import { renderErrorPage } from "./mcpOAuthHtml.ts";
@@ -78,13 +76,16 @@ export const layer = HttpApiBuilder.group(
     const cloudLink = yield* CloudLink.CloudLink;
     const serverEnvironment = yield* ServerEnvironment.ServerEnvironmentIdentity;
     const hostedAppUrl = yield* agentApprovalAppUrlConfig.pipe(
-      Effect.orElseSucceed(() => DEFAULT_HOSTED_APP_URL),
+      Effect.orElseSucceed(() => defaultAgentApprovalAppUrl),
     );
     // T3 Connect serves this host, so the owner can approve on the hosted app by signing in there.
     const hostedApprovalUrl = (issuer: string, search: string) =>
       cloudLink.linkState().pipe(
         Effect.flatMap((state) =>
-          state.linked && !state.linkRevoked && state.tunnelHostname === new URL(issuer).hostname
+          state.linked &&
+          !state.linkRevoked &&
+          hostedAppUrl !== null &&
+          state.tunnelHostname === new URL(issuer).hostname
             ? serverEnvironment.getEnvironmentId.pipe(
                 Effect.map((environmentId) => {
                   const url = new URL(HOSTED_APPROVAL_PATH, hostedAppUrl);

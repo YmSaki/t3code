@@ -30,7 +30,7 @@ describe("hostedPairing", () => {
         host: "https://backend.example.com:3773",
         token: "pairing-token",
         label: "Workstation",
-      }),
+      }) ?? "",
     );
 
     expect(url.origin).toBe("https://preview.t3.codes");
@@ -39,5 +39,13 @@ describe("hostedPairing", () => {
     expect(url.searchParams.get("label")).toBe("Workstation");
     expect(url.searchParams.has("token")).toBe(false);
     expect(url.hash).toBe("#token=pairing-token");
+  });
+
+  it("leaves pairing on the server when a fork has no hosted Web URL", () => {
+    vi.stubEnv("VITE_HOSTED_APP_URL", "");
+
+    expect(
+      buildHostedPairingUrl({ host: "https://backend.example.com:3773", token: "pairing-token" }),
+    ).toBeNull();
   });
 });

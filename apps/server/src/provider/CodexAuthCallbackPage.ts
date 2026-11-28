@@ -13,8 +13,9 @@ export function codexAuthCallbackPage(
   success: boolean,
   returnUrl: string | undefined,
   nonce: string,
+  hostedOrigins?: readonly string[],
 ) {
-  const destination = codexAuthReturnUrl(returnUrl);
+  const destination = codexAuthReturnUrl(returnUrl, hostedOrigins);
   const title = success ? "You're signed in" : "Sign-in couldn't finish";
   const description = success
     ? destination

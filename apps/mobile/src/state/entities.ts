@@ -31,6 +31,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { msg, useGT, useMessages } from "gt-react-native";
 
 import { threadChipTargets } from "../lib/enrichedLinkPresentation";
+import { mobileThreadLinkMatcher } from "../lib/hostedApp";
 import { resolveProjectChipIcon } from "../lib/projectIcon";
 import { projectGlyphImageAtom, projectGlyphKey } from "../native/ProjectChipIconImages";
 import { projectFaviconUrlAtom } from "./assets";
@@ -158,7 +159,7 @@ const threadChipIconsAtom = Atom.family((key: string) => {
   return Atom.make((get) => {
     const icons = new Map<string, string>();
     for (const target of targets) {
-      const link = target.link ? parseThreadLinkHref(target.href) : null;
+      const link = target.link ? parseThreadLinkHref(target.href, mobileThreadLinkMatcher) : null;
       const ref =
         (link ? resolveThreadLink(get, link, target.environmentId) : null) ??
         scopeThreadRef(target.environmentId, target.threadId);
@@ -251,8 +252,12 @@ export function useLiveThreadLinkLabels(
   const resolve = useMessages();
   const gt = useGT();
   const titles = useAtomValue(
-    hasThreadLinks(markdown)
-      ? threadLinkTitlesAtom(JSON.stringify(threadLinkRefs(markdown, environmentId).map(threadKey)))
+    hasThreadLinks(markdown, mobileThreadLinkMatcher)
+      ? threadLinkTitlesAtom(
+          JSON.stringify(
+            threadLinkRefs(markdown, environmentId, mobileThreadLinkMatcher).map(threadKey),
+          ),
+        )
       : EMPTY_THREAD_LINK_TITLES_ATOM,
   );
   return relabelThreadLinks(
@@ -269,6 +274,7 @@ export function useLiveThreadLinkLabels(
       return title && resolve(msg("Thread", { $context: "fallback title of a linked thread" }));
     },
     resolve,
+    mobileThreadLinkMatcher,
   );
 }
 

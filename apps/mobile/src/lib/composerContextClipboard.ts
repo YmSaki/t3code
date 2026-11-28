@@ -40,6 +40,7 @@ import {
   waitForComposerDraftsLoaded,
 } from "../state/use-composer-drafts";
 import { loadLocalAttachmentPreview } from "./localAttachmentPreview";
+import { mobileThreadLinkMatcher } from "./hostedApp";
 
 export interface NativeContextClipboard {
   readonly text: string;
@@ -90,6 +91,7 @@ export async function importComposerContextClipboard(
       linkedEnvironments.has(record.environmentId)
         ? record.contextId
         : undefined,
+    mobileThreadLinkMatcher,
   );
   const source =
     copied?.source ??

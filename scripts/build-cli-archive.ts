@@ -692,16 +692,13 @@ const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
       "tar (zip)",
     );
   } else {
-    // npm rejects Linux hardlink entries; macOS pnpm clones and bsdtar lacks this flag.
+    // Linux archives also ship inside Windows installers, where ordinary gzip defeats blockmap reuse.
+    const tarOptions =
+      input.platform === "linux"
+        ? ["--hard-dereference", "--use-compress-program=gzip --rsyncable -n", "-cf"]
+        : ["-czf"];
     yield* runCommand(
-      ChildProcess.make("tar", [
-        ...(input.platform === "linux" ? ["--hard-dereference"] : []),
-        "-czf",
-        archivePath,
-        "-C",
-        stageRoot,
-        stem,
-      ]),
+      ChildProcess.make("tar", [...tarOptions, archivePath, "-C", stageRoot, stem]),
       "tar (gzip)",
     );
   }

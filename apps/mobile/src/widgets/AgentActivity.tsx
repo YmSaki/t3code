@@ -64,6 +64,7 @@ export interface AgentActivityText {
 }
 
 export interface AgentActivityProps {
+  readonly appScheme?: string;
   readonly text?: AgentActivityText;
   readonly title: string;
   readonly subtitle: string;
@@ -174,11 +175,10 @@ function AgentActivity(
   const showCompactGlyph = !attentionRow && !failedRow && !allDone && !environment.isStale;
   const summary = attentionSuffix || activeLabel;
 
-  // Widget taps target the containing app, so its production scheme is safe in every build.
   const deepLinkRow = attentionRow ?? row0;
   const deepLink =
     deepLinkRow && deepLinkRow.deepLink.startsWith("/") && !deepLinkRow.deepLink.startsWith("//")
-      ? `t3code://${deepLinkRow.deepLink.slice(1)}`
+      ? `${props.appScheme ?? "t3code"}://${deepLinkRow.deepLink.slice(1)}`
       : null;
   const linkModifiers = deepLink ? [widgetURL(deepLink)] : [];
 

@@ -11,9 +11,6 @@ const {
 const { createRequire } = require("node:module");
 const { join } = require("node:path");
 
-const { parse: parseYaml } = createRequire(join(__dirname, "../../packages/shared/package.json"))(
-  "yaml",
-);
 const TARGETS = [
   {
     platform: "mac-arm64",
@@ -40,6 +37,19 @@ const TARGETS = [
 const METADATA_FILE = "t3code-release.json";
 const INSTALL_SCRIPT_FILES = ["install.sh", "install.ps1"];
 const LINUX_X64_ARTIFACT_ARCH = { ".AppImage": "x86_64", ".deb": "amd64" };
+
+function cliArchiveName(version, target) {
+  return "t3-" + version + "-" + target.cliKey;
+}
+
+function forkReleaseCliAssets(version) {
+  return [
+    ...TARGETS.filter((target) => target.cliKey).map((target) => cliArchiveName(version, target)),
+    "SHA256SUMS",
+    METADATA_FILE,
+    ...INSTALL_SCRIPT_FILES,
+  ];
+}
 
 function artifactFiles(inputDir, artifact) {
   let entries;
@@ -76,7 +86,8 @@ async function digestFile(path, algorithm, encoding) {
 async function checkLinuxAppImage(text, label, artifactDir, installers, appImage) {
   let updateInfo;
   try {
-    updateInfo = parseYaml(text);
+    const requireShared = createRequire(join(__dirname, "../../packages/shared/package.json"));
+    updateInfo = requireShared("yaml").parse(text);
   } catch (error) {
     throw new Error(label + " is not a valid Linux update manifest.", { cause: error });
   }
@@ -201,7 +212,7 @@ async function stageForkReleaseAssets({
     }
     if (target.cliKey) {
       const artifact = "cli-" + target.platform;
-      const name = "t3-" + version + "-" + target.cliKey;
+      const name = cliArchiveName(version, target);
       const names = artifactFiles(inputDir, artifact);
       if (names.length !== 1 || names[0] !== name) {
         throw new Error(artifact + " must contain exactly " + name + ".");
@@ -245,4 +256,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { stageForkReleaseAssets };
+module.exports = { forkReleaseCliAssets, stageForkReleaseAssets };
