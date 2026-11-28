@@ -4,6 +4,7 @@ import * as NodeOS from "node:os";
 import { defaultInclude, defineConfig } from "vite-plus";
 
 import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-external-packages.ts";
+import serverPackageJson from "../server/package.json" with { type: "json" };
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 const repoEnv = loadRepoEnv();
@@ -25,8 +26,13 @@ const publicConfigDefine = {
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
   ),
 };
+const serverPackageDefine = {
+  __T3CODE_SERVER_NODE_ENGINE_RANGE__: JSON.stringify(serverPackageJson.engines.node),
+};
 
 export default defineConfig({
+  // Tests load the main-process sources unbundled, so they need the same build-time values.
+  define: serverPackageDefine,
   run: {
     tasks: {
       build: {
@@ -71,7 +77,7 @@ export default defineConfig({
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
-      define: publicConfigDefine,
+      define: { ...publicConfigDefine, ...serverPackageDefine },
       outputOptions: { codeSplitting: false },
       entry: ["src/main.ts"],
       clean: true,

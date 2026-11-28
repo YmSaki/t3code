@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { expect, it } from "vite-plus/test";
-import { cacheKey, seedPreparedCache } from "./server-compile-cache.ts";
+import { cacheKey, seedPreparedCache } from "./serverCompileCache.ts";
 
 it.each([
   { platform: "freebsd", hostArch: "x64", arch: 1, reason: "unsupported target freebsd" },
@@ -16,7 +16,7 @@ it.each([
   async ({ platform, hostArch, arch, reason, untrusted }) => {
     const { spawnSync } = await import("node:child_process");
     const hook = NodeURL.fileURLToPath(
-      new URL("../prepare-server-compile-cache.cjs", import.meta.url),
+      new URL("../../../scripts/prepare-server-compile-cache.cjs", import.meta.url),
     );
     const result = spawnSync(
       process.execPath,
@@ -63,10 +63,10 @@ it.each([
     NodeFS.writeFileSync(NodePath.join(dist, "server-fixture.mjs"), "export const answer = 43;");
     NodeFS.writeFileSync(
       helper,
-      `module.exports = require(${JSON.stringify(NodeURL.fileURLToPath(new URL("./server-compile-cache.ts", import.meta.url)))});`,
+      `module.exports = require(${JSON.stringify(NodeURL.fileURLToPath(new URL("./serverCompileCache.ts", import.meta.url)))});`,
     );
     const hook = NodeURL.fileURLToPath(
-      new URL("../prepare-server-compile-cache.cjs", import.meta.url),
+      new URL("../../../scripts/prepare-server-compile-cache.cjs", import.meta.url),
     );
     // Node stands in for the packaged engine.
     const result = spawnSync(
@@ -131,7 +131,7 @@ it("rejects ambiguous bundled server entries before importing them", async () =>
       [
         "--input-type=module",
         "-e",
-        `import {generatePreparedServerCache} from ${JSON.stringify(new URL("./server-compile-cache.ts", import.meta.url).href)}; await generatePreparedServerCache(${JSON.stringify(root)});`,
+        `import {generatePreparedServerCache} from ${JSON.stringify(new URL("./serverCompileCache.ts", import.meta.url).href)}; await generatePreparedServerCache(${JSON.stringify(root)});`,
       ],
       {
         encoding: "utf8",
@@ -191,7 +191,7 @@ it("reclaims only AppImage cache directories linked to gone mounts", async () =>
       [
         "--input-type=module",
         "-e",
-        `process.env.APPIMAGE = "fixture"; import {enablePreparedServerCache} from ${JSON.stringify(new URL("./server-compile-cache.ts", import.meta.url).href)}; if (!enablePreparedServerCache(${JSON.stringify(NodePath.join(resources, "app.asar/apps/server/dist/binCli-fixture.mjs"))}, ${JSON.stringify(cacheRoot)})) throw Error("cache disabled");`,
+        `process.env.APPIMAGE = "fixture"; import {enablePreparedServerCache} from ${JSON.stringify(new URL("./serverCompileCache.ts", import.meta.url).href)}; if (!enablePreparedServerCache(${JSON.stringify(NodePath.join(resources, "app.asar/apps/server/dist/binCli-fixture.mjs"))}, ${JSON.stringify(cacheRoot)})) throw Error("cache disabled");`,
       ],
       {
         encoding: "utf8",
@@ -267,7 +267,7 @@ it.each(["app", "server"])(
   "generates %s.asar cache with the consumer engine and falls back after damage",
   async (archive) => {
     const { spawnSync } = await import("node:child_process");
-    const helper = new URL("./server-compile-cache.ts", import.meta.url).href;
+    const helper = new URL("./serverCompileCache.ts", import.meta.url).href;
     const root = NodeFS.realpathSync(
       NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cache-engine-")),
     );
