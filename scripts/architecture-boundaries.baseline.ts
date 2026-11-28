@@ -133,22 +133,6 @@ export const UPSTREAM_REFERENCE_BASELINE: ReadonlyArray<{
   },
   { file: "apps/marketing/vercel.ts", refs: { "app.t3.codes": 1 }, reason: MARKETING },
   {
-    file: "apps/mobile/app.config.ts",
-    refs: { "clerk.t3.codes": 3, "app.t3.codes": 2 },
-    reason: HOSTED,
-    tracking: ["#49", "#77"],
-  },
-  {
-    file: "apps/mobile/modules/t3-composer-editor/android/src/main/java/expo/modules/t3composereditor/T3ComposerEditorModule.kt",
-    refs: { "app.t3.codes": 1 },
-    reason: HOSTED,
-  },
-  {
-    file: "apps/mobile/modules/t3-composer-editor/ios/T3ComposerEditorModule.swift",
-    refs: { "app.t3.codes": 1 },
-    reason: HOSTED,
-  },
-  {
     file: "apps/mobile/src/features/settings/lib/legal-document-url.ts",
     refs: { "t3.codes": 1 },
     reason: HOSTED,
@@ -158,18 +142,6 @@ export const UPSTREAM_REFERENCE_BASELINE: ReadonlyArray<{
     file: "apps/server/scripts/acp-mock-agent.ts",
     refs: { "t3.codes": 5, "pingdotgg/t3code": 1 },
     reason: FIXTURE,
-  },
-  {
-    file: "apps/server/src/auth/McpOAuth.ts",
-    refs: { "app.t3.codes": 1 },
-    reason: HOSTED,
-    tracking: ["#49"],
-  },
-  {
-    file: "apps/server/src/cloud/publicConfig.ts",
-    refs: { "nightly.app.t3.codes": 1, "app.t3.codes": 1 },
-    reason: HOSTED,
-    tracking: ["#49"],
   },
   {
     file: "apps/server/src/policy/policyTemplates.ts",
@@ -208,12 +180,6 @@ export const UPSTREAM_REFERENCE_BASELINE: ReadonlyArray<{
     tracking: ["#57"],
   },
   {
-    file: "apps/web/vercel.ts",
-    refs: { "app.t3.codes": 1, "latest.app.t3.codes": 1, "nightly.app.t3.codes": 1 },
-    reason: HOSTED,
-    tracking: ["#49"],
-  },
-  {
     file: "infra/relay/src/mobileTelemetry/monitoring.ts",
     refs: { "pingdotgg/t3code": 1 },
     reason: REPOSITORY,
@@ -235,18 +201,19 @@ export const UPSTREAM_REFERENCE_BASELINE: ReadonlyArray<{
     reason: REPOSITORY,
   },
   { file: "packages/contracts/src/t3ProjectFile.ts", refs: { "t3.codes": 2 }, reason: BRAND },
-  {
-    file: "packages/shared/src/connectAuth.ts",
-    refs: { "app.t3.codes": 1 },
-    reason: HOSTED,
-    tracking: ["#49"],
-  },
   { file: "packages/shared/src/icalGenerator.core.ts", refs: { "t3.codes": 1 }, reason: BRAND },
   {
-    file: "packages/shared/src/providerAuthReturnUrl.ts",
-    refs: { "app.t3.codes": 1 },
-    reason: HOSTED,
-    tracking: ["#49"],
+    file: "packages/shared/src/productConfig.ts",
+    refs: {
+      "app.t3.codes": 1,
+      "latest.app.t3.codes": 1,
+      "nightly.app.t3.codes": 1,
+      "clerk.t3.codes": 1,
+      "t3.codes": 2,
+    },
+    reason:
+      "Single owner of upstream isolation: names the upstream hosts only to reject them for the fork and to accept old links.",
+    tracking: ["#103"],
   },
   {
     file: "packages/source-control-github/src/server/githubStackRebase.ts",
