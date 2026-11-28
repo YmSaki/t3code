@@ -18,6 +18,7 @@ it("stays byte-identical to .github/triage/PLAYBOOK.md", () => {
     "../../../../.github/triage/PLAYBOOK.md",
   );
   assert.equal(TRIAGE_PLAYBOOK, NodeFS.readFileSync(canonicalPath, "utf8"));
+  assert.notInclude(TRIAGE_PLAYBOOK, "pingdotgg");
 });
 
 it("launch prompt stays a single argv-safe line naming the prompt file", () => {
@@ -38,6 +39,7 @@ it("context file labels the CLI version as the CLI's, not the user's build", () 
   assert.notInclude(context, "Release tag");
   assert.include(context, "- Triage CLI version: 0.0.42 (");
   assert.include(context, "version 0.0.43-nightly.20260923.2173");
+  assert.include(context, "- Repo: https://github.com/YmSaki/t3codeJP\n");
   assert.notInclude(context, "runs inside T3 Code");
 });
 

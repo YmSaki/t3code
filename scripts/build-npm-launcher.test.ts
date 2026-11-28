@@ -13,7 +13,8 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeEvents from "node:events";
 import * as NodeHttp from "node:http";
 
-import { npmReleaseDatabaseMigration } from "@t3tools/shared/cliRelease";
+import { CLI_RELEASE_REPOSITORY, npmReleaseDatabaseMigration } from "@t3tools/shared/cliRelease";
+import { DEFAULT_HOME_DIRECTORY } from "@t3tools/shared/productIdentity";
 
 import { buildNpmLauncher } from "./build-npm-launcher.ts";
 
@@ -112,6 +113,20 @@ exit 7
 });
 
 it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
+  // The launcher is dependency-free, so it repeats these values instead of importing them.
+  it.effect("launcher defaults match the product identity and release repository", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const source = yield* fs.readFileString(
+        path.join(import.meta.dirname, "npm-launcher/t3.mjs"),
+      );
+      assert.include(source, `path.join(os.homedir(), "${DEFAULT_HOME_DIRECTORY}")`);
+      assert.include(source, `"https://github.com/${CLI_RELEASE_REPOSITORY}/releases/download"`);
+      assert.notInclude(source, "pingdotgg");
+    }),
+  );
+
   it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
     "publishes a launcher that downloads, verifies, caches, and runs the release executable",
     () =>

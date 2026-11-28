@@ -124,13 +124,16 @@ function clearFileDrags() {
  */
 export function setFileDragActive(setActive: (active: boolean) => void, active: boolean) {
   setActive(active);
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads window; pass the browser value as an input
   if (typeof window === "undefined") return;
   if (!active) {
     if (fileDragClears.delete(setActive) && fileDragClears.size === 0) {
+      // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads window; pass the browser value as an input
       window.removeEventListener("dragend", clearFileDrags);
     }
     return;
   }
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads window; pass the browser value as an input
   if (fileDragClears.size === 0) window.addEventListener("dragend", clearFileDrags, { once: true });
   fileDragClears.add(setActive);
 }
@@ -142,6 +145,7 @@ export function setFileDragActive(setActive: (active: boolean) => void, active: 
 export function useSnoozeWakeClock(
   threads: ReadonlyArray<{ readonly snoozedUntil?: string | null | undefined }>,
 ): number {
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
   const [clockMs, setClockMs] = React.useState(() => Date.now());
   const wakeTimes: number[] = [];
   let nextWakeAt: number | null = null;
@@ -760,6 +764,7 @@ export function useThreadJumpHintsVisible(
     () =>
       threadJumpModifierHold.getSnapshot() &&
       shouldShowThreadJumpHintsForModifiers(shortcutModifierStore.getSnapshot(), keybindings, {
+        // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads navigator; pass the platform as an input
         platform: navigator.platform,
         context: threadShortcutContext(routeThreadRef),
       }),
@@ -1148,6 +1153,7 @@ export function searchSidebarThreads<
   threads: readonly T[],
   query: string,
   contentMatchKeys: ReadonlySet<string> = EMPTY_CONTENT_MATCH_KEYS,
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
   now = Date.now(),
 ): { readonly titleMatches: T[]; readonly contentMatches: T[] } {
   const normalizedQuery = foldSearchQuery(query);

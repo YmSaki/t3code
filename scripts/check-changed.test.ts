@@ -21,6 +21,7 @@ import {
   docReaderTests,
   gitLines,
   ignoredCheckInputs,
+  packageReaderTests,
   runSteps,
   splitTests,
   type Step,
@@ -47,6 +48,17 @@ describe("check:changed", () => {
       "apps/server/src/cloud/ConnectReachability.test.ts",
     ]);
     assert.deepStrictEqual(decide(["docs/user/install.md"], packages, false).affected, []);
+  });
+
+  it.each([
+    "apps/marketing/src/lib/site.ts",
+    "apps/marketing/src/pages/95.astro",
+    "infra/relay/src/monitoring.ts",
+    "infra/task-cache/scripts/install-ci.ts",
+  ])("runs the scripts tests that scan %s", (file) => {
+    const { affected, outputs } = decide([file], readWorkspace(), false);
+    assert.include(outputs.test_packages.split(" "), "@t3tools/scripts");
+    assert.include(packageReaderTests(affected), "scripts/architecture-boundaries.test.ts");
   });
 
   it("runs the desktop tests that drive the compile cache afterPack hook", () => {

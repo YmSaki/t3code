@@ -1,7 +1,7 @@
 import { msg } from "gt-react";
 import { m } from "~/i18n/messages";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { UnifiedSettings } from "@t3tools/contracts";
+import type { ThreadEnvMode, UnifiedSettings } from "@t3tools/contracts";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -15,7 +15,6 @@ import {
 import { buildDraftThreadRouteParams } from "../../threadRoutes";
 import {
   type DraftCheckoutPullRequest,
-  type DraftThreadEnvMode,
   useComposerDraftStore,
   DraftId,
 } from "../../composerDraftStore";
@@ -68,7 +67,7 @@ export function usePullRequestDraftThread(input: PullRequestDraftThreadInput) {
   const openOrReuseProjectDraftThread = async (input: {
     branch: string;
     worktreePath: string | null;
-    envMode: DraftThreadEnvMode;
+    envMode: ThreadEnvMode;
     checkoutPullRequest: DraftCheckoutPullRequest;
   }) => {
     if (!activeProject) {

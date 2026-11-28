@@ -1391,9 +1391,6 @@ importers:
       '@noble/hashes':
         specifier: 'catalog:'
         version: 1.8.0
-      '@t3tools/client-runtime':
-        specifier: workspace:*
-        version: link:../../packages/client-runtime
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -1425,6 +1422,9 @@ importers:
       '@electric-sql/pglite':
         specifier: 0.3.15
         version: 0.3.15
+      '@t3tools/client-runtime':
+        specifier: workspace:*
+        version: link:../../packages/client-runtime
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -2086,9 +2086,6 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@t3tools/provider-core':
-        specifier: workspace:*
-        version: link:../provider-core
       '@t3tools/secret-provider-core':
         specifier: workspace:*
         version: link:../secret-provider-core
@@ -2248,9 +2245,6 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@t3tools/provider-core':
-        specifier: workspace:*
-        version: link:../provider-core
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../shared
@@ -2307,9 +2301,6 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@t3tools/provider-core':
-        specifier: workspace:*
-        version: link:../provider-core
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../shared
@@ -2365,9 +2356,6 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@t3tools/provider-core':
-        specifier: workspace:*
-        version: link:../provider-core
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../shared
@@ -2399,9 +2387,6 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@t3tools/provider-core':
-        specifier: workspace:*
-        version: link:../provider-core
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../shared
@@ -2433,9 +2418,6 @@ importers:
       '@t3tools/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@t3tools/provider-core':
-        specifier: workspace:*
-        version: link:../provider-core
       '@t3tools/shared':
         specifier: workspace:*
         version: link:../shared

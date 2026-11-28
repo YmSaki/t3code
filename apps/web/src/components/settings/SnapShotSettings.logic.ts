@@ -140,6 +140,7 @@ export function snapShotUnavailableMessage(
   resolve: MessageResolver = m,
 ): string | undefined {
   if (hasBridge) return undefined;
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads window; pass the browser value as an input
   return typeof window !== "undefined" && window.desktopBridge
     ? resolve(msg("Update the desktop app to use snapshots."))
     : resolve(msg("Only available in the desktop app."));

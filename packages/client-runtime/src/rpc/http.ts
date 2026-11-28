@@ -11,6 +11,8 @@ import {
   type EnvironmentResourceNotFoundError,
   type EnvironmentScopeRequiredError,
 } from "@t3tools/contracts";
+import { environmentHttpApiBaseUrl } from "@t3tools/shared/environmentHttpApiClient";
+export { makeEnvironmentHttpApiClient } from "@t3tools/shared/environmentHttpApiClient";
 import * as HttpObservability from "@t3tools/shared/httpObservability";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -105,19 +107,6 @@ export const layerRemoteHttpClient = (
     HttpObservability.layer,
   );
 
-const remoteApiBaseUrl = (httpBaseUrl: string): string => {
-  const url = new URL(httpBaseUrl);
-  url.pathname = "/";
-  url.search = "";
-  url.hash = "";
-  return url.toString();
-};
-
-export const makeEnvironmentHttpApiClient = (httpBaseUrl: string) =>
-  HttpApiClient.make(EnvironmentHttpApi, {
-    baseUrl: remoteApiBaseUrl(httpBaseUrl),
-  });
-
 export const makeEnvironmentHttpApiGroupClient = <
   Group extends keyof typeof EnvironmentHttpApi.groups,
 >(
@@ -128,13 +117,13 @@ export const makeEnvironmentHttpApiGroupClient = <
     HttpApiClient.group(EnvironmentHttpApi, {
       httpClient,
       group,
-      baseUrl: remoteApiBaseUrl(httpBaseUrl),
+      baseUrl: environmentHttpApiBaseUrl(httpBaseUrl),
     }),
   );
 
 export const makeEnvironmentHttpApiUrlBuilder = (httpBaseUrl: string) =>
   HttpApiClient.urlBuilder(EnvironmentHttpApi, {
-    baseUrl: remoteApiBaseUrl(httpBaseUrl),
+    baseUrl: environmentHttpApiBaseUrl(httpBaseUrl),
   });
 
 const failRemoteRequest = (

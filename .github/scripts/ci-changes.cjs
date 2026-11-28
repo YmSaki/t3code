@@ -45,6 +45,10 @@ const TEST_ONLY_DEPS = {
     "@t3tools/web",
     "t3",
     "@t3tools/provider-cursor",
+    // architecture-boundaries.test.ts scans these, and no package depends on them.
+    "@t3tools/marketing",
+    "t3code-relay",
+    "@t3tools/task-cache",
   ],
 };
 // The server bundles the web build without importing it.

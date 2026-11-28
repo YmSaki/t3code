@@ -10,7 +10,7 @@ import { readLocalApi } from "../localApi";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ThreadEnvMode, ThreadId } from "@t3tools/contracts";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m as resolveMessage } from "../i18n/messages";
 import { FolderGit2Icon, FolderGitIcon, FolderIcon, PlusIcon, ScaleIcon } from "lucide-react";
@@ -30,7 +30,6 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShellsForProjectRefs } from "../state/entities";
 import {
   ADD_TO_MACHINE_LABEL_CLASS,
-  type EnvMode,
   type EnvironmentOption,
   resolveContextStripLabelsCompact,
   resolveCurrentWorkspaceLabel,
@@ -103,8 +102,8 @@ interface BranchToolbarProps {
   /** False when the project folder has no branch of its own to pick. Defaults to `showGitControls`. */
   showBranchControls?: boolean;
   draftId?: DraftId;
-  onEnvModeChange: (mode: EnvMode) => void;
-  envMode: EnvMode;
+  onEnvModeChange: (mode: ThreadEnvMode) => void;
+  envMode: ThreadEnvMode;
   activeThreadBranchOverride?: string | null;
   onActiveThreadBranchOverrideChange?: (branch: string | null) => void;
   startFromOrigin: boolean;
@@ -167,9 +166,9 @@ interface RunContextSelectorProps {
   showEnvironmentPicker: boolean;
   showEnvironmentIndicator: boolean;
   onEnvironmentChange: ((environmentId: EnvironmentId) => void) | undefined;
-  effectiveEnvMode: EnvMode;
+  effectiveEnvMode: ThreadEnvMode;
   activeWorktreePath: string | null;
-  onEnvModeChange: (mode: EnvMode) => void;
+  onEnvModeChange: (mode: ThreadEnvMode) => void;
   previousWorktreeLabel: string | null;
   previousWorktreeBranch: string | null;
   onUsePreviousWorktree: () => void;
@@ -433,7 +432,7 @@ const RunContextSelector = memo(function RunContextSelector({
                 onUsePreviousWorktree();
                 return;
               }
-              onEnvModeChange(value as EnvMode);
+              onEnvModeChange(value as ThreadEnvMode);
             }}
           >
             <MenuRadioItem disabled={envModeLocked || forceNewWorktree} value="local" closeOnClick>

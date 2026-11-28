@@ -202,6 +202,7 @@ import { useLinkedEnvironments } from "~/state/peerLinks";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
 import type {
   ComposerContextRecord,
+  MessageDispatchMode,
   OrchestrationV2Run,
   ThreadPullRequestLink,
 } from "@t3tools/contracts";
@@ -264,7 +265,6 @@ import type { PendingApproval, PendingUserInput, TimelineEntry } from "../../ses
 import {
   composerRunsDraftLocally,
   resolveComposerDispatchMode,
-  type ComposerDispatchMode,
 } from "@t3tools/client-runtime/state/composer-dispatch";
 import {
   resolveProviderSkillsForCwd,
@@ -462,12 +462,12 @@ export interface ChatComposerProps {
   onCompactContext: () => void;
   onSend: (
     e?: { preventDefault: () => void },
-    dispatchMode?: ComposerDispatchMode,
+    dispatchMode?: MessageDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
   ) => void;
   captureDetachedSend?: () => (
     e?: { preventDefault: () => void },
-    dispatchMode?: ComposerDispatchMode,
+    dispatchMode?: MessageDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
     directAnnotation?: {
       annotation: PreviewAnnotationPayload;
@@ -2222,14 +2222,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const submitComposerRef = useRef<
     (
-      dispatchMode?: ComposerDispatchMode,
+      dispatchMode?: MessageDispatchMode,
       submissionIntent?: ComposerSubmissionIntent,
       options?: { readonly afterDictation?: boolean },
     ) => void
   >(() => {});
   const submitComposer = (
     event?: { preventDefault: () => void },
-    dispatchMode?: ComposerDispatchMode,
+    dispatchMode?: MessageDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
     options?: { readonly afterDictation?: boolean },
   ) => {
