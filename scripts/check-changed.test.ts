@@ -52,6 +52,7 @@ describe("check:changed", () => {
 
   it.each([
     "apps/marketing/src/lib/site.ts",
+    "apps/marketing/src/pages/95.astro",
     "infra/relay/src/monitoring.ts",
     "infra/task-cache/scripts/install-ci.ts",
   ])("runs the scripts tests that scan %s", (file) => {

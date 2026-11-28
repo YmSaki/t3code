@@ -161,7 +161,13 @@ const COMMENT = /\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
 const namespaceSymbols = (name: string, body: string) => {
   const escaped = name.replace(/\$/g, "\\$");
   const uses = [
-    ...body.matchAll(new RegExp(`(?<![.\\w$])${escaped}(?![\\w$])(?:\\s*\\.\\s*([\\w$]+))?`, "g")),
+    // A spread (`...ns`) is a whole use; a property (`x.ns`) or a specifier ("pkg/ns") is not.
+    ...body.matchAll(
+      new RegExp(
+        `(?<![\\w$/"'\`])(?<!(?<!\\.\\.)\\.)${escaped}(?![\\w$])(?:\\s*\\.\\s*([\\w$]+))?`,
+        "g",
+      ),
+    ),
   ];
   const members = new Set(uses.flatMap((use) => (use[1] === undefined ? [] : [use[1]])));
   // The import clause itself is one bare use.
@@ -197,12 +203,13 @@ const symbolsOf = (source: string, body: string, isExport: boolean) => {
   return symbols.length > 0 ? symbols : [SIDE_EFFECT];
 };
 
-const importsOf = (source: string) => {
-  // Strings go too, so a specifier such as "pkg/Name" is not a use of the namespace `Name`.
-  const body = source.replace(
-    /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
-    "",
-  );
+// `markup` is an Astro template: it reads namespace members but holds no imports.
+const importsOf = (source: string, markup = "") => {
+  // Strings are kept, so a stray quote such as JSX "Don't" cannot hide a member use.
+  const body = `${source.replace(
+    /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+    (_, literal: string | undefined) => literal ?? "",
+  )}\n${markup}`;
   return [...source.matchAll(IMPORT)].map((match) =>
     match[2] !== undefined
       ? {
@@ -215,14 +222,20 @@ const importsOf = (source: string) => {
   );
 };
 
-// Astro components import only in their frontmatter and script blocks; the template is markup.
-const codeOf = (file: string, content: string) =>
+const FRONTMATTER = /^\s*---\r?\n((?:[\s\S]*?\r?\n)??)---/;
+const SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script>/g;
+
+// Astro components import only in their frontmatter and script blocks; the rest is template.
+const fileImports = (file: string, content: string) =>
   file.endsWith(".astro")
-    ? [
-        /^\s*---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1] ?? "",
-        ...[...content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((match) => match[1]),
-      ].join("\n")
-    : content;
+    ? importsOf(
+        [
+          FRONTMATTER.exec(content)?.[1] ?? "",
+          ...[...content.matchAll(SCRIPT)].map((match) => match[1]),
+        ].join("\n"),
+        content.replace(FRONTMATTER, "").replace(SCRIPT, ""),
+      )
+    : importsOf(content);
 
 const packageNameOf = (specifier: string) =>
   specifier
@@ -324,7 +337,7 @@ const sourceImports = (files: ReadonlyMap<string, string>) => {
     if (!from || !CODE_FILE.test(file)) continue;
     const field = phaseOf(from, file);
     if (!field) continue;
-    for (const { specifier, symbols } of importsOf(codeOf(file, content))) {
+    for (const { specifier, symbols } of fileImports(file, content)) {
       const target = resolveImport(file, specifier);
       if (!target || target.pkg === from) continue;
       used.add(`${from.name} -> ${specifier}`);
@@ -541,7 +554,7 @@ describe("rules", () => {
   });
 
   it("collects imported names from every import form", () => {
-    const source = `import type {\n  A, // why\n  /* x */ type B as C,\n} from "a";\nexport {\n  b,\n} from 'b';\nimport "c";\nconst d = await import("d", { with: { type: "json" } });\nrequire("e");\nimport F, * as G from "f";\nexport * from "g";\nimport * as H from "h";\nimport * as I from "i";\nexport * as J from "j";\nH.x(H . y, I, z.H.w); // H.comment`;
+    const source = `import type {\n  A, // why\n  /* x */ type B as C,\n} from "a";\nexport {\n  b,\n} from 'b';\nimport "c";\nconst d = await import("d", { with: { type: "json" } });\nrequire("e");\nimport F, * as G from "f";\nexport * from "g";\nimport * as H from "h";\nimport * as I from "i";\nexport * as J from "j";\nimport * as K from "k";\nH.x(H . y, I, z.H.w, K.a, { ...K }, "H"); // H.comment\nconst el = <p>Don't {H.z} it's</p>;`;
     expect(importsOf(source)).toEqual([
       { specifier: "a", symbols: ["A", "B"] },
       { specifier: "b", symbols: ["b"] },
@@ -550,10 +563,21 @@ describe("rules", () => {
       { specifier: "e", symbols: ["*"] },
       { specifier: "f", symbols: ["default", "*"] },
       { specifier: "g", symbols: ["*"] },
-      { specifier: "h", symbols: ["x", "y"] },
+      { specifier: "h", symbols: ["x", "y", "z"] },
       { specifier: "i", symbols: ["*"] },
       { specifier: "j", symbols: ["*"] },
+      { specifier: "k", symbols: ["a", "*"] },
     ]);
+  });
+
+  it("records namespace members an .astro template reads", () => {
+    const file = "apps/marketing/src/pages/a.astro";
+    const content = `---\nimport * as Ws from "../../../server/src/ws";\nconst a = Ws.A;\n---\n<p>{Ws.B}</p><Ws.C />`;
+    expect([...sourceImports(withFile(file, content)).violations.keys()]).toEqual(
+      ["A", "B", "C"].map(
+        (symbol) => `@t3tools/marketing -> t3 | ${file} -> ../../../server/src/ws | ${symbol}`,
+      ),
+    );
   });
 
   it("fails a baselined namespace import that reads another member", () => {
@@ -575,6 +599,11 @@ describe("rules", () => {
       "a script block",
       `---\n---\n<script>\n  import { x } from "@t3tools/web/x";\n</script>`,
       ["app must not depend on app"],
+    ],
+    [
+      "an empty frontmatter, ignoring a later fence",
+      `---\n---\n<p>import { x } from "t3/src/ws";</p>\n---\n`,
+      [],
     ],
     [
       "valid imports, ignoring template text",
