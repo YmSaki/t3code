@@ -45,6 +45,17 @@ export const FORK_ICON_DIRECTORIES = {
   production: "assets/fork/production",
 } as const;
 
+export const FORK_BRAND_COLORS = {
+  development: "#3b4e64",
+  nightly: "#293657",
+  production: "#123a3b",
+} as const satisfies Record<WebAssetBrand, string>;
+
+export const FORK_MOBILE_ICON_PATHS = {
+  monochrome: "assets/fork/android-monochrome-1024.png",
+  notification: "assets/fork/android-notification-96.png",
+} as const;
+
 export const WEB_ASSET_CHANNELS = ["latest", "nightly"] as const;
 
 export type WebAssetChannel = (typeof WEB_ASSET_CHANNELS)[number];

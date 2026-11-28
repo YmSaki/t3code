@@ -1,3 +1,6 @@
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import appleAppSiteAssociation from "../web/public/.well-known/apple-app-site-association.json";
@@ -78,15 +81,16 @@ it.each([
     { scheme: "https", host, pathPrefix: "/threads/" },
   ]);
   expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
+  expect(config.icon).toMatch(/^\.\.\/\.\.\/assets\/(?:dev|nightly|prod)\//);
 });
 
 it.each([
-  ["production", "io.github.ymsaki.t3codejp", "t3codejp"],
-  ["development", "io.github.ymsaki.t3codejp.dev", "t3codejp-dev"],
-  ["preview", "io.github.ymsaki.t3codejp.preview", "t3codejp-preview"],
+  ["production", "io.github.ymsaki.t3codejp", "t3codejp", "production"],
+  ["development", "io.github.ymsaki.t3codejp.dev", "t3codejp-dev", "development"],
+  ["preview", "io.github.ymsaki.t3codejp.preview", "t3codejp-preview", "nightly"],
 ])(
-  "isolates the fork's %s app and disables OTA without a fork project",
-  async (appVariant, id, scheme) => {
+  "isolates the fork's %s app, uses fork icons, and disables OTA without a fork project",
+  async (appVariant, id, scheme, brandDir) => {
     vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
     const config = await loadConfig(appVariant);
     expect(config.ios?.bundleIdentifier).toBe(id);
@@ -100,6 +104,47 @@ it.each([
     expect(config.updates?.url).toBeUndefined();
     expect(config.extra?.eas.projectId).toBeUndefined();
     expect(config.extra?.hostedAppUrl).toBe("");
+
+    const pluginOptions = (pluginName: string) => {
+      const entry = config.plugins?.find(
+        (plugin) => Array.isArray(plugin) && plugin[0] === pluginName,
+      );
+      return Array.isArray(entry) ? (entry[1] as Record<string, unknown> | undefined) : undefined;
+    };
+    const splash = pluginOptions("expo-splash-screen") as
+      | {
+          image?: string;
+          dark?: { image?: string };
+          android?: { image?: string; dark?: { image?: string } };
+        }
+      | undefined;
+    const notifications = pluginOptions("expo-notifications") as { icon?: string } | undefined;
+    const forkAssetPaths = [
+      config.icon,
+      config.ios?.icon,
+      config.android?.icon,
+      config.android?.adaptiveIcon?.foregroundImage,
+      config.android?.adaptiveIcon?.monochromeImage,
+      splash?.image,
+      splash?.dark?.image,
+      splash?.android?.image,
+      splash?.android?.dark?.image,
+      notifications?.icon,
+    ];
+    for (const assetPath of forkAssetPaths) {
+      expect(assetPath).toBeTypeOf("string");
+      if (typeof assetPath !== "string") {
+        throw new Error(`Expected string asset path, got ${String(assetPath)}`);
+      }
+      expect(assetPath).toMatch(/^\.\.\/\.\.\/assets\/fork\//);
+      expect(NodeFS.existsSync(NodePath.resolve(import.meta.dirname, assetPath))).toBe(true);
+    }
+    expect(config.icon).toBe(`../../assets/fork/${brandDir}/ios-1024.png`);
+    expect(config.ios?.icon).toBe(`../../assets/fork/${brandDir}/ios-1024.png`);
+    expect(config.android?.adaptiveIcon?.foregroundImage).toBe(
+      `../../assets/fork/${brandDir}/android-foreground-1024.png`,
+    );
+    expect(splash?.android?.image).toBe(`../../assets/fork/${brandDir}/android-splash-1024.png`);
   },
 );
 

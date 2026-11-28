@@ -6,7 +6,13 @@ import {
   PRODUCT_NAME,
   PRODUCT_SLUG,
 } from "../../packages/shared/src/productIdentity.ts";
-import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
+import {
+  BRAND_ASSET_PATHS,
+  FORK_BRAND_COLORS,
+  FORK_ICON_DIRECTORIES,
+  FORK_MOBILE_ICON_PATHS,
+  type WebAssetBrand,
+} from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 type AppVariant = "development" | "preview" | "production";
@@ -86,6 +92,29 @@ const RELEASE_ASSETS = {
   androidNotificationColor: "#FFFFFF",
 } as const;
 
+function forkMobileAssets(brand: WebAssetBrand) {
+  const directory = FORK_ICON_DIRECTORIES[brand];
+  const color = FORK_BRAND_COLORS[brand];
+  return {
+    appIcon: fromRepoRoot(`${directory}/ios-1024.png`),
+    iosIcon: fromRepoRoot(`${directory}/ios-1024.png`),
+    splashIcon: fromRepoRoot(`${directory}/icon-1024.png`),
+    androidAdaptiveForeground: fromRepoRoot(`${directory}/android-foreground-1024.png`),
+    androidAdaptiveBackgroundColor: color,
+    androidAdaptiveBackgroundImage: undefined,
+    androidSplashIcon: fromRepoRoot(`${directory}/android-splash-1024.png`),
+    androidMonochromeIcon: fromRepoRoot(FORK_MOBILE_ICON_PATHS.monochrome),
+    androidNotificationIcon: fromRepoRoot(FORK_MOBILE_ICON_PATHS.notification),
+    androidNotificationColor: color,
+  } as const;
+}
+
+const FORK_ASSETS = {
+  development: forkMobileAssets("development"),
+  preview: forkMobileAssets("nightly"),
+  production: forkMobileAssets("production"),
+} as const;
+
 const VARIANT_CONFIG = {
   development: {
     appName: "T3 Code Dev",
@@ -135,6 +164,7 @@ const variant = release.fork
       scheme: forkSuffix ? `${PRODUCT_SLUG}-${forkSuffix}` : PRODUCT_SLUG,
       iosBundleIdentifier: forkBundleId,
       androidPackage: forkBundleId,
+      assets: FORK_ASSETS[APP_VARIANT],
     }
   : upstreamVariant;
 const hostedWeb = product.hostedWeb.kind === "enabled" ? product.hostedWeb : null;
