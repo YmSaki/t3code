@@ -213,7 +213,35 @@ describe(RULE_NAME, () => {
           const sessionStorage = new Map<string, string>();
           return sessionStorage.get("k");
         };
+        export const elapsed = (performance: { now: () => number }) => performance.now();
+        export const fill = (crypto: { getRandomValues: (b: Uint8Array) => Uint8Array }) =>
+          crypto.getRandomValues(new Uint8Array(4));
+        export const read = (globalThis: { window: number; fetch: () => number }) => [
+          globalThis.window,
+          globalThis.fetch(),
+        ];
+        export const stored = (globalThis: { localStorage: number }) => {
+          const { localStorage } = globalThis;
+          return localStorage;
+        };
+        export const today = () => {
+          const Date = { now: () => 0 };
+          return Date.now();
+        };
       `,
+    );
+
+    core.invalid(
+      "reports globals destructured from globalThis, including renamed bindings",
+      `
+        const { localStorage } = globalThis;
+        const { setTimeout: delay, performance: perf, crypto } = globalThis;
+        export const a = localStorage.getItem("k");
+        export const b = delay(() => undefined, 1);
+        export const c = perf.now();
+        export const d = crypto.randomUUID();
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 4),
     );
 
     core.invalid(
@@ -222,9 +250,12 @@ describe(RULE_NAME, () => {
         let counter = 0;
         export let cache = new Map();
         var legacy = 1;
-        export const bump = () => [counter, cache, legacy];
+        {
+          var hoisted = 2;
+        }
+        export const bump = () => [counter, cache, legacy, hoisted];
       `,
-      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 3),
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 4),
     );
 
     core.valid(
@@ -234,7 +265,10 @@ describe(RULE_NAME, () => {
         export const count = (items: ReadonlyArray<number>) => {
           let total = 0;
           for (const item of items) total += item;
-          return total;
+          {
+            var last = total;
+          }
+          return last;
         };
       `,
     );

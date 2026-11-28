@@ -34,7 +34,7 @@ The `t3code/no-io-in-functional-core` rule ([source](../../oxlint-plugin-t3code/
 | Time          | `Date.now` (call or reference), `new Date()` with no arguments, `performance.now`, `setTimeout`, `setInterval`                                                                                                                                                                   |
 | Randomness    | `Math.random`, `crypto.randomUUID`, `crypto.getRandomValues`                                                                                                                                                                                                                     |
 | Environment   | `process.env`, global `window`, `navigator`, `localStorage`, `sessionStorage` (also via `globalThis`; locals and `typeof` types that reuse the name are fine)                                                                                                                    |
-| State         | top-level `let` or `var`                                                                                                                                                                                                                                                         |
+| State         | top-level `let`, or `var` outside a function (it hoists out of blocks)                                                                                                                                                                                                           |
 
 `new Date(iso)` and `Date.parse` are allowed: they are pure for a given input.
 
