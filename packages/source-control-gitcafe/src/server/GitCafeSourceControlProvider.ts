@@ -17,7 +17,7 @@ import {
   type SourceControlCliDiscoverySpec,
   type SourceControlManagedCliDiscoverySpec,
 } from "@t3tools/source-control-core/server/discovery";
-import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
+import { randomUuidV4 } from "@t3tools/shared/randomUuid";
 import * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
 import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import { isSshRemoteUrl } from "@t3tools/shared/sourceControl";

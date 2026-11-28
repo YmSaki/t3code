@@ -29,7 +29,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import { randomUuidV4 } from "./randomUuid.ts";
+import { randomUuidV4 } from "@t3tools/shared/randomUuid";
 
 export const IdAllocatorV2Kind = Schema.Literals([
   "command",

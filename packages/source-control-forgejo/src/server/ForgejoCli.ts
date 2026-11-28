@@ -15,7 +15,7 @@ import { ChildProcessSpawner } from "effect/process";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
-import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
+import { collectUint8StreamText } from "@t3tools/shared/collectStreamText";
 import type { SourceControlProviderContext } from "@t3tools/source-control-core/server/SourceControlProvider";
 
 // A Gitea list page can hold 50 pull request bodies; tea's output is otherwise capped at 1 MB.

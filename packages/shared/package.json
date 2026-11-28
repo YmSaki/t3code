@@ -383,6 +383,18 @@
       "types": "./src/HostProcess.ts",
       "import": "./src/HostProcess.ts"
     },
+    "./collectStreamText": {
+      "types": "./src/collectStreamText.ts",
+      "import": "./src/collectStreamText.ts"
+    },
+    "./randomUuid": {
+      "types": "./src/randomUuid.ts",
+      "import": "./src/randomUuid.ts"
+    },
+    "./spawnAndCollect": {
+      "types": "./src/spawnAndCollect.ts",
+      "import": "./src/spawnAndCollect.ts"
+    },
     "./testing/gitRepositoryEnv": {
       "types": "./src/testing/gitRepositoryEnv.ts",
       "import": "./src/testing/gitRepositoryEnv.ts"

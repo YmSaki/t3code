@@ -10,10 +10,7 @@ import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 import * as Headers from "effect/http/Headers";
 import { GraphQLClientError, GraphQLMiddleware, GraphQLProtocol } from "effect/graphql";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
-import {
-  collectUint8StreamChunks,
-  decodeUtf8,
-} from "@t3tools/provider-core/server/collectStreamText";
+import { collectUint8StreamChunks, decodeUtf8 } from "@t3tools/shared/collectStreamText";
 
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";

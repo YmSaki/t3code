@@ -14,7 +14,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
-import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
+import { collectUint8StreamText } from "@t3tools/shared/collectStreamText";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import { parseGitRemoteHost } from "@t3tools/source-control-core/shared/definition";
 import { CURSOR_ORIGIN_GIT_HOST } from "../shared/definition.ts";
