@@ -910,7 +910,9 @@ const layerRemoteDelegation = RemoteDelegation.layer.pipe(
   Layer.provide(ProjectionStoreV2.layer),
   Layer.provide(layerPeerStack),
 );
-const layerWebPush = WebPushService.layer.pipe(Layer.provide(WebPushStore.layer));
+const layerWebPush = WebPushService.layer.pipe(
+  Layer.provide(WebPushStore.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+);
 const layerMetaProject = MetaProjectService.layer.pipe(
   Layer.provide(MetaProjectStore.layer),
   Layer.provide(MetaProjectRuntimeWiring.layer),
