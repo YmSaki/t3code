@@ -255,6 +255,12 @@ export const docReaderTests = (files: ReadonlyArray<string>) =>
     ? ["apps/server/src/cloud/ConnectReachability.test.ts"]
     : [];
 
+// Tests that read files other than the ones beside them, so no changed file selects them.
+export const packageReaderTests = (affected: ReadonlyArray<string>) => [
+  ...(affected.includes("t3") ? ["apps/server/src/provider/AgentContextBudget.test.ts"] : []),
+  ...(affected.includes("@t3tools/scripts") ? ["scripts/architecture-boundaries.test.ts"] : []),
+];
+
 const checkChanged = Effect.fn("checkChanged")(function* (input: {
   readonly ref: Option.Option<string>;
   readonly concurrency: Option.Option<number>;
@@ -363,10 +369,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
       if (entry.startsWith(prefix) && TEST.test(entry)) tests.add(path.join(dir, entry));
     }
   }
-  for (const test of docReaderTests(files)) tests.add(test);
-  // It reads files other than the ones beside it, so no changed file selects it.
-  if (affected.includes("t3")) tests.add("apps/server/src/provider/AgentContextBudget.test.ts");
-  if (affected.includes("@t3tools/scripts")) tests.add("scripts/architecture-boundaries.test.ts");
+  for (const test of [...docReaderTests(files), ...packageReaderTests(affected)]) tests.add(test);
   const { vitestTests, nodeTests } = splitTests(tests);
 
   // React Compiler coverage compiles every client source file, so run only the

@@ -4,10 +4,12 @@
 
 type Tracking = ReadonlyArray<`#${number}`>;
 
-// Adopted design rather than debt: the pairs a cross-domain rule would otherwise flag.
-export const ALLOWED_CROSS_DOMAIN_EDGES: ReadonlySet<string> = new Set([
-  // source-control-core owns the IssueTracker interface that issue trackers implement.
-  "@t3tools/issue-tracker-linear -> @t3tools/source-control-core",
+// Adopted design rather than debt: the exact public imports a cross-domain rule would otherwise
+// flag, as "package -> specifier". Other subpaths and relative paths of the pair stay forbidden.
+export const ALLOWED_CROSS_DOMAIN_IMPORTS: ReadonlySet<string> = new Set([
+  // source-control-core owns the interface and host service that standalone trackers implement.
+  "@t3tools/issue-tracker-linear -> @t3tools/source-control-core/server/IssueTracker",
+  "@t3tools/issue-tracker-linear -> @t3tools/source-control-core/server/IssueTrackerHost",
 ]);
 
 const GENERIC_PROVIDER_HELPER =
@@ -15,70 +17,140 @@ const GENERIC_PROVIDER_HELPER =
 
 export const PACKAGE_EDGE_BASELINE: ReadonlyArray<{
   readonly edge: string;
-  readonly imports: ReadonlyArray<string>;
+  // "file -> specifier" to the imported names ("*" for namespace or dynamic imports).
+  readonly imports: Readonly<Record<string, ReadonlyArray<string>>>;
   readonly reason: string;
   readonly tracking?: Tracking;
 }> = [
   {
     edge: "effect-codex-app-server -> @t3tools/shared",
-    imports: [
-      "packages/effect-codex-app-server/src/_internal/stdio.test.ts -> @t3tools/shared/HostProcess",
-      "packages/effect-codex-app-server/src/_internal/stdio.ts -> @t3tools/shared/HostProcess",
-    ],
+    imports: {
+      "packages/effect-codex-app-server/package.json -> @t3tools/shared": ["dependencies"],
+      "packages/effect-codex-app-server/src/_internal/stdio.test.ts -> @t3tools/shared/HostProcess":
+        ["*"],
+      "packages/effect-codex-app-server/src/_internal/stdio.ts -> @t3tools/shared/HostProcess": [
+        "*",
+      ],
+    },
     reason: "Standalone protocol libraries must have zero product package dependencies.",
   },
   {
     edge: "t3code-relay -> @t3tools/client-runtime",
-    imports: [
-      "infra/relay/src/environments/EnvironmentConnector.ts -> @t3tools/client-runtime/rpc",
-      "infra/relay/src/http/Api.test.ts -> @t3tools/client-runtime/relay",
-    ],
+    imports: {
+      "infra/relay/package.json -> @t3tools/client-runtime": ["dependencies"],
+      "infra/relay/src/environments/EnvironmentConnector.ts -> @t3tools/client-runtime/rpc": [
+        "makeEnvironmentHttpApiClient",
+      ],
+      "infra/relay/src/http/Api.test.ts -> @t3tools/client-runtime/relay": [
+        "relayProtectedErrorMessage",
+      ],
+    },
     reason:
       "A hosted service depends on the client runtime; the shared wire pieces belong to contracts or shared.",
   },
   {
     edge: "@t3tools/secret-provider-onepassword -> @t3tools/provider-core",
-    imports: [
-      "packages/secret-provider-onepassword/src/server/driver.ts -> @t3tools/provider-core/server/snapshotProbe",
-    ],
+    imports: {
+      "packages/secret-provider-onepassword/package.json -> @t3tools/provider-core": [
+        "dependencies",
+      ],
+      "packages/secret-provider-onepassword/src/server/driver.ts -> @t3tools/provider-core/server/snapshotProbe":
+        ["spawnAndCollect"],
+    },
     reason: GENERIC_PROVIDER_HELPER,
   },
   {
     edge: "@t3tools/source-control-bitbucket -> @t3tools/provider-core",
-    imports: [
-      "packages/source-control-bitbucket/src/server/BitbucketApi.ts -> @t3tools/provider-core/server/collectStreamText",
-    ],
+    imports: {
+      "packages/source-control-bitbucket/package.json -> @t3tools/provider-core": ["dependencies"],
+      "packages/source-control-bitbucket/src/server/BitbucketApi.ts -> @t3tools/provider-core/server/collectStreamText":
+        ["collectUint8StreamText"],
+    },
     reason: GENERIC_PROVIDER_HELPER,
   },
   {
     edge: "@t3tools/source-control-cursor-origin -> @t3tools/provider-core",
-    imports: [
-      "packages/source-control-cursor-origin/src/server/OriginCli.ts -> @t3tools/provider-core/server/collectStreamText",
-    ],
+    imports: {
+      "packages/source-control-cursor-origin/package.json -> @t3tools/provider-core": [
+        "dependencies",
+      ],
+      "packages/source-control-cursor-origin/src/server/OriginCli.ts -> @t3tools/provider-core/server/collectStreamText":
+        ["collectUint8StreamText"],
+    },
     reason: GENERIC_PROVIDER_HELPER,
   },
   {
     edge: "@t3tools/source-control-forgejo -> @t3tools/provider-core",
-    imports: [
-      "packages/source-control-forgejo/src/server/ForgejoCli.ts -> @t3tools/provider-core/server/collectStreamText",
-    ],
+    imports: {
+      "packages/source-control-forgejo/package.json -> @t3tools/provider-core": ["dependencies"],
+      "packages/source-control-forgejo/src/server/ForgejoCli.ts -> @t3tools/provider-core/server/collectStreamText":
+        ["collectUint8StreamText"],
+    },
     reason: GENERIC_PROVIDER_HELPER,
   },
   {
     edge: "@t3tools/source-control-gitcafe -> @t3tools/provider-core",
-    imports: [
-      "packages/source-control-gitcafe/src/server/GitCafePullRequestProvider.ts -> @t3tools/provider-core/server/randomUuid",
-      "packages/source-control-gitcafe/src/server/GitCafeSourceControlProvider.ts -> @t3tools/provider-core/server/randomUuid",
-    ],
+    imports: {
+      "packages/source-control-gitcafe/package.json -> @t3tools/provider-core": ["dependencies"],
+      "packages/source-control-gitcafe/src/server/GitCafePullRequestProvider.ts -> @t3tools/provider-core/server/randomUuid":
+        ["randomUuidV4"],
+      "packages/source-control-gitcafe/src/server/GitCafeSourceControlProvider.ts -> @t3tools/provider-core/server/randomUuid":
+        ["randomUuidV4"],
+    },
     reason: GENERIC_PROVIDER_HELPER,
   },
   {
     edge: "@t3tools/source-control-github -> @t3tools/provider-core",
-    imports: [
-      "packages/source-control-github/src/server/GitHubRest.ts -> @t3tools/provider-core/server/collectStreamText",
-      "packages/source-control-github/src/server/gitHubGraphQlClient.ts -> @t3tools/provider-core/server/collectStreamText",
-    ],
+    imports: {
+      "packages/source-control-github/package.json -> @t3tools/provider-core": ["dependencies"],
+      "packages/source-control-github/src/server/GitHubRest.ts -> @t3tools/provider-core/server/collectStreamText":
+        ["collectUint8StreamText"],
+      "packages/source-control-github/src/server/gitHubGraphQlClient.ts -> @t3tools/provider-core/server/collectStreamText":
+        ["collectUint8StreamChunks", "decodeUtf8"],
+    },
     reason: GENERIC_PROVIDER_HELPER,
+  },
+  {
+    edge: "@t3tools/desktop -> t3",
+    imports: {
+      "apps/desktop/src/backend/DesktopBackendConfiguration.ts -> ../../../server/package.json": [
+        "default",
+      ],
+      "apps/desktop/src/ssh/DesktopSshEnvironment.ts -> ../../../server/package.json": ["default"],
+    },
+    reason:
+      "The desktop runtime reads the server's package.json by relative path instead of a public interface.",
+  },
+  {
+    edge: "@t3tools/desktop -> @t3tools/scripts",
+    imports: {
+      "apps/desktop/src/compileCache.ts -> ../../../scripts/lib/server-compile-cache.ts": [
+        "enablePreparedServerCache",
+      ],
+      "apps/desktop/src/serverCompileCache.ts -> ../../../scripts/lib/server-compile-cache.ts": [
+        "generatePreparedServerCache",
+      ],
+    },
+    reason:
+      "Desktop runtime code imports support code from scripts/lib (overview.md: support code is never imported by production runtime code).",
+  },
+  {
+    edge: "@t3tools/mobile -> @t3tools/web",
+    imports: {
+      "apps/mobile/app.config.test.ts -> ../web/public/.well-known/apple-app-site-association.json":
+        ["default"],
+      "apps/mobile/app.config.test.ts -> ../web/public/.well-known/assetlinks.json": ["default"],
+    },
+    reason: "A mobile test reads the web app's published well-known files by relative path.",
+  },
+  {
+    edge: "@t3tools/provider-pi -> @t3tools/client-runtime",
+    imports: {
+      "packages/provider-pi/src/server/adapter.test.ts -> ../../../client-runtime/src/work-log/itemDetail.ts":
+        ["turnItemOutputText"],
+    },
+    reason:
+      "An adapter test reaches client-runtime internals by relative path; adapters must not depend on the client runtime.",
   },
 ];
 
