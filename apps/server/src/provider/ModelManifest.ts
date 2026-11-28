@@ -15,6 +15,7 @@ import * as Semaphore from "effect/Semaphore";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
+import { CLI_RELEASE_REPOSITORY } from "@t3tools/shared/cliRelease";
 import { ServerConfig } from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { hasValidClaudeManifestAdapters } from "./ClaudeModelManifest.ts";
@@ -25,8 +26,8 @@ import {
 } from "./providerCompatibility.ts";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 
-const MODEL_MANIFEST_URL =
-  "https://raw.githubusercontent.com/pingdotgg/t3code/main/apps/server/src/provider/model-manifest.json";
+/** Fork-owned feed; never fetch the upstream repository's manifest. */
+const MODEL_MANIFEST_URL = `https://raw.githubusercontent.com/${CLI_RELEASE_REPOSITORY}/main/apps/server/src/provider/model-manifest.json`;
 
 const MANIFEST_TTL_MS = 60 * 60 * 1000;
 

@@ -248,15 +248,17 @@ const INVALID_REMOTE_MANIFESTS: ReadonlyArray<ModelManifest.ModelManifestData> =
   }),
 ];
 
-const layerHttpClient = (handler: () => Response) =>
+const layerHttpClient = (handler: (url: string) => Response) =>
   Layer.succeed(
     HttpClient.HttpClient,
-    HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, handler()))),
+    HttpClient.make((request) =>
+      Effect.succeed(HttpClientResponse.fromWeb(request, handler(request.url))),
+    ),
   );
 
 const layerService = (input: {
   readonly prefix: string;
-  readonly response: () => Response;
+  readonly response: (url: string) => Response;
   readonly settings?: Parameters<typeof ServerSettings.layerTest>[0];
 }) =>
   ServerConfig.layerTest(process.cwd(), { prefix: input.prefix }).pipe(
@@ -266,11 +268,15 @@ const layerService = (input: {
   );
 
 describe("ModelManifest service", () => {
-  it.effect("prefers a fetched manifest over the bundle and caches it to disk", () =>
-    Effect.gen(function* () {
+  it.effect("prefers a fetched manifest over the bundle and caches it to disk", () => {
+    const requestedUrls: Array<string> = [];
+    return Effect.gen(function* () {
       const service = yield* ModelManifest.make;
       const refreshed = yield* service.refresh;
       assert.deepStrictEqual(refreshed, REMOTE_MANIFEST);
+      assert.deepStrictEqual(requestedUrls, [
+        "https://raw.githubusercontent.com/YmSaki/t3codeJP/main/apps/server/src/provider/model-manifest.json",
+      ]);
 
       const rebooted = yield* ModelManifest.make;
       assert.deepStrictEqual(yield* rebooted.current, REMOTE_MANIFEST);
@@ -279,11 +285,37 @@ describe("ModelManifest service", () => {
       Effect.provide(
         layerService({
           prefix: "model-manifest-fetch-test",
-          response: () => Response.json(REMOTE_MANIFEST),
+          response: (url) => {
+            requestedUrls.push(url);
+            return Response.json(REMOTE_MANIFEST);
+          },
         }),
       ),
-    ),
-  );
+    );
+  });
+
+  it.effect("keeps the bundled manifest and writes no cache when the fetch fails", () => {
+    const responses = [new Response("not found", { status: 404 }), Response.json({ version: 2 })];
+    let responseIndex = 0;
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      const service = yield* ModelManifest.make;
+      for (const _response of responses) {
+        assert.deepStrictEqual(yield* service.forceRefresh, ModelManifest.BUNDLED_MODEL_MANIFEST);
+      }
+      assert.isFalse(yield* fs.exists(path.join(config.stateDir, "model-manifest.json")));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        layerService({
+          prefix: "model-manifest-fetch-failure-test",
+          response: () => responses[responseIndex++]!,
+        }),
+      ),
+    );
+  });
 
   it.effect(
     "ignores older remote edits without replacing the current manifest or disk cache",
