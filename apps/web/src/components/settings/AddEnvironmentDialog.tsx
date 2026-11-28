@@ -229,10 +229,13 @@ export function AddEnvironmentDialog({
     onErrorChange(null);
     let remotePairingInput: ReturnType<typeof parseRemotePairingFields>;
     try {
-      remotePairingInput = parseRemotePairingFields({
-        host: savedBackendHost,
-        pairingCode: savedBackendPairingCode,
-      });
+      remotePairingInput = parseRemotePairingFields(
+        {
+          host: savedBackendHost,
+          pairingCode: savedBackendPairingCode,
+        },
+        window.location.origin,
+      );
     } catch (error) {
       const message =
         error instanceof Error
@@ -369,7 +372,7 @@ export function AddEnvironmentDialog({
   };
 
   const handleSavedBackendHostChange = (value: string) => {
-    const parsedPairingUrl = parsePairingUrlFields(value);
+    const parsedPairingUrl = parsePairingUrlFields(value, window.location.origin);
     if (parsedPairingUrl) {
       setSavedBackendHost(parsedPairingUrl.host);
       setSavedBackendPairingCode(parsedPairingUrl.pairingCode);

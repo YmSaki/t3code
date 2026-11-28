@@ -137,10 +137,11 @@ export function snapShotAccessibilityUnavailableMessage(
 
 export function snapShotUnavailableMessage(
   hasBridge: boolean,
+  isDesktopApp: boolean,
   resolve: MessageResolver = m,
 ): string | undefined {
   if (hasBridge) return undefined;
-  return typeof window !== "undefined" && window.desktopBridge
+  return isDesktopApp
     ? resolve(msg("Update the desktop app to use snapshots."))
     : resolve(msg("Only available in the desktop app."));
 }

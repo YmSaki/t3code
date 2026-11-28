@@ -104,8 +104,6 @@ import {
   hasChangedBackgroundActivitySettings,
   isProjectGroupingEnabled,
   projectGroupingModeFromToggle,
-  readLastEnabledProjectGroupingMode,
-  rememberEnabledProjectGroupingMode,
   syncAutoSettleDaysField,
 } from "./SettingsPanels.logic";
 import {
@@ -825,6 +823,25 @@ function AutoSettleDaysInput({
       aria-label={gt("Days of inactivity before auto-settle")}
     />
   );
+}
+
+const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grouping-mode";
+
+function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode {
+  try {
+    return localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) === "repository_path"
+      ? "repository_path"
+      : "repository";
+  } catch {
+    return "repository";
+  }
+}
+
+function rememberEnabledProjectGroupingMode(mode: SidebarProjectGroupingMode): void {
+  if (mode === "separate") return;
+  try {
+    localStorage.setItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY, mode);
+  } catch {}
 }
 
 export function GeneralSettingsPanel() {

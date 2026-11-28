@@ -207,7 +207,7 @@ function conflictsWithWhen(leftWhen: string, rightWhen: string): boolean {
 export function keybindingConflictLabels(
   rows: ReadonlyArray<KeybindingRow>,
   input: { readonly rowId: string; readonly key: string; readonly when: string },
-  platform = navigator.platform,
+  platform: string,
   resolve: MessageResolver = m,
 ): ReadonlyArray<string> {
   if (input.key.trim().length === 0) return [];
@@ -282,7 +282,7 @@ export function groupKeybindingRows(
 
 export function buildKeybindingRows(
   keybindings: ResolvedKeybindingsConfig,
-  platform = navigator.platform,
+  platform: string,
   sendShortcut: ClientSettings["sendShortcut"] = "enter",
   resolve: MessageResolver = m,
 ): ReadonlyArray<KeybindingRow> {

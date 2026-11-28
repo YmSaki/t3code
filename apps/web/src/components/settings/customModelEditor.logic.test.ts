@@ -3,6 +3,7 @@ import { ProviderDriverKind, type ModelCapabilities } from "@t3tools/contracts";
 
 import {
   DESCRIPTOR_PRESETS_BY_KIND,
+  createEditorKeySource,
   descriptorFromPreset,
   definitionFromDraft,
   descriptorsFromCapabilities,
@@ -59,7 +60,7 @@ describe("customModelEditor.logic", () => {
       },
     });
 
-    const reopened = draftFromDefinition(definition);
+    const reopened = draftFromDefinition(definition, createEditorKeySource());
     expect(reopened.name).toBe("My Model");
     expect(reopened.descriptors.map((descriptor) => descriptor.id)).toEqual([
       "reasoningEffort",
@@ -88,6 +89,7 @@ describe("customModelEditor.logic", () => {
         ],
       },
       ProviderDriverKind.make("claudeAgent"),
+      createEditorKeySource(),
     );
     expect(descriptors[0]!.choices.map((choice) => choice.isDefault)).toEqual([false, true]);
     expect(
@@ -112,6 +114,7 @@ describe("customModelEditor.logic", () => {
         ],
       },
       ProviderDriverKind.make("claudeAgent"),
+      createEditorKeySource(),
     );
     expect(copied!.choices.map((choice) => choice.id)).toEqual(["high"]);
   });
@@ -130,22 +133,32 @@ describe("customModelEditor.logic", () => {
     };
     const claude = ProviderDriverKind.make("claudeAgent");
     const copied = definitionFromDraft(
-      draft({ descriptors: descriptorsFromCapabilities(capabilities, claude) }),
+      draft({
+        descriptors: descriptorsFromCapabilities(capabilities, claude, createEditorKeySource()),
+      }),
     );
     expect(copied.capabilities?.optionDescriptors).toEqual([capabilities.optionDescriptors![1]]);
+    const newKey = createEditorKeySource();
     const presets = definitionFromDraft(
       draft({
-        descriptors: (DESCRIPTOR_PRESETS_BY_KIND[claude] ?? []).map(descriptorFromPreset),
+        descriptors: (DESCRIPTOR_PRESETS_BY_KIND[claude] ?? []).map((preset) =>
+          descriptorFromPreset(preset, newKey),
+        ),
       }),
     );
     expect(
       presets.capabilities?.optionDescriptors?.some((option) => option.id === "contextWindow"),
     ).toBe(false);
-    const cursorCopy = descriptorsFromCapabilities(capabilities, ProviderDriverKind.make("cursor"));
+    const cursorCopy = descriptorsFromCapabilities(
+      capabilities,
+      ProviderDriverKind.make("cursor"),
+      createEditorKeySource(),
+    );
     expect(cursorCopy.map((option) => option.id)).toEqual(["contextWindow", "thinking"]);
     const authored = { slug: "custom", name: "Custom", capabilities };
     expect(
-      definitionFromDraft(draftFromDefinition(authored)).capabilities?.optionDescriptors?.[0],
+      definitionFromDraft(draftFromDefinition(authored, createEditorKeySource())).capabilities
+        ?.optionDescriptors?.[0],
     ).toMatchObject(capabilities.optionDescriptors![0]!);
   });
 
