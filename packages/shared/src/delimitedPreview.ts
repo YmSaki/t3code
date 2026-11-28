@@ -1,4 +1,4 @@
-import { GENERIC_MIME_TYPES } from "./image.ts";
+import { GENERIC_MIME_TYPES } from "./mimeType.ts";
 
 export function filePreviewDelimiter(file: { name: string; mimeType?: string }): "," | "\t" | null {
   const mime = file.mimeType?.split(";", 1)[0]?.trim().toLowerCase();
