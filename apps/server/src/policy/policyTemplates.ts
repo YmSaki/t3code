@@ -5,6 +5,7 @@ import {
   WINDOWS_POLICY_LISTS,
   WINDOWS_POLICY_VALUES,
 } from "@t3tools/shared/managedPolicyFile";
+import { DESKTOP_APP_ID, PRODUCT_NAME, PRODUCT_SLUG } from "@t3tools/shared/productIdentity";
 
 import { knownDriverLabels } from "./managedProviders.ts";
 
@@ -243,7 +244,7 @@ export function windowsAdmx(): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
   <policyNamespaces>
-    <target prefix="t3code" namespace="T3Tools.Policies.T3Code" />
+    <target prefix="${PRODUCT_SLUG}" namespace="${PRODUCT_NAME}.Policies" />
   </policyNamespaces>
   <resources minRequiredRevision="1.0" />
   <supportedOn>
@@ -343,7 +344,7 @@ const nullPath = (
   return undefined;
 };
 
-/** A device configuration profile that installs `document` for `com.t3tools.t3code`. */
+/** A device configuration profile that installs `document` for `DESKTOP_APP_ID`. */
 export function macosProfile(
   document: ManagedPolicyDocument,
   uuids: { readonly profile: string; readonly payload: string },
@@ -364,8 +365,8 @@ export function macosProfile(
     PayloadContent: [
       {
         PayloadDisplayName: "T3 Code policy",
-        PayloadIdentifier: `com.t3tools.t3code.policy.${uuids.payload}`,
-        PayloadType: "com.t3tools.t3code",
+        PayloadIdentifier: `${DESKTOP_APP_ID}.policy.${uuids.payload}`,
+        PayloadType: DESKTOP_APP_ID,
         PayloadUUID: uuids.payload,
         PayloadVersion: 1,
         ...document,
@@ -373,7 +374,7 @@ export function macosProfile(
     ],
     PayloadDescription: "Configures T3 Code for every user on this Mac.",
     PayloadDisplayName: `T3 Code policy for ${document.organization}`,
-    PayloadIdentifier: `com.t3tools.t3code.policy`,
+    PayloadIdentifier: `${DESKTOP_APP_ID}.policy`,
     PayloadOrganization: document.organization,
     PayloadScope: "System",
     PayloadType: "Configuration",

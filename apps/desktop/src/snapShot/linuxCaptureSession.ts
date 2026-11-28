@@ -2,6 +2,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeURL from "node:url";
 import type { SnapShotKeyChord } from "@t3tools/contracts";
+import { DESKTOP_APP_ID } from "@t3tools/shared/productIdentity";
 import * as Schema from "effect/Schema";
 import { nativeImage } from "electron";
 
@@ -17,8 +18,8 @@ export class CaptureSetupRequiredError extends Schema.TaggedError<CaptureSetupRe
     return `${this.state} Open Settings → SnapShots to continue setup.`;
   }
 }
-export const NIRI_CAPTURE_PATH = "/com/t3tools/SnapShot";
-export const NIRI_CAPTURE_INTERFACE = "com.t3tools.SnapShot";
+export const NIRI_CAPTURE_PATH = `/${DESKTOP_APP_ID.replaceAll(".", "/")}/SnapShot`;
+export const NIRI_CAPTURE_INTERFACE = `${DESKTOP_APP_ID}.SnapShot`;
 
 function isDesktopSession(env: NodeJS.ProcessEnv, desktop: string): boolean {
   return (

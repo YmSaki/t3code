@@ -73,8 +73,8 @@ The bundled protocol XML ships with the helper because its BSD license requires 
 ## Niri
 
 Niri does not implement the global-shortcut portal. While capture is enabled the app owns
-`<app-id>.SnapShot` on the session bus and exports `com.t3tools.SnapShot.Capture`; the config
-binding spawns `gdbus` to call it. Development and packaged app IDs use separate names so a dev
+`<app-id>.SnapShot` on the session bus and exports `Capture` on an interface and object path
+derived from `DESKTOP_APP_ID` in `productIdentity.ts`; the config binding spawns `gdbus` to call it. Development and packaged app IDs use separate names so a dev
 build does not steal the user's binding.
 
 Niri supplies no global screenshot origin, so AT-SPI matching uses logical size and title only.
@@ -95,7 +95,7 @@ Source in `apps/desktop/gnome-extension`, UUID `snap-shot@t3.codes`. GNOME only 
 installed extension at login, so setup distinguishes "installed, needs logout" from "discovered but
 disabled" and compares loaded and installed versions.
 
-The extension trusts callers that own `com.t3tools.T3Code.SnapShot` (or the `.Development`
+The extension trusts callers that own `io.github.ymsaki.t3codejp.SnapShot` (or the `.dev`
 variant) on the same connection. This is GNOME's trusted-session-client pattern, not authentication
 against a hostile process on the user's bus.
 
