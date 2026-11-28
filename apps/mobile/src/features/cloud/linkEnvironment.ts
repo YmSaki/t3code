@@ -235,21 +235,6 @@ export const linkEnvironmentToCloudWithPreference = Effect.fn(
       ? target.wsBaseUrl
       : httpBaseUrl.replace(/^http/, "ws");
   const relayUrl = yield* requireRelayUrl();
-  // Publishing is a host-local setting, so enable it before committing a link a retry would skip.
-  yield* executeConnectedEnvironmentHttpRequest({
-    group: "connect",
-    method: "POST",
-    url: (urls) => urls.preferences(),
-    timeoutMs: CLOUD_LINK_REQUEST_TIMEOUT_MS,
-    request: ({ client, headers }) =>
-      client.preferences({ headers, payload: { publishAgentActivity: true } }),
-  }).pipe(
-    Effect.mapError(
-      cloudEnvironmentLinkError(m(msg("Could not turn on agent activity publishing.")), (detail) =>
-        m(msg("Could not turn on agent activity publishing: {detail}", { detail })),
-      ),
-    ),
-  );
   const relayClient = yield* ManagedRelay.ManagedRelayClient;
   const storage = yield* MobileStorage.MobileStorage;
   const deviceId = yield* storage.loadOrCreateAgentAwarenessDeviceId.pipe(
@@ -338,6 +323,25 @@ export const linkEnvironmentToCloudWithPreference = Effect.fn(
       cloudEnvironmentLinkError(
         m(msg("Could not configure environment relay access.")),
         (detail) => m(msg("Could not configure environment relay access: {detail}", { detail })),
+        { relayLinkCommitted: true },
+      ),
+    ),
+  );
+
+  // Persist host activity publishing only after the relay link and host config succeed so failed
+  // or cancelled attempts never leave it changed or roll back concurrent settings updates.
+  yield* executeConnectedEnvironmentHttpRequest({
+    group: "connect",
+    method: "POST",
+    url: (urls) => urls.preferences(),
+    timeoutMs: CLOUD_LINK_REQUEST_TIMEOUT_MS,
+    request: ({ client, headers }) =>
+      client.preferences({ headers, payload: { publishAgentActivity: true } }),
+  }).pipe(
+    Effect.mapError(
+      cloudEnvironmentLinkError(
+        m(msg("Could not turn on agent activity publishing.")),
+        (detail) => m(msg("Could not turn on agent activity publishing: {detail}", { detail })),
         { relayLinkCommitted: true },
       ),
     ),

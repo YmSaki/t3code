@@ -1,6 +1,7 @@
 import { beforeEach, vi } from "vite-plus/test";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as Layer from "effect/Layer";
@@ -251,7 +252,10 @@ describe("mobile cloud link environment client", () => {
           _tag: "CloudEnvironmentLinkError",
           message: "Relay returned credentials for a different environment.",
         });
-        expect(fetchMock).toHaveBeenCalledTimes(4);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(
+          fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/connect/preferences")),
+        ).toBe(false);
       }),
   );
 
@@ -284,14 +288,19 @@ describe("mobile cloud link environment client", () => {
         _tag: "CloudEnvironmentLinkError",
         message: "Relay returned credentials for a different endpoint provider.",
       });
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(
+        fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/connect/preferences")),
+      ).toBe(false);
     }),
   );
 
   it.effect("preserves disabled Live Activity preferences when linking an environment", () =>
     Effect.gen(function* () {
+      const urls: Array<string> = [];
       const bodies: Array<unknown> = [];
       const fetchMock = vi.fn((url: string | URL, init?: RequestInit) => {
+        urls.push(String(url));
         if (init?.body) {
           bodies.push(JSON.parse(requestBodyText(init.body)));
         }
@@ -315,8 +324,14 @@ describe("mobile cloud link environment client", () => {
 
       yield* linkPreparedEnvironment(false);
 
-      expect(bodies[0]).toEqual({ publishAgentActivity: true });
-      expect(bodies[2]).toMatchObject({
+      expect(urls.map((url) => new URL(url).pathname)).toEqual([
+        "/v1/client/environment-link-challenges",
+        "/api/connect/link-proof",
+        "/v1/client/environment-links",
+        "/api/connect/relay-config",
+        "/api/connect/preferences",
+      ]);
+      expect(bodies[1]).toMatchObject({
         endpoint: {
           httpBaseUrl: "https://desktop.example.test/",
           wsBaseUrl: "wss://desktop.example.test/ws",
@@ -327,16 +342,151 @@ describe("mobile cloud link environment client", () => {
           localHttpPort: 443,
         },
       });
-      expect(bodies[3]).toMatchObject({
+      expect(bodies[2]).toMatchObject({
         deviceId: "device-1",
         notificationsEnabled: true,
         liveActivitiesEnabled: false,
         managedTunnelsEnabled: false,
       });
-      expect(bodies[4]).toMatchObject({
+      expect(bodies[3]).toMatchObject({
         cloudUserId: "user_123",
         environmentCredential: "environment-credential",
       });
+      expect(bodies[4]).toEqual({ publishAgentActivity: true });
     }),
+  );
+
+  it.effect(
+    "leaves host activity publishing unchanged when a pre-commit link step fails and enables it on a successful retry",
+    () =>
+      Effect.gen(function* () {
+        let hostPublishAgentActivity = false;
+        let failChallenge = true;
+        const fetchMock = vi.fn((url: string | URL, init?: RequestInit) => {
+          const target = String(url);
+          if (target.endsWith("/v1/client/environment-link-challenges")) {
+            if (failChallenge) {
+              return Promise.resolve(
+                Response.json({ message: "Relay unavailable" }, { status: 503 }),
+              );
+            }
+            return Promise.resolve(Response.json(validLinkChallengeResponse()));
+          }
+          if (target.endsWith("/api/connect/link-proof")) {
+            return Promise.resolve(Response.json(validLinkProof()));
+          }
+          if (target.endsWith("/v1/client/environment-links")) {
+            return Promise.resolve(Response.json(validLinkResponse()));
+          }
+          if (target.endsWith("/api/connect/relay-config")) {
+            return Promise.resolve(
+              Response.json({ ok: true, endpointRuntimeStatus: { status: "configured" } }),
+            );
+          }
+          if (target.endsWith("/api/connect/preferences")) {
+            const payload = JSON.parse(requestBodyText(init?.body)) as {
+              readonly publishAgentActivity: boolean;
+            };
+            hostPublishAgentActivity = payload.publishAgentActivity;
+            return Promise.resolve(Response.json(linkStateResponse()));
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${target}`));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const error = yield* linkPreparedEnvironment(true).pipe(Effect.flip);
+        expect(error._tag).toBe("CloudEnvironmentLinkError");
+        expect(error.relayLinkCommitted).toBeUndefined();
+        expect(hostPublishAgentActivity).toBe(false);
+        expect(
+          fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/connect/preferences")),
+        ).toBe(false);
+
+        // An already-enabled host setting is also preserved on failure.
+        hostPublishAgentActivity = true;
+        const secondError = yield* linkPreparedEnvironment(true).pipe(Effect.flip);
+        expect(secondError._tag).toBe("CloudEnvironmentLinkError");
+        expect(hostPublishAgentActivity).toBe(true);
+        expect(
+          fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/connect/preferences")),
+        ).toBe(false);
+
+        failChallenge = false;
+        hostPublishAgentActivity = false;
+        yield* linkPreparedEnvironment(true);
+        expect(hostPublishAgentActivity).toBe(true);
+      }),
+  );
+
+  it.effect(
+    "does not touch or revert concurrent host activity settings when linking is cancelled mid-flight",
+    () =>
+      Effect.gen(function* () {
+        let hostPublishAgentActivity = false;
+        const challengeStarted = Promise.withResolvers<void>();
+        const releaseChallenge = Promise.withResolvers<Response>();
+        const fetchMock = vi.fn((url: string | URL, init?: RequestInit) => {
+          const target = String(url);
+          if (target.endsWith("/v1/client/environment-link-challenges")) {
+            challengeStarted.resolve();
+            return releaseChallenge.promise;
+          }
+          if (target.endsWith("/api/connect/preferences")) {
+            const payload = JSON.parse(requestBodyText(init?.body)) as {
+              readonly publishAgentActivity: boolean;
+            };
+            hostPublishAgentActivity = payload.publishAgentActivity;
+            return Promise.resolve(Response.json(linkStateResponse()));
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${target}`));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const fiber = yield* linkPreparedEnvironment(true).pipe(Effect.forkChild);
+        yield* Effect.promise(() => challengeStarted.promise);
+        // Simulate a concurrent legitimate host preference update while the link is in flight.
+        hostPublishAgentActivity = true;
+        yield* Fiber.interrupt(fiber);
+        releaseChallenge.resolve(Response.json(validLinkChallengeResponse()));
+
+        expect(hostPublishAgentActivity).toBe(true);
+        expect(
+          fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/connect/preferences")),
+        ).toBe(false);
+      }),
+  );
+
+  it.effect(
+    "marks relayLinkCommitted when persisting host preferences fails after relay-config",
+    () =>
+      Effect.gen(function* () {
+        const fetchMock = vi.fn((url: string | URL) => {
+          const target = String(url);
+          if (target.endsWith("/v1/client/environment-link-challenges")) {
+            return Promise.resolve(Response.json(validLinkChallengeResponse()));
+          }
+          if (target.endsWith("/api/connect/link-proof")) {
+            return Promise.resolve(Response.json(validLinkProof()));
+          }
+          if (target.endsWith("/v1/client/environment-links")) {
+            return Promise.resolve(Response.json(validLinkResponse()));
+          }
+          if (target.endsWith("/api/connect/relay-config")) {
+            return Promise.resolve(
+              Response.json({ ok: true, endpointRuntimeStatus: { status: "configured" } }),
+            );
+          }
+          return Promise.resolve(
+            Response.json({ message: "Host preferences failed" }, { status: 500 }),
+          );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const error = yield* linkPreparedEnvironment(true).pipe(Effect.flip);
+        expect(error).toMatchObject({
+          _tag: "CloudEnvironmentLinkError",
+          relayLinkCommitted: true,
+        });
+      }),
   );
 });
