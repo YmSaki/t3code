@@ -10,6 +10,7 @@ const DEFAULT_SELECTION_MIN_THREADS = 3;
 /** Treat candidates missing git as repositories for servers predating git scans. */
 export function partitionOnboardingProjects<T extends AgentSessionProjectCandidate>(
   candidates: ReadonlyArray<T>,
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
   now = Date.now(),
 ) {
   const cutoff = now - RECENT_PROJECT_WINDOW_MS;

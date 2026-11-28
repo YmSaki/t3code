@@ -12,6 +12,7 @@ export function formatWorkingTimerNow(startIso: string, environmentId: Environme
 
   const elapsedSeconds = Math.max(
     0,
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
     Math.floor((toServerClock(environmentId, Date.now()) - startedAtMs) / 1000),
   );
   if (elapsedSeconds < 60) {

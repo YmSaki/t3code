@@ -13,6 +13,7 @@ export interface KeybindingsUpdateToastController {
 export function createKeybindingsUpdateToastController(input: {
   readonly now?: () => number;
 }): KeybindingsUpdateToastController {
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
   const now = input.now ?? Date.now;
   let lastToast: { readonly key: string; readonly at: number } | null = null;
 

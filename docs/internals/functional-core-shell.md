@@ -18,7 +18,7 @@ Push I/O outward. If a function needs a timestamp, an id, or an env value, the c
 ## Naming and layout
 
 - A core module is named `<topic>.core.ts` and sits beside the service that calls it, in the same domain folder. Its tests are `<topic>.core.test.ts`.
-- `*.logic.ts` files are functional core too and the lint rule below covers them. A few upstream web `*.logic.ts` files that predate the rule are exempted by name in `vite.config.ts`; do not add to that list. Name new pure modules `*.core.ts`; do not rename old ones as a drive-by.
+- `*.logic.ts` files are functional core too and the lint rule below covers them. Violations that predate a check carry a line-level `oxlint-disable-next-line ... -- legacy: <reason>` per the [baseline policy](review.md#technical-debt-baseline-policy); never exempt a whole file, and remove the directive when the site is fixed. Name new pure modules `*.core.ts`; do not rename old ones as a drive-by.
 - A core module exports plain functions and types. No `Context.Service`, no `Layer`, no module-level mutable state.
 - Effect itself is fine in a core file when it stays pure: `Option`, `Result`, `Schema`, `Data`, `Array`, and `Effect` values that only compose other pure values.
 
@@ -26,13 +26,15 @@ Push I/O outward. If a function needs a timestamp, an id, or an env value, the c
 
 The `t3code/no-io-in-functional-core` rule ([source](../../oxlint-plugin-t3code/rules/no-io-in-functional-core.ts)) reports these in `*.core.ts` and `*.logic.ts`, plus their `.cts`, `.mts`, `.js`, and `.tsx` variants. Test files (`*.test.*`, `*.spec.*`) are exempt, so `foo.core.test.ts` may use fixtures freely.
 
-| Kind        | Forbidden                                                                                                                                                                                            |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Imports     | `node:*`, `effect/FileSystem`, `effect/sql`, `effect/unstable/sql`, `@effect/sql`, `@effect/platform-node`, `@effect/platform-node-shared` (static, dynamic, and re-export forms; subpaths included) |
-| Network     | global `fetch(...)`, `globalThis.fetch(...)`                                                                                                                                                         |
-| Time        | `Date.now` (call or reference), `new Date()` with no arguments                                                                                                                                       |
-| Randomness  | `Math.random`, `crypto.randomUUID`                                                                                                                                                                   |
-| Environment | `process.env`                                                                                                                                                                                        |
+| Kind          | Forbidden                                                                                                                                                                                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Imports       | `node:*`, bare `fs`, `path`, `child_process`, `os`, `crypto`, `http`, `https`, `net`, `effect/FileSystem`, `effect/sql`, `effect/unstable/sql`, `@effect/sql`, `@effect/platform-node`, `@effect/platform-node-shared` (static, dynamic, and re-export forms; subpaths included) |
+| Shell modules | `effect/Clock`, `effect/Config`, `effect/Console`, `effect/Context`, `effect/Layer`, `effect/Random`, `effect/http/HttpClient`, `effect/http/FetchHttpClient`                                                                                                                    |
+| Network       | global `fetch(...)`, `globalThis.fetch(...)`                                                                                                                                                                                                                                     |
+| Time          | `Date.now` (call or reference), `new Date()` with no arguments, `performance.now`, `setTimeout`, `setInterval`                                                                                                                                                                   |
+| Randomness    | `Math.random`, `crypto.randomUUID`, `crypto.getRandomValues`                                                                                                                                                                                                                     |
+| Environment   | `process.env`, global `window`, `navigator`, `localStorage`, `sessionStorage` (also via `globalThis`; locals and `typeof` types that reuse the name are fine)                                                                                                                    |
+| State         | top-level `let` or `var`                                                                                                                                                                                                                                                         |
 
 `new Date(iso)` and `Date.parse` are allowed: they are pure for a given input.
 

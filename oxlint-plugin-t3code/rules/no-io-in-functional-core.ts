@@ -13,8 +13,39 @@ const FORBIDDEN_MODULE_PREFIXES = [
   "@effect/sql",
   "@effect/platform-node",
   "@effect/platform-node-shared",
+  "effect/Clock",
+  "effect/Config",
+  "effect/Console",
+  "effect/Context",
+  "effect/http/HttpClient",
+  "effect/http/FetchHttpClient",
+  "effect/Layer",
+  "effect/Random",
+  "fs",
+  "path",
+  "child_process",
+  "os",
+  "crypto",
+  "http",
+  "https",
+  "net",
 ];
-const FORBIDDEN_MEMBERS = new Set(["Date.now", "Math.random", "crypto.randomUUID", "process.env"]);
+const FORBIDDEN_MEMBERS = new Set([
+  "Date.now",
+  "Math.random",
+  "crypto.randomUUID",
+  "crypto.getRandomValues",
+  "performance.now",
+  "process.env",
+]);
+const FORBIDDEN_GLOBALS = new Set([
+  "window",
+  "navigator",
+  "localStorage",
+  "sessionStorage",
+  "setTimeout",
+  "setInterval",
+]);
 
 const MESSAGE_SUFFIX =
   "Functional core files (*.core.ts, *.logic.ts) stay pure: take time, randomness, environment, and I/O as inputs and let the shell (Effect Service) supply them. See docs/internals/functional-core-shell.md.";
@@ -56,6 +87,15 @@ const forbiddenMember = (node: unknown): Option.Option<string> =>
     return normalized.length > 1 && FORBIDDEN_MEMBERS.has(name) ? Option.some(name) : Option.none();
   });
 
+const isMutableDeclaration = (node: ESTree.Node) =>
+  node.type === "VariableDeclaration" && (node.kind === "let" || node.kind === "var");
+
+const isTypeQuery = (identifier: ESTree.Node) => {
+  let parent = identifier.parent;
+  while (parent?.type === "TSQualifiedName") parent = parent.parent;
+  return parent?.type === "TSTypeQuery";
+};
+
 const isGlobalFetch = (callee: unknown) =>
   isIdentifier(unwrapExpression(callee), "fetch") ||
   Option.exists(memberPath(callee), (path) => path.join(".") === "globalThis.fetch");
@@ -65,7 +105,7 @@ export default defineRule({
     type: "problem",
     docs: {
       description:
-        "Disallow I/O and nondeterminism (node:*, fetch, Date.now, Math.random, crypto.randomUUID, process.env) in *.core.ts and *.logic.ts files.",
+        "Disallow I/O, nondeterminism, browser globals, services/layers, and module-level mutable state in *.core.ts and *.logic.ts files.",
     },
   },
   create(context) {
@@ -80,6 +120,32 @@ export default defineRule({
     };
 
     return {
+      Program(node) {
+        for (const statement of node.body) {
+          const declaration =
+            statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+          if (declaration === null || !isMutableDeclaration(declaration)) continue;
+          context.report({
+            node: declaration,
+            message: usageMessage("module-level mutable state"),
+          });
+        }
+      },
+      "Program:exit"() {
+        const globalScope = context.sourceCode.scopeManager.globalScope;
+        if (globalScope === null) return;
+        const references = [
+          ...globalScope.through,
+          ...[...FORBIDDEN_GLOBALS].flatMap((name) => {
+            const variable = globalScope.set.get(name);
+            return variable === undefined || variable.defs.length > 0 ? [] : variable.references;
+          }),
+        ];
+        for (const { identifier } of references) {
+          if (!FORBIDDEN_GLOBALS.has(identifier.name) || isTypeQuery(identifier)) continue;
+          context.report({ node: identifier, message: usageMessage(`global ${identifier.name}`) });
+        }
+      },
       ImportDeclaration(node) {
         checkModuleSource(node, node.source);
       },
@@ -97,6 +163,15 @@ export default defineRule({
         context.report({ node, message: usageMessage("global fetch") });
       },
       MemberExpression(node) {
+        const globalAlias = Option.flatMap(memberPath(node), (path) =>
+          path.length === 2 && path[0] === "globalThis" && FORBIDDEN_GLOBALS.has(path[1]!)
+            ? Option.some(path[1]!)
+            : Option.none(),
+        );
+        if (Option.isSome(globalAlias)) {
+          context.report({ node, message: usageMessage(`global ${globalAlias.value}`) });
+          return;
+        }
         const member = forbiddenMember(node);
         if (Option.isNone(member)) return;
         context.report({ node, message: usageMessage(member.value) });

@@ -207,6 +207,7 @@ function conflictsWithWhen(leftWhen: string, rightWhen: string): boolean {
 export function keybindingConflictLabels(
   rows: ReadonlyArray<KeybindingRow>,
   input: { readonly rowId: string; readonly key: string; readonly when: string },
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads navigator; pass the platform as an input
   platform = navigator.platform,
   resolve: MessageResolver = m,
 ): ReadonlyArray<string> {
@@ -282,6 +283,7 @@ export function groupKeybindingRows(
 
 export function buildKeybindingRows(
   keybindings: ResolvedKeybindingsConfig,
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads navigator; pass the platform as an input
   platform = navigator.platform,
   sendShortcut: ClientSettings["sendShortcut"] = "enter",
   resolve: MessageResolver = m,

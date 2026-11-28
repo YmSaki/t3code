@@ -130,6 +130,114 @@ describe(RULE_NAME, () => {
       `,
       (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 2),
     );
+
+    core.invalid(
+      "reports shell-only effect modules",
+      `
+        import * as Clock from "effect/Clock";
+        import * as Config from "effect/Config";
+        import * as Console from "effect/Console";
+        import * as Context from "effect/Context";
+        import * as HttpClient from "effect/http/HttpClient";
+        import * as Layer from "effect/Layer";
+        import * as Random from "effect/Random";
+        export const used = [Clock, Config, Console, Context, HttpClient, Layer, Random];
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 7),
+    );
+
+    core.invalid(
+      "reports bare Node builtin imports and their subpaths",
+      `
+        import * as FS from "fs";
+        import * as FSPromises from "fs/promises";
+        import * as Path from "path";
+        import * as ChildProcess from "child_process";
+        import * as OS from "os";
+        import * as Crypto from "crypto";
+        import * as Http from "http";
+        import * as Https from "https";
+        import * as Net from "net";
+        export const used = [FS, FSPromises, Path, ChildProcess, OS, Crypto, Http, Https, Net];
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 9),
+    );
+
+    core.valid(
+      "allows effect modules that only share a prefix with forbidden ones",
+      `
+        import * as ConfigProvider from "effect/ConfigProvider";
+        import * as HttpClientRequest from "effect/http/HttpClientRequest";
+        import * as pathe from "pathe";
+        export const used = [ConfigProvider, HttpClientRequest, pathe];
+      `,
+    );
+
+    core.invalid(
+      "reports performance.now and crypto.getRandomValues",
+      `
+        export const a = performance.now();
+        export const b = crypto.getRandomValues(new Uint8Array(4));
+        export const c = globalThis.performance.now();
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 3),
+    );
+
+    core.invalid(
+      "reports timers, storage, window, and navigator globals",
+      `
+        export const a = setTimeout(() => undefined, 1);
+        export const b = setInterval(() => undefined, 1);
+        export const c = localStorage.getItem("k");
+        export const d = sessionStorage.getItem("k");
+        export const e = window.location.href;
+        export const f = navigator.userAgent;
+        export const g = globalThis.setTimeout;
+        export const h = globalThis.window;
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 8),
+    );
+
+    core.valid(
+      "allows locals, parameters, and properties that reuse global names",
+      `
+        export const span = (window: number) => window * 2;
+        export const pick = (input: { navigator: string; setTimeout: number }) => [
+          input.navigator,
+          input.setTimeout,
+        ];
+        export const shape = { window: 1, localStorage: "key" };
+        export type Timer = ReturnType<typeof setTimeout>;
+        export type Href = typeof window.location.href;
+        export const local = () => {
+          const sessionStorage = new Map<string, string>();
+          return sessionStorage.get("k");
+        };
+      `,
+    );
+
+    core.invalid(
+      "reports module-level let and var",
+      `
+        let counter = 0;
+        export let cache = new Map();
+        var legacy = 1;
+        export const bump = () => [counter, cache, legacy];
+      `,
+      (output) => assert.equal(output.match(/no-io-in-functional-core/g)?.length, 3),
+    );
+
+    core.valid(
+      "allows module-level const and function-local let",
+      `
+        export const LIMITS = { max: 10 } as const;
+        export const count = (items: ReadonlyArray<number>) => {
+          let total = 0;
+          for (const item of items) total += item;
+          return total;
+        };
+      `,
+    );
   });
 
   describe("*.logic.ts", () => {

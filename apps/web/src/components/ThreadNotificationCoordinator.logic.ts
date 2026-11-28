@@ -47,6 +47,7 @@ export function createThreadNotificationGate<Key>(
     { readonly at: number; readonly timer: ReturnType<typeof setTimeout> | undefined }
   >();
   const release = (key: Key, at: number) => {
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: schedules a timer; move scheduling to the shell
     const timer = setTimeout(() => {
       releases.delete(key);
       handled.set(key, at);

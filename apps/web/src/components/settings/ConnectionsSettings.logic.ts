@@ -257,6 +257,7 @@ export function parsePairingUrlFields(
       /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
         ? trimmed
         : `https://${trimmed}`;
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads window; pass the browser value as an input
     const url = new URL(urlLikeInput, window.location.origin);
     const hostedPairingRequest = readHostedPairingRequest(url);
     if (hostedPairingRequest) {
@@ -451,6 +452,7 @@ export function resolveAdvertisedEndpointPairingUrl(
 
 export function resolveCurrentOriginPairingUrl(
   credential: string,
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads window; pass the browser value as an input
   currentHref: string = window.location.href,
 ): string | null {
   const url = new URL("/pair", currentHref);

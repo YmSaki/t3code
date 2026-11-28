@@ -353,7 +353,9 @@ export type HeldThreadTimeline<T extends readonly unknown[]> = {
 
 const MAX_REMEMBERED_THREAD_TIMELINES = 16;
 
+// oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: module-level cache; move the state to its owner
 let rememberedThreadTimelines = new Map<string, HeldThreadTimeline<readonly unknown[]>>();
+// oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: module-level cache; move the state to its owner
 let rememberedThreadTimelineOrder: string[] = [];
 
 function rememberThreadTimelineEntries(held: HeldThreadTimeline<readonly unknown[]>): void {
@@ -674,6 +676,7 @@ export async function prepareRevertedMessageAttachments(input: {
       const url = resolveAssetUrl(input.httpBaseUrl, result.value.relativeUrl);
       if (url === null)
         throw new Error(m(msg("The environment returned an invalid attachment URL.")));
+      // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: network I/O; move the request to the shell
       const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
       if (!response.ok)
         throw new Error(m(msg("Could not restore attachment: {name}", { name: attachment.name })));
@@ -1002,6 +1005,7 @@ export async function waitForRevertedMessage(
         finish();
     };
     unsubscribe = appAtomRegistry.subscribe(threadAtom, inspect);
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: schedules a timer; move scheduling to the shell
     timeout = globalThis.setTimeout(() => {
       finish(new Error(m(msg("Timed out waiting for the thread to rewind."))));
     }, timeoutMs);
@@ -1041,6 +1045,7 @@ export function createLocalDispatchSnapshot(
   const runtime = activeThread?.runtime ?? null;
   return {
     startedAt: new Date(
+      // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
       environmentId === undefined ? Date.now() : toServerClock(environmentId, Date.now()),
     ).toISOString(),
     preparingWorktree: Boolean(options?.preparingWorktree),
@@ -1322,6 +1327,7 @@ export function makeThreadErrorSetter(input: {
   return (targetThreadId: ThreadId | null, error: string | null) => {
     if (!targetThreadId) return;
     const nextError = sanitizeThreadErrorMessage(error);
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
     const nextEntry: LocalThreadErrorEntry = { message: nextError, at: Date.now() };
     const { routeThreadRef, serverThreadRef } = input;
     if (
