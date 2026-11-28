@@ -135,6 +135,7 @@ export const DESCRIPTOR_PRESETS_BY_KIND: Partial<
   ],
 };
 
+// oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: module-level key counter; move the state to its owner
 let nextKey = 0;
 function newEditorKey(): string {
   nextKey += 1;

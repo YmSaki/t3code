@@ -658,6 +658,7 @@ export function filterCommandPaletteGroups(
     }
   }
 
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
   const now = input.now ?? Date.now();
   const ranked = rankSearchGroups(
     searchableGroups.map((group) => ({ group, items: group.items })),
@@ -855,6 +856,7 @@ export function getEnvironmentBrowsePlatform(os: string | null | undefined): str
   if (os === "linux") {
     return "Linux";
   }
+  // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads navigator; pass the platform as an input
   return typeof navigator === "undefined" ? "" : navigator.platform;
 }
 
