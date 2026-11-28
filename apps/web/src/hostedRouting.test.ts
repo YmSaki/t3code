@@ -1,7 +1,7 @@
-import { hostedAppRoutingFromEnv } from "@t3tools/shared/hostedApp";
 import { expect, it, vi } from "vite-plus/test";
 
 const fork = {
+  T3CODE_DISTRIBUTION: "fork",
   T3CODE_WEB_ROUTER_URL: "https://fork.example.test",
   T3CODE_WEB_LATEST_DOMAIN: "stable.fork.example.test",
   T3CODE_WEB_NIGHTLY_DOMAIN: "nightly.fork.example.test",
@@ -40,14 +40,12 @@ it("uses fork channel origins in the hosted Web router", async () => {
   }
 });
 
-it("rejects partial or conflicting routing configuration", () => {
-  expect(() =>
-    hostedAppRoutingFromEnv({ T3CODE_WEB_ROUTER_URL: fork.T3CODE_WEB_ROUTER_URL }),
-  ).toThrow("T3CODE_WEB_LATEST_DOMAIN");
-  expect(() =>
-    hostedAppRoutingFromEnv({ ...fork, T3CODE_WEB_ROUTER_URL: "http://fork.example.test" }),
-  ).toThrow("T3CODE_WEB_ROUTER_URL");
-  expect(() =>
-    hostedAppRoutingFromEnv({ ...fork, T3CODE_WEB_NIGHTLY_DOMAIN: fork.T3CODE_WEB_LATEST_DOMAIN }),
-  ).toThrow("distinct domains");
+it("refuses to deploy hosted Web without fork routing", async () => {
+  vi.resetModules();
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
+  try {
+    await expect(import("../vercel.ts")).rejects.toThrow("hosted Web settings");
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });

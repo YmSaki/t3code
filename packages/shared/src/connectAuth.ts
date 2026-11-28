@@ -1,7 +1,5 @@
 import { readHashParams } from "./remote.ts";
 
-export { DEFAULT_HOSTED_APP_URL } from "./hostedApp.ts";
-
 const CONNECT_AUTH_STATE_PARAM = "state";
 const CONNECT_AUTH_CHALLENGE_PARAM = "challenge";
 const CONNECT_AUTH_PORT_PARAM = "port";

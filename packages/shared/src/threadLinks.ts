@@ -2,7 +2,7 @@ import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contract
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { hostedAppLinkOrigins, hostedAppRouting } from "./hostedApp.ts";
+import { hostedAppLinkOrigins } from "./hostedApp.ts";
 
 export const THREAD_LINK_PROTOCOL = "t3-thread";
 const V1_PREFIX = `${THREAD_LINK_PROTOCOL}://v1/`;
@@ -56,7 +56,7 @@ const hostedSegment = (id: string) =>
   );
 
 /** Opens the thread from anywhere: the hosted app offers the desktop app, the mobile app, or itself. */
-export function hostedThreadLink(ref: ScopedThreadRef, origin = hostedAppRouting.router): string {
+export function hostedThreadLink(ref: ScopedThreadRef, origin: string): string {
   const path = `/threads/${hostedSegment(ref.environmentId)}/${hostedSegment(ref.threadId)}`;
   return new URL(path, origin).toString();
 }
@@ -154,12 +154,18 @@ export function formatThreadLink(ref: ThreadLink, label?: string): string {
   return cleaned ? `[${cleaned}](${destination})` : `<${href}>`;
 }
 
+/** Without a hosted app the product cannot mint hosted links; the in-app link is the share target. */
+export function threadShareLink(ref: ScopedThreadRef, hostedOrigin: string | null): string {
+  return hostedOrigin === null ? threadLinkHref(ref) : hostedThreadLink(ref, hostedOrigin);
+}
+
 /** What a person copies out of T3 Code: a Markdown link that opens the thread anywhere. */
 export function formatHostedThreadLink(
   ref: ScopedThreadRef,
   label: string,
-  origin?: string,
+  origin: string | null,
 ): string {
+  if (origin === null) return formatThreadLink(ref, label);
   const href = hostedThreadLink(ref, origin);
   const cleaned = linkLabel(label);
   return cleaned ? `[${cleaned}](${href})` : href;

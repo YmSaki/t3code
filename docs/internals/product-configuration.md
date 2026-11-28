@@ -13,6 +13,14 @@ Derive platform-specific settings (GitHub Releases, Electron builders, Expo/EAS 
 3. **Runtime configuration** — Client, environment, and project settings resolved at runtime.
 4. **Secrets** — Credentials injected at CI or runtime boundaries.
 
+## Resolution owner
+
+[productConfig.ts](../../packages/shared/src/productConfig.ts) resolves the raw inputs into one validated `ProductConfig` per build or release: distribution (`T3CODE_DISTRIBUTION`, `upstream` or `fork`), hosted Web, Connect, mobile release identity, and link policy. Web, Desktop, CLI, Mobile, and release workflows derive from that result and never re-validate it.
+
+- An unconfigured optional service is `disabled`, never an upstream default. Partial or upstream-owned fork values, and fork-only values in an upstream build, fail the build.
+- Links separate generation from acceptance: `links.generate` is null without a hosted Web, and `links.accept` is the only place the upstream compatibility origins appear. Provider-auth return targets use `links.authReturn`, which excludes them.
+- An unbuilt source tree is the upstream distribution; fork builds always define the resolved public config.
+
 ## Product identity
 
 - Shared product identity (product name, slug, desktop app ID, default home directory, and URL schemes) is owned by [productIdentity.ts](../../packages/shared/src/productIdentity.ts).

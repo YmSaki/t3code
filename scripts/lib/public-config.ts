@@ -4,6 +4,8 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
+import { resolveProductConfig } from "@t3tools/shared/productConfig";
+
 export interface T3CodePublicConfig {
   readonly clerkPublishableKey: string | undefined;
   readonly clerkJwtTemplate: string | undefined;
@@ -31,12 +33,25 @@ export function loadRepoEnv({
   const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
   const env = { ...rootEnv, ...localEnv, ...baseEnv };
-  const forkConnect =
-    env.T3CODE_CONNECT_DISTRIBUTION?.trim() === "fork" ||
-    env.T3CODE_MOBILE_DISTRIBUTION?.trim() === "fork";
+  const { connect } = resolveProductConfig(env);
+  const forkConnect = connect.kind !== "unmanaged";
   const config = {
     ...resolvePublicConfig(baseEnv, localEnv, rootEnv),
-    ...(forkConnect ? resolveForkConnectConfig(env) : {}),
+    ...(connect.kind === "enabled"
+      ? {
+          clerkPublishableKey: connect.clerkPublishableKey,
+          clerkJwtTemplate: connect.clerkJwtTemplate,
+          clerkCliOAuthClientId: connect.clerkCliOAuthClientId,
+          relayUrl: connect.relayUrl,
+        }
+      : connect.kind === "disabled"
+        ? {
+            clerkPublishableKey: "",
+            clerkJwtTemplate: "",
+            clerkCliOAuthClientId: "",
+            relayUrl: "",
+          }
+        : {}),
   };
 
   return {
@@ -103,57 +118,6 @@ export function loadRepoEnv({
           VITE_RELAY_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
         }
       : {}),
-  };
-}
-
-function isUpstreamConnectHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
-  return host === "t3.codes" || host.endsWith(".t3.codes");
-}
-
-function forkClerkHostname(key: string): string | undefined {
-  const encoded = /^pk_(?:live|test)_(.+)$/.exec(key)?.[1];
-  if (!encoded) return undefined;
-  try {
-    return /^([a-z0-9-]+(?:\.[a-z0-9-]+)+)\$$/i.exec(atob(encoded))?.[1];
-  } catch {
-    return undefined;
-  }
-}
-
-export function resolveForkConnectConfig(env: Environment) {
-  const passkeyDomains = env.T3CODE_CLERK_PASSKEY_RP_DOMAINS?.split(",") ?? [];
-  if (passkeyDomains.some((domain) => isUpstreamConnectHost(domain.trim()))) {
-    throw new Error("T3CODE_CLERK_PASSKEY_RP_DOMAINS must use fork-owned domains.");
-  }
-  const clerkPublishableKey = env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
-  const clerkJwtTemplate = env.T3CODE_CLERK_JWT_TEMPLATE?.trim() ?? "";
-  const clerkCliOAuthClientId = env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() ?? "";
-  const relay = env.T3CODE_RELAY_URL?.trim() ?? "";
-  if (!clerkPublishableKey && !clerkJwtTemplate && !clerkCliOAuthClientId && !relay) {
-    return { clerkPublishableKey, clerkJwtTemplate, clerkCliOAuthClientId, relayUrl: "" };
-  }
-  if (!clerkPublishableKey || !clerkJwtTemplate || !clerkCliOAuthClientId || !relay) {
-    throw new Error("Set all four Connect settings for the fork together.");
-  }
-  const clerkHost = forkClerkHostname(clerkPublishableKey);
-  if (!clerkHost || isUpstreamConnectHost(clerkHost)) {
-    throw new Error("T3CODE_CLERK_PUBLISHABLE_KEY must be from the fork-owned Clerk instance.");
-  }
-  const relayUrl = URL.parse(relay);
-  if (
-    !relayUrl ||
-    relayUrl.protocol !== "https:" ||
-    relayUrl.href !== `${relayUrl.origin}/` ||
-    isUpstreamConnectHost(relayUrl.hostname)
-  ) {
-    throw new Error("T3CODE_RELAY_URL must be a fork-owned HTTPS relay origin.");
-  }
-  return {
-    clerkPublishableKey,
-    clerkJwtTemplate,
-    clerkCliOAuthClientId,
-    relayUrl: relayUrl.origin,
   };
 }
 

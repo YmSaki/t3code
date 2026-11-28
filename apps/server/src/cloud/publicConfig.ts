@@ -1,5 +1,5 @@
 import { connectLoopbackRedirectUri, CONNECT_OAUTH_SCOPES } from "@t3tools/shared/connectAuth";
-import { hostedAppRouting } from "@t3tools/shared/hostedApp";
+import { hostedAppGenerateOrigin, hostedWeb } from "@t3tools/shared/hostedApp";
 import { clerkFrontendApiUrlFromPublishableKey } from "@t3tools/shared/relayAuth";
 import { isRelayTracingEnabled } from "@t3tools/shared/otelEnvironment";
 import { normalizeSecureRelayUrl } from "@t3tools/shared/relayUrl";
@@ -109,17 +109,19 @@ export const relayUrlConfig = makeRelayUrlConfig();
 
 export const hostedAppUrlConfig = makePublicValueConfig(
   "T3CODE_HOSTED_APP_URL",
-  hostedAppRouting.router,
+  hostedAppGenerateOrigin ?? "",
 ).pipe(Config.mapEffect(validateHostedAppUrl));
 
-export const defaultAgentApprovalAppUrl =
-  typeof __T3CODE_BUILD_CHANNEL__ !== "undefined" && __T3CODE_BUILD_CHANNEL__ === "nightly"
-    ? hostedAppRouting.nightly
-    : hostedAppRouting.router;
+export const defaultAgentApprovalAppUrl: string | null =
+  hostedWeb.kind === "disabled"
+    ? null
+    : typeof __T3CODE_BUILD_CHANNEL__ !== "undefined" && __T3CODE_BUILD_CHANNEL__ === "nightly"
+      ? hostedWeb.nightly
+      : hostedWeb.router;
 
 export const agentApprovalAppUrlConfig = makePublicValueConfig(
   "T3CODE_HOSTED_APP_URL",
-  defaultAgentApprovalAppUrl,
+  defaultAgentApprovalAppUrl ?? "",
 ).pipe(Config.mapEffect(validateHostedAppUrl));
 
 function validateHostedAppUrl(value: string) {
