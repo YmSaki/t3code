@@ -66,17 +66,22 @@ Apply the gate when a change would:
 
 Before implementing a gated design, agree on the design artifacts required by [Engineering process](docs/internals/engineering-process.md), including explicit stage decisions for large cross-cutting changes. Use an existing issue or PR when available; explicit agreement in the active conversation also counts. Any necessary PR split must be explicitly included in that agreement. Read-only investigation may continue while gated implementation waits.
 
-### Read when relevant
+### Required reading
 
-- Design philosophy, trade-offs, and principles: [Design principles](docs/internals/design-principles.md).
-- Staged design process and Design Gate workflow: [Engineering process](docs/internals/engineering-process.md).
-- Domain concepts, relationships, and modeling rules: [Domain model](docs/internals/domain-model.md).
-- Architecture, package dependencies, and durable state: [Overview](docs/internals/overview.md).
+Before designing, implementing, or reviewing code changes, read all four foundational documents. Read them before classifying the task for the Design Gate or deciding its scope; perceived local relevance is not a reason to skip them.
+
+- [Design principles](docs/internals/design-principles.md): Design philosophy, trade-offs, and principles.
+- [Engineering process](docs/internals/engineering-process.md): Staged design process and Design Gate workflow.
+- [Domain model](docs/internals/domain-model.md): Domain concepts, relationships, and modeling rules.
+- [Overview](docs/internals/overview.md): Architecture, package dependencies, and durable state.
+
+In addition, read the following documents when the task meets the stated conditions; these are requirements, not optional suggestions:
+
 - Product identity, releases, configuration, secrets, or fork isolation: [Product configuration](docs/internals/product-configuration.md).
-- Pure decisions and I/O boundaries: [Functional core](docs/internals/functional-core-shell.md).
-- Effect services and transport boundaries: [Effect services](docs/internals/effect-services.md).
-- Evidence, test selection, and integration proof: [Testing](docs/internals/testing.md).
-- Design and code review criteria: [Review](docs/internals/review.md).
+- Domain logic, pure decisions, or I/O boundaries: [Functional core](docs/internals/functional-core-shell.md).
+- Services, side effects, or transport boundaries: [Effect services](docs/internals/effect-services.md).
+- Behavior changes, tests, or verification: [Testing](docs/internals/testing.md).
+- Design or code review: [Review](docs/internals/review.md).
 
 Keep hard-rule definitions here; linked documents explain their application.
 
@@ -85,7 +90,7 @@ Keep hard-rule definitions here; linked documents explain their application.
 We need to be on the same page with terminology. When communicating, use this language:
 
 - **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean Theo, Julius and the people building T3 Code. These are who you are talking to now.
+- **we, us, and maintainers** mean YmSaki and r-fallingstar, the maintainers of T3CodeJP. Design and hard-rule exception approvals belong to these fork maintainers. The separate requirement for YmSaki's approval before merging into `main` still applies.
 - **user** means the person using T3 Code to direct coding agents.
 - **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
 - **provider** means the agent runtime or harness T3 Code talks to, such as Codex, Claude, Cursor, or OpenCode.
