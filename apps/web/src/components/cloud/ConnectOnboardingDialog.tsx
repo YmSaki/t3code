@@ -18,7 +18,7 @@ import {
   EMPTY_CONNECT_ONBOARDING_OPT_OUT_STATE,
 } from "~/cloud/connectOnboarding";
 import { useManagedTunnelUsage } from "~/cloud/managedRelayState";
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
+import { hasCloudPublicConfig, resolveCloudPublicConfig } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useUpdatePrimarySettings } from "~/hooks/useSettings";
@@ -41,6 +41,10 @@ import {
   useT3ConnectAccountPage,
 } from "../clerk/T3ConnectAccountPages";
 import { CloudEnvironmentConnectRows } from "./CloudEnvironmentConnectList";
+import {
+  formatRelayDestination,
+  resolveInitialConnectOnboardingSelection,
+} from "./ConnectOnboardingDialog.logic";
 import { TunnelLimitAlert } from "./TunnelUsage";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
@@ -113,8 +117,8 @@ function ConfiguredConnectOnboardingDialog() {
   const [requestedAccount, setRequestedAccount] = useState<string | null>(null);
   const [openForAccount, setOpenForAccount] = useState<string | null>(null);
   const [step, setStep] = useState<OnboardingStep>("devices");
-  const [exposeEnvironment, setExposeEnvironment] = useState(true);
-  const [publishAgentActivity, setPublishAgentActivity] = useState(true);
+  const [exposeEnvironment, setExposeEnvironment] = useState(false);
+  const [publishAgentActivity, setPublishAgentActivity] = useState(false);
   const [requireDeviceApproval, setRequireDeviceApproval] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
@@ -156,8 +160,8 @@ function ConfiguredConnectOnboardingDialog() {
     } else if (sessionScopesKnown && publishStepDecided) {
       setRequestedAccount(null);
       setPrefilledFromLinkState(false);
-      setExposeEnvironment(true);
-      setPublishAgentActivity(true);
+      setExposeEnvironment(false);
+      setPublishAgentActivity(false);
       setRequireDeviceApproval(false);
       setDontShowAgain(false);
       setStep(canManageRelay && controller.linkState.target !== null ? "publish" : "devices");
@@ -168,15 +172,13 @@ function ConfiguredConnectOnboardingDialog() {
   const linkStateData = controller.linkState.data;
   if (openForAccount !== null && !prefilledFromLinkState && linkStateData !== null) {
     setPrefilledFromLinkState(true);
-    if (
-      linkStateData.linked &&
-      linkStateData.linkRevoked !== true &&
-      linkStateData.cloudUserId === openForAccount
-    ) {
-      setExposeEnvironment(linkStateData.managedTunnelActive ?? linkStateData.linked);
-      setPublishAgentActivity(linkStateData.publishAgentActivity);
-    }
+    const initial = resolveInitialConnectOnboardingSelection(linkStateData, openForAccount);
+    setExposeEnvironment(initial.exposeEnvironment);
+    setPublishAgentActivity(initial.publishAgentActivity);
   }
+  const relayDestination = formatRelayDestination(
+    linkStateData?.relayUrl ?? resolveCloudPublicConfig().relayUrl,
+  );
 
   const complete = () => {
     if (isApplying) return;
@@ -277,6 +279,7 @@ function ConfiguredConnectOnboardingDialog() {
             <PublishStep
               exposeEnvironment={exposeEnvironment}
               publishAgentActivity={publishAgentActivity}
+              relayDestination={relayDestination}
               requireDeviceApproval={
                 canRequireDeviceApproval ? requireDeviceApproval || deviceApprovalRequired : null
               }
@@ -341,6 +344,7 @@ const STEP_LABELS: Record<OnboardingStep, string> = {
 function PublishStep({
   exposeEnvironment,
   publishAgentActivity,
+  relayDestination,
   requireDeviceApproval,
   requireDeviceApprovalLocked,
   onRequireDeviceApprovalChange,
@@ -353,6 +357,7 @@ function PublishStep({
 }: {
   readonly exposeEnvironment: boolean;
   readonly publishAgentActivity: boolean;
+  readonly relayDestination: string | null;
   /** Null when this session cannot change who may connect. */
   readonly requireDeviceApproval: boolean | null;
   readonly requireDeviceApprovalLocked: boolean;
@@ -370,18 +375,29 @@ function PublishStep({
       <div className="rounded-lg border">
         <OnboardingToggleRow
           title={gt("Publish this environment")}
-          description={gt(
-            "Make this environment available to your other devices through T3 Connect.",
-          )}
+          description={
+            relayDestination
+              ? gt("Expose this environment to your other devices through {relayDestination}.", {
+                  relayDestination,
+                })
+              : gt("Make this environment available to your other devices through T3 Connect.")
+          }
           checked={exposeEnvironment}
           disabled={disabled}
           onCheckedChange={onExposeEnvironmentChange}
         />
         <OnboardingToggleRow
           title={gt("Publish agent activity")}
-          description={gt(
-            "Send activity from this environment to your mobile clients for push notifications and Live Activities.",
-          )}
+          description={
+            relayDestination
+              ? gt(
+                  "Send project and thread titles, model names, activity status, and environment and thread IDs to {relayDestination} for mobile notifications and Live Activities.",
+                  { relayDestination },
+                )
+              : gt(
+                  "Send project and thread titles, model names, activity status, and environment and thread IDs through T3 Connect for mobile notifications and Live Activities.",
+                )
+          }
           checked={publishAgentActivity}
           disabled={disabled}
           onCheckedChange={onPublishAgentActivityChange}
