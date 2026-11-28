@@ -24,6 +24,8 @@ const EXTRA_OWNERS = [
   [/^scripts\/lib\//, ["@t3tools/desktop", "@t3tools/mobile", "@t3tools/web", "t3"]],
   // scripts/build-desktop-artifact.ts reads the GNOME extension manifest.
   [/^apps\/desktop\/gnome-extension\//, ["@t3tools/scripts"]],
+  // apps/desktop/src/serverCompileCache.test.ts runs the electron-builder hook.
+  [/^scripts\/prepare-server-compile-cache\.cjs$/, ["@t3tools/desktop"]],
   [/^native\/browser-secret\//, ["@t3tools/desktop"]],
   [/^native\/kde-snap-shot\//, ["@t3tools/desktop"]],
   [/^native\/libghostty-vt\//, ["@t3tools/web"]],

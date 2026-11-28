@@ -60,6 +60,13 @@ describe("check:changed", () => {
     assert.include(packageReaderTests(affected), "scripts/architecture-boundaries.test.ts");
   });
 
+  it("runs the desktop tests that drive the compile cache afterPack hook", () => {
+    assert.include(
+      decide(["scripts/prepare-server-compile-cache.cjs"], readWorkspace(), false).affected,
+      "@t3tools/desktop",
+    );
+  });
+
   it.effect(
     "keeps weighted steps within the budget, in order, and serial steps one at a time",
     () =>

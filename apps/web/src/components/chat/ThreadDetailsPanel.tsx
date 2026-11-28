@@ -4,6 +4,7 @@ import type {
   ProjectId,
   ProjectScript,
   ResolvedKeybindingsConfig,
+  ThreadEnvMode,
   ThreadId,
 } from "@t3tools/contracts";
 
@@ -12,7 +13,7 @@ import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 
 import type { ComposerThreadTarget, DraftId } from "../../composerDraftStore";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
-import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
+import { type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
 import GitActionsControl from "../GitActionsControl";
 import ProjectScriptsControl, {
@@ -76,8 +77,8 @@ interface ThreadDetailsPanelProps extends Pick<
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
-  onEnvModeChange: (mode: EnvMode) => void;
-  envMode: EnvMode;
+  onEnvModeChange: (mode: ThreadEnvMode) => void;
+  envMode: ThreadEnvMode;
   activeThreadBranchOverride?: string | null;
   onActiveThreadBranchOverrideChange?: (branch: string | null) => void;
   startFromOrigin: boolean;

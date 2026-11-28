@@ -41,6 +41,7 @@ const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grou
 
 export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode {
   try {
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: touches localStorage; move persistence to the shell
     return localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) === "repository_path"
       ? "repository_path"
       : "repository";
@@ -52,6 +53,7 @@ export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode
 export function rememberEnabledProjectGroupingMode(mode: SidebarProjectGroupingMode): void {
   if (mode === "separate") return;
   try {
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: touches localStorage; move persistence to the shell
     localStorage.setItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY, mode);
   } catch {}
 }

@@ -703,6 +703,27 @@ export const OrchestrationV2RunStatus = Schema.Literals([
 ]);
 export type OrchestrationV2RunStatus = typeof OrchestrationV2RunStatus.Type;
 
+/** Runs that own the thread's provider turn; `waiting` is the checkpoint drain after it ends. */
+export const ACTIVE_RUN_STATUSES = [
+  "preparing",
+  "starting",
+  "running",
+  "waiting",
+] as const satisfies ReadonlyArray<OrchestrationV2RunStatus>;
+
+/** Every non-terminal status: the active ones plus `queued`. */
+export const UNFINISHED_RUN_STATUSES = [
+  "queued",
+  ...ACTIVE_RUN_STATUSES,
+] as const satisfies ReadonlyArray<OrchestrationV2RunStatus>;
+
+const activeRunStatuses: ReadonlySet<string | null> = new Set(ACTIVE_RUN_STATUSES);
+const unfinishedRunStatuses: ReadonlySet<string | null> = new Set(UNFINISHED_RUN_STATUSES);
+
+export const isActiveRunStatus = (status: string | null): boolean => activeRunStatuses.has(status);
+export const isUnfinishedRunStatus = (status: string | null): boolean =>
+  unfinishedRunStatuses.has(status);
+
 export const OrchestrationV2DelegatedCompletionTaskDeliveryState = Schema.Literals([
   "pending",
   "claimed",
@@ -1718,6 +1739,10 @@ export const OrchestrationV2UserMessageInputIntent = Schema.Literals([
 ]);
 export type OrchestrationV2UserMessageInputIntent =
   typeof OrchestrationV2UserMessageInputIntent.Type;
+
+/** How a client asks a message to reach a thread that may have an active run. */
+export const MessageDispatchMode = Schema.Literals(["auto", "queue", "steer", "restart"]);
+export type MessageDispatchMode = typeof MessageDispatchMode.Type;
 
 /** Notices without a level predate it and are warnings. */
 const OrchestrationV2SystemNoticeLevel = Schema.Literals(["info", "warning", "error"]);

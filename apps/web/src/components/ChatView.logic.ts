@@ -42,6 +42,9 @@ import {
   type ThreadContextRecord,
   type EnvironmentContextRecord,
   type ResponseContextRecord,
+  type MessageDispatchMode,
+  type ThreadEnvMode,
+  UNFINISHED_RUN_STATUSES,
   type ThreadId,
   type ThreadLinkedPullRequest,
   type RunId,
@@ -93,8 +96,6 @@ import {
   reviewCommentContextLabel,
   terminalContextReference,
 } from "../lib/composerContextRecords";
-import type { ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
-import type { DraftThreadEnvMode } from "../composerDraftStore";
 import { type ComposerSubmissionIntent } from "../composer-logic";
 import type { ReviewCommentContext } from "../reviewCommentContext";
 import { derivePhase, type TimelineEntry } from "../session-logic";
@@ -353,7 +354,9 @@ export type HeldThreadTimeline<T extends readonly unknown[]> = {
 
 const MAX_REMEMBERED_THREAD_TIMELINES = 16;
 
+// oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: module-level cache; move the state to its owner
 let rememberedThreadTimelines = new Map<string, HeldThreadTimeline<readonly unknown[]>>();
+// oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: module-level cache; move the state to its owner
 let rememberedThreadTimelineOrder: string[] = [];
 
 function rememberThreadTimelineEntries(held: HeldThreadTimeline<readonly unknown[]>): void {
@@ -674,6 +677,7 @@ export async function prepareRevertedMessageAttachments(input: {
       const url = resolveAssetUrl(input.httpBaseUrl, result.value.relativeUrl);
       if (url === null)
         throw new Error(m(msg("The environment returned an invalid attachment URL.")));
+      // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: network I/O; move the request to the shell
       const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
       if (!response.ok)
         throw new Error(m(msg("Could not restore attachment: {name}", { name: attachment.name })));
@@ -715,11 +719,11 @@ export { readFileAsDataUrl } from "../lib/imageCompression";
 export { resolveSendEnvMode } from "@t3tools/shared/projectSettings";
 
 export function resolveBackgroundDraftWorkspaceOptions(input: {
-  envMode: DraftThreadEnvMode;
+  envMode: ThreadEnvMode;
   branch: string | null;
   startFromOrigin: boolean;
 }): {
-  envMode: DraftThreadEnvMode;
+  envMode: ThreadEnvMode;
   branch: string | null;
   worktreePath: null;
   startFromOrigin: boolean;
@@ -1002,6 +1006,7 @@ export async function waitForRevertedMessage(
         finish();
     };
     unsubscribe = appAtomRegistry.subscribe(threadAtom, inspect);
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: schedules a timer; move scheduling to the shell
     timeout = globalThis.setTimeout(() => {
       finish(new Error(m(msg("Timed out waiting for the thread to rewind."))));
     }, timeoutMs);
@@ -1041,6 +1046,7 @@ export function createLocalDispatchSnapshot(
   const runtime = activeThread?.runtime ?? null;
   return {
     startedAt: new Date(
+      // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
       environmentId === undefined ? Date.now() : toServerClock(environmentId, Date.now()),
     ).toISOString(),
     preparingWorktree: Boolean(options?.preparingWorktree),
@@ -1322,6 +1328,7 @@ export function makeThreadErrorSetter(input: {
   return (targetThreadId: ThreadId | null, error: string | null) => {
     if (!targetThreadId) return;
     const nextError = sanitizeThreadErrorMessage(error);
+    // oxlint-disable-next-line t3code/no-io-in-functional-core -- legacy: reads the wall clock; take now as an input
     const nextEntry: LocalThreadErrorEntry = { message: nextError, at: Date.now() };
     const { routeThreadRef, serverThreadRef } = input;
     if (
@@ -1444,7 +1451,7 @@ export function planComposerTurn(input: {
   readonly sendQueuesBehindSetup: boolean;
   readonly isServerThread: boolean;
   readonly activeMessageCount: number;
-  readonly sendEnvMode: DraftThreadEnvMode;
+  readonly sendEnvMode: ThreadEnvMode;
   readonly worktreePath: string | null;
   readonly activeThreadBranch: string | null;
   /** False for a plain folder that tracks repositories: each starts from its own default branch. */
@@ -1456,7 +1463,7 @@ export function planComposerTurn(input: {
   readonly resumeCompactionTokens: number | null;
   readonly keepFullHistory: boolean;
   readonly phase: SessionPhase;
-  readonly dispatchMode: ComposerDispatchMode;
+  readonly dispatchMode: MessageDispatchMode;
   /** The turn starts a new provider session, so it neither compacts first nor steers. */
   readonly freshContext: boolean;
 }) {
@@ -1627,7 +1634,9 @@ export function presentThreadShellFromProjection(
 }
 
 // Excludes `waiting`: that is post-terminal checkpoint drain, so its agent turn is over.
-const LIVE_RUN_STATUSES = new Set(["queued", "preparing", "starting", "running"]);
+const LIVE_RUN_STATUSES: ReadonlySet<string> = new Set(
+  UNFINISHED_RUN_STATUSES.filter((status) => status !== "waiting"),
+);
 
 /**
  * Background work the provider still runs after an earlier run ended. It

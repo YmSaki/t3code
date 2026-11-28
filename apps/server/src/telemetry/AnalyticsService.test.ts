@@ -117,7 +117,7 @@ const recordTwentyEvents = Effect.gen(function* () {
 const analyticsLayerWith = (
   client: HttpClient.HttpClient,
   policy?: ManagedPolicyDocument,
-  env?: Readonly<Record<string, string>>,
+  env?: Readonly<Record<string, string | undefined>>,
 ) =>
   AnalyticsService.layer.pipe(
     Layer.provideMerge(
@@ -297,6 +297,28 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
       assert.equal(bodies.length, 1);
       assert.notInclude(bodies[0], "acme-secret-distro");
       assert.include(bodies[0], '"wsl":true');
+    }),
+  );
+
+  it.effect("sends nothing anywhere when the PostHog key or host is unset or empty", () =>
+    Effect.gen(function* () {
+      for (const env of [
+        { T3CODE_POSTHOG_KEY: undefined },
+        { T3CODE_POSTHOG_HOST: undefined },
+        { T3CODE_POSTHOG_KEY: "" },
+        { T3CODE_POSTHOG_HOST: " " },
+      ]) {
+        const urls: Array<string> = [];
+        const client = HttpClient.make((request) => {
+          urls.push(request.url);
+          return respondWithStatus(204)(request);
+        });
+        yield* Effect.gen(function* () {
+          yield* recordTwentyEvents;
+          yield* (yield* AnalyticsService.AnalyticsService).flush;
+        }).pipe(Effect.provide(analyticsLayerWith(client, undefined, env)));
+        assert.deepEqual(urls, [], JSON.stringify(env));
+      }
     }),
   );
 

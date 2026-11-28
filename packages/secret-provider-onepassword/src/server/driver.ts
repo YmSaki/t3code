@@ -1,4 +1,4 @@
-import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
+import { spawnAndCollect } from "@t3tools/shared/spawnAndCollect";
 import { defineSecretProviderDriver } from "@t3tools/secret-provider-core/server/driver";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import * as SecureRandom from "effect/crypto/SecureRandom";

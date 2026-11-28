@@ -61,6 +61,7 @@ import {
   type ServerProvider,
   type ServerProviderModel,
   ThreadId,
+  ACTIVE_RUN_STATUSES,
   isOrchestrationV2WorkActive,
   latestProviderTurnForAttempt,
   resolveProjectProviderInstanceEnabled,
@@ -1384,7 +1385,7 @@ const make = Effect.gen(function* () {
   // Runs on every MCP call, and long threads hold thousands of records; callers need only active runs.
   const loadCallerRecords = <K extends "runs">(threadId: ThreadId, fields: ReadonlyArray<K>) =>
     loadThreadRecords(threadId, fields, {
-      runStatuses: ThreadManagementService.ACTIVE_RUN_STATUSES,
+      runStatuses: ACTIVE_RUN_STATUSES,
     });
 
   // A dispatcher thread holds thousands of tasks, each with its full prompt; read only the ones named.
@@ -1576,7 +1577,7 @@ const make = Effect.gen(function* () {
     const [records, runCount] = yield* Effect.all([
       threadManagement.getProjectThreadRecords(input, ["runs", "runtimeRequests"], {
         latestRunLimit: runLimit,
-        runStatuses: ThreadManagementService.ACTIVE_RUN_STATUSES,
+        runStatuses: ACTIVE_RUN_STATUSES,
         runtimeRequestStatuses: ["pending"],
       }),
       threadManagement.getRunCount(threadId),

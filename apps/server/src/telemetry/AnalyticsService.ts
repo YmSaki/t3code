@@ -9,6 +9,7 @@ import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import { constant } from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Random from "effect/Random";
@@ -65,13 +66,16 @@ function retryDelayMs(failures: number, random: number): number {
   return Math.round(ceiling / 2 + (ceiling / 2) * random);
 }
 
+const nonEmptyString = (name: string) =>
+  Config.String(name).pipe(
+    Config.option,
+    Config.map(Option.filter((value) => value.trim() !== "")),
+  );
+
+// No built-in destination: an unconfigured fork must never fall back to upstream ingest.
 const TelemetryEnvConfig = Config.all({
-  posthogKey: Config.String("T3CODE_POSTHOG_KEY").pipe(
-    Config.withDefault("phc_XOWci4oZP4VvLiEyrFqkFjP4CZn55mjYYBMREK5Wd6m"),
-  ),
-  posthogHost: Config.String("T3CODE_POSTHOG_HOST").pipe(
-    Config.withDefault("https://ingest.t3.codes"),
-  ),
+  posthogKey: nonEmptyString("T3CODE_POSTHOG_KEY"),
+  posthogHost: nonEmptyString("T3CODE_POSTHOG_HOST"),
   enabled: Config.Boolean("T3CODE_TELEMETRY_ENABLED").pipe(Config.option),
   flushBatchSize: Config.Number("T3CODE_TELEMETRY_FLUSH_BATCH_SIZE").pipe(Config.withDefault(20)),
   maxBufferedEvents: Config.Number("T3CODE_TELEMETRY_MAX_BUFFERED_EVENTS").pipe(
@@ -121,6 +125,16 @@ function serverOsFromNodePlatform(platform: string): ClientOs {
 /** @public */
 export const make = Effect.gen(function* () {
   const telemetryConfig = yield* TelemetryEnvConfig;
+  if (Option.isNone(telemetryConfig.posthogKey) || Option.isNone(telemetryConfig.posthogHost)) {
+    yield* Effect.logInfo("Telemetry disabled: T3CODE_POSTHOG_KEY or T3CODE_POSTHOG_HOST is unset");
+    return AnalyticsService.of({
+      record: constant(Effect.void),
+      flush: Effect.void,
+      recordOwners: constant(Effect.void),
+    });
+  }
+  const posthogKey = telemetryConfig.posthogKey.value;
+  const posthogHost = telemetryConfig.posthogHost.value;
   const hostEnvironment = yield* HostProcess.Environment;
   const serverSettingsService = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
   const awaitingShellConsent = hostEnvironment.T3CODE_DESKTOP_SHELL_DISCOVERY_PENDING === "1";
@@ -232,7 +246,7 @@ export const make = Effect.gen(function* () {
     if (!(yield* telemetryEnabled) || !distinctId) return;
 
     const payload = {
-      api_key: telemetryConfig.posthogKey,
+      api_key: posthogKey,
       batch: events.map((event) => ({
         uuid: event.uuid,
         event: event.event,
@@ -257,7 +271,7 @@ export const make = Effect.gen(function* () {
       })),
     };
 
-    yield* HttpClientRequest.post(`${telemetryConfig.posthogHost}/batch/`).pipe(
+    yield* HttpClientRequest.post(`${posthogHost}/batch/`).pipe(
       HttpClientRequest.bodyJson(payload),
       Effect.flatMap(httpClient.execute),
       Effect.flatMap(HttpClientResponse.filterStatusOk),

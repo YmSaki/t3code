@@ -28,7 +28,9 @@ import {
   type PreviewAnnotationPayload,
   type ResponseContextRecord,
   type ScopedThreadRef,
+  type MessageDispatchMode,
   type ThreadContextRecord,
+  type ThreadEnvMode,
   type ThreadId,
   ProviderInteractionMode,
   RuntimeMode,
@@ -80,7 +82,6 @@ import {
   composerTargetKey,
   type ComposerFileAttachment,
   type ComposerImageAttachment,
-  type DraftThreadEnvMode,
   useComposerDraftStore,
   DraftId,
 } from "../../composerDraftStore";
@@ -110,7 +111,6 @@ import {
 } from "./composerSend.logic";
 import { useMultipleModelSend } from "./useMultipleModelSend";
 import type { SideChatMessage } from "./useSideChat";
-import { type ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
 import {
   getUploadedAttachments,
   refreshExpiredAttachmentUploads,
@@ -216,7 +216,7 @@ interface ComposerSendInput {
   readonly isGitRepo: boolean;
   readonly phase: SessionPhase;
   readonly runtimeMode: RuntimeMode;
-  readonly sendEnvMode: DraftThreadEnvMode;
+  readonly sendEnvMode: ThreadEnvMode;
   /** Tracked repositories a new worktree takes; undefined leaves the choice to the server. */
   readonly worktreeRepositories: ReadonlyArray<{ readonly path: string }> | undefined;
   readonly startFromOrigin: boolean;
@@ -416,7 +416,7 @@ export function useComposerSend(input: ComposerSendInput) {
 
   const onSend = async (
     e?: { preventDefault: () => void },
-    dispatchMode: ComposerDispatchMode = "auto",
+    dispatchMode: MessageDispatchMode = "auto",
     submissionIntent: ComposerSubmissionIntent = "foreground",
     directAnnotation?: {
       annotation: PreviewAnnotationPayload;

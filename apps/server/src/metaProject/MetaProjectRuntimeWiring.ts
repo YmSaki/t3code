@@ -1,6 +1,7 @@
 import {
   type EnvironmentId,
   IsoDateTime,
+  isUnfinishedRunStatus,
   type OrchestratorMcpFailure,
   type PeerLink,
   ProjectId,
@@ -54,14 +55,12 @@ const RemoteThreadPage = Schema.Struct({
   nextCursor: Schema.NullOr(Schema.Number),
 });
 
-const LIVE_STATUSES = new Set(["queued", "preparing", "starting", "running", "waiting"]);
-
 /** `waiting` does not say whether the agent waits on an approval or an answer; both need the user. */
 export function toRollupThreadStatus(status: string, settled: boolean): RollupThreadStatus {
   if (settled) return "settled";
   if (status === "waiting") return "waiting_input";
   if (status === "failed") return "error";
-  return LIVE_STATUSES.has(status) ? "running" : "idle";
+  return isUnfinishedRunStatus(status) ? "running" : "idle";
 }
 
 const collectPages = Effect.fn("MetaProjectRuntimeWiring.collectPages")(function* <A>(
@@ -145,7 +144,7 @@ const makeRemoteSnapshotFetcher = Effect.fn("MetaProjectRuntimeWiring.makeFetche
           threadId: thread.threadId,
           title: thread.title,
           updatedAt: thread.updatedAt,
-          isActive: LIVE_STATUSES.has(thread.status),
+          isActive: isUnfinishedRunStatus(thread.status),
         })),
         rollupThreads: visibleThreads.map((thread) => ({
           environmentId,

@@ -13,10 +13,12 @@ import * as Path from "effect/Path";
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
-import { buildTriageAppPrompt, type TriageSourceClone } from "./triagePrompt.ts";
+import {
+  buildTriageAppPrompt,
+  T3CODE_REPOSITORY_URL,
+  type TriageSourceClone,
+} from "./triagePrompt.ts";
 import { triageSourceCacheDir, writeTriageSession } from "./triageSession.ts";
-
-const T3CODE_REPOSITORY_URL = "https://github.com/pingdotgg/t3code";
 
 // No tty: a credential prompt would hang until the timeout, so git must fail
 // instead. An empty GIT_ASKPASS also skips core.askPass and SSH_ASKPASS helpers.

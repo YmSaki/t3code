@@ -141,6 +141,11 @@ describe("resolveProviderCatalog", () => {
   });
 });
 
+const FORK_MANIFEST_URL =
+  "https://raw.githubusercontent.com/YmSaki/t3codeJP/main/apps/server/src/provider/model-manifest.json";
+const UPSTREAM_MANIFEST_URL =
+  "https://raw.githubusercontent.com/pingdotgg/t3code/main/apps/server/src/provider/model-manifest.json";
+
 const REMOTE_UPDATED_AT = "2099-01-01T00:00:00Z";
 
 const REMOTE_MANIFEST: ModelManifest.ModelManifestData = {
@@ -248,15 +253,17 @@ const INVALID_REMOTE_MANIFESTS: ReadonlyArray<ModelManifest.ModelManifestData> =
   }),
 ];
 
-const layerHttpClient = (handler: () => Response) =>
+const layerHttpClient = (handler: (url: string) => Response) =>
   Layer.succeed(
     HttpClient.HttpClient,
-    HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, handler()))),
+    HttpClient.make((request) =>
+      Effect.succeed(HttpClientResponse.fromWeb(request, handler(request.url))),
+    ),
   );
 
 const layerService = (input: {
   readonly prefix: string;
-  readonly response: () => Response;
+  readonly response: (url: string) => Response;
   readonly settings?: Parameters<typeof ServerSettings.layerTest>[0];
 }) =>
   ServerConfig.layerTest(process.cwd(), { prefix: input.prefix }).pipe(
@@ -266,11 +273,13 @@ const layerService = (input: {
   );
 
 describe("ModelManifest service", () => {
-  it.effect("prefers a fetched manifest over the bundle and caches it to disk", () =>
-    Effect.gen(function* () {
+  it.effect("prefers a fetched manifest over the bundle and caches it to disk", () => {
+    const requestedUrls: Array<string> = [];
+    return Effect.gen(function* () {
       const service = yield* ModelManifest.make;
       const refreshed = yield* service.refresh;
       assert.deepStrictEqual(refreshed, REMOTE_MANIFEST);
+      assert.deepStrictEqual(requestedUrls, [FORK_MANIFEST_URL]);
 
       const rebooted = yield* ModelManifest.make;
       assert.deepStrictEqual(yield* rebooted.current, REMOTE_MANIFEST);
@@ -279,11 +288,47 @@ describe("ModelManifest service", () => {
       Effect.provide(
         layerService({
           prefix: "model-manifest-fetch-test",
-          response: () => Response.json(REMOTE_MANIFEST),
+          response: (url) => {
+            requestedUrls.push(url);
+            return Response.json(REMOTE_MANIFEST);
+          },
         }),
       ),
-    ),
-  );
+    );
+  });
+
+  it.effect("keeps the bundled manifest and writes no cache when the fetch fails", () => {
+    const responses = [
+      new Response("not found", { status: 404 }),
+      new Response("{not json", { headers: { "content-type": "application/json" } }),
+      Response.json({ version: 2 }),
+    ];
+    let responseIndex = 0;
+    const requestedUrls: Array<string> = [];
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      const service = yield* ModelManifest.make;
+      for (const _response of responses) {
+        requestedUrls.length = 0;
+        assert.deepStrictEqual(yield* service.forceRefresh, ModelManifest.BUNDLED_MODEL_MANIFEST);
+        assert.deepStrictEqual(requestedUrls, [FORK_MANIFEST_URL]);
+      }
+      assert.isFalse(yield* fs.exists(path.join(config.stateDir, "model-manifest.json")));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        layerService({
+          prefix: "model-manifest-fetch-failure-test",
+          response: (url) => {
+            requestedUrls.push(url);
+            return responses[responseIndex++]!;
+          },
+        }),
+      ),
+    );
+  });
 
   it.effect(
     "ignores older remote edits without replacing the current manifest or disk cache",
@@ -382,7 +427,11 @@ describe("ModelManifest service", () => {
       ]) {
         yield* fs.writeFileString(
           cachePath,
-          yield* ModelManifest.encodeManifestCache({ fetchedAtMs: 0, manifest: stale }),
+          yield* ModelManifest.encodeManifestCache({
+            sourceUrl: FORK_MANIFEST_URL,
+            fetchedAtMs: 0,
+            manifest: stale,
+          }),
         );
         const service = yield* ModelManifest.make;
         assert.deepStrictEqual(yield* service.current, ModelManifest.BUNDLED_MODEL_MANIFEST);
@@ -390,7 +439,11 @@ describe("ModelManifest service", () => {
 
       yield* fs.writeFileString(
         cachePath,
-        yield* ModelManifest.encodeManifestCache({ fetchedAtMs: 0, manifest: REMOTE_MANIFEST }),
+        yield* ModelManifest.encodeManifestCache({
+          sourceUrl: FORK_MANIFEST_URL,
+          fetchedAtMs: 0,
+          manifest: REMOTE_MANIFEST,
+        }),
       );
       const later = yield* ModelManifest.make;
       assert.deepStrictEqual(yield* later.current, REMOTE_MANIFEST);
@@ -404,6 +457,43 @@ describe("ModelManifest service", () => {
       ),
     ),
   );
+
+  it.effect("ignores a newer disk cache that was not fetched from the fork URL", () => {
+    const requestedUrls: Array<string> = [];
+    const upstreamManifest = { ...REMOTE_MANIFEST, currentModels: { codex: ["upstream-model"] } };
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      const cachePath = path.join(config.stateDir, "model-manifest.json");
+      for (const contents of [
+        JSON.stringify({ fetchedAtMs: 0, manifest: upstreamManifest }),
+        yield* ModelManifest.encodeManifestCache({
+          sourceUrl: UPSTREAM_MANIFEST_URL,
+          fetchedAtMs: 0,
+          manifest: upstreamManifest,
+        }),
+      ]) {
+        yield* fs.writeFileString(cachePath, contents);
+        requestedUrls.length = 0;
+        const service = yield* ModelManifest.make;
+        assert.deepStrictEqual(yield* service.current, ModelManifest.BUNDLED_MODEL_MANIFEST);
+        assert.deepStrictEqual(yield* service.refresh, REMOTE_MANIFEST);
+        assert.deepStrictEqual(requestedUrls, [FORK_MANIFEST_URL]);
+      }
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        layerService({
+          prefix: "model-manifest-cache-source-test",
+          response: (url) => {
+            requestedUrls.push(url);
+            return Response.json(REMOTE_MANIFEST);
+          },
+        }),
+      ),
+    );
+  });
 
   it.effect("does not fetch when provider update checks are disabled", () =>
     Effect.gen(function* () {
@@ -430,4 +520,31 @@ describe("ModelManifest service", () => {
       ),
     ),
   );
+
+  it.effect("does not fetch when settings cannot be read", () => {
+    let fetchCount = 0;
+    return Effect.gen(function* () {
+      const settings = yield* ServerSettings.ServerSettingsService;
+      const service = yield* ModelManifest.make.pipe(
+        Effect.provideService(ServerSettings.ServerSettingsService, {
+          ...settings,
+          getSettings: Effect.die("settings unreadable"),
+        }),
+      );
+      assert.deepStrictEqual(yield* service.refresh, ModelManifest.BUNDLED_MODEL_MANIFEST);
+      assert.deepStrictEqual(yield* service.forceRefresh, ModelManifest.BUNDLED_MODEL_MANIFEST);
+      assert.strictEqual(fetchCount, 0);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        layerService({
+          prefix: "model-manifest-settings-failure-test",
+          response: () => {
+            fetchCount += 1;
+            return Response.json(REMOTE_MANIFEST);
+          },
+        }),
+      ),
+    );
+  });
 });
