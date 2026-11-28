@@ -494,7 +494,8 @@ fi
 # Self-contained release archive: no Node, npm, or compiler on the remote.
 # Unpacked into the pinned-runtime layout so \`t3 service install\` reuses it.
 T3_CHECKSUMS_URL=@@T3_CHECKSUMS_URL@@
-T3_INSTALL_SH_URL=@@T3_INSTALL_SH_URL@@
+T3_CHECKSUMS_DISPLAY_URL=@@T3_CHECKSUMS_DISPLAY_URL@@
+T3_INSTALL_SH_DISPLAY_URL=@@T3_INSTALL_SH_DISPLAY_URL@@
 T3_RUNTIME_DIR="$HOME/${DEFAULT_HOME_DIRECTORY}/runtime/versions/$T3_ARCHIVE_VERSION"
 t3_runtime_ready() {
   [ -x "$T3_RUNTIME_DIR/t3" ] && [ "$(cat "$T3_RUNTIME_DIR/.install-complete" 2>/dev/null)" = "$T3_ARCHIVE_VERSION" ]
@@ -533,9 +534,9 @@ fi
 if ! t3_runtime_ready; then
   # Keep aligned with CLI_ARCHIVE_PLATFORM_KEYS in packages/shared/src/cliRelease.ts.
   case "$(uname -s) $(uname -m)" in
-    "Darwin arm64") T3_PLATFORM_KEY="darwin-arm64"; T3_ARCHIVE_URL=@@T3_DARWIN_ARM64_ARCHIVE_URL@@ ;;
-    "Linux arm64" | "Linux aarch64") T3_PLATFORM_KEY="linux-arm64"; T3_ARCHIVE_URL=@@T3_LINUX_ARM64_ARCHIVE_URL@@ ;;
-    "Linux x86_64" | "Linux amd64") T3_PLATFORM_KEY="linux-x64"; T3_ARCHIVE_URL=@@T3_LINUX_X64_ARCHIVE_URL@@ ;;
+    "Darwin arm64") T3_PLATFORM_KEY="darwin-arm64"; T3_ARCHIVE_URL=@@T3_DARWIN_ARM64_ARCHIVE_URL@@; T3_ARCHIVE_DISPLAY_URL=@@T3_DARWIN_ARM64_ARCHIVE_DISPLAY_URL@@ ;;
+    "Linux arm64" | "Linux aarch64") T3_PLATFORM_KEY="linux-arm64"; T3_ARCHIVE_URL=@@T3_LINUX_ARM64_ARCHIVE_URL@@; T3_ARCHIVE_DISPLAY_URL=@@T3_LINUX_ARM64_ARCHIVE_DISPLAY_URL@@ ;;
+    "Linux x86_64" | "Linux amd64") T3_PLATFORM_KEY="linux-x64"; T3_ARCHIVE_URL=@@T3_LINUX_X64_ARCHIVE_URL@@; T3_ARCHIVE_DISPLAY_URL=@@T3_LINUX_X64_ARCHIVE_DISPLAY_URL@@ ;;
     *) printf 'Remote host %s has no t3 release archive.\\n' "$(uname -s) $(uname -m)" >&2; exit 1 ;;
   esac
   T3_ARCHIVE="t3-$T3_ARCHIVE_VERSION-$T3_PLATFORM_KEY.tar.gz"
@@ -550,12 +551,12 @@ if ! t3_runtime_ready; then
     elif command -v wget >/dev/null 2>&1; then wget -q --timeout=30 --tries=1 "$1" -O "$2"
     else printf 'Remote host needs curl or wget to download %s.\\n' "$T3_ARCHIVE" >&2; exit 1
     fi || {
-      printf 'Could not download t3 %s from %s. If this host cannot reach it, install t3 %s on it with %s (T3CODE_VERSION=%s; T3CODE_RELEASE_BASE_URL selects a mirror).\\n' "$T3_ARCHIVE_VERSION" "$1" "$T3_ARCHIVE_VERSION" "$T3_INSTALL_SH_URL" "$T3_ARCHIVE_VERSION" >&2
+      printf 'Could not download t3 %s from %s. If this host cannot reach it, install t3 %s on it with %s (T3CODE_VERSION=%s; T3CODE_RELEASE_BASE_URL selects a mirror).\\n' "$T3_ARCHIVE_VERSION" "$4" "$T3_ARCHIVE_VERSION" "$T3_INSTALL_SH_DISPLAY_URL" "$T3_ARCHIVE_VERSION" >&2
       exit 1
     }
   }
-  t3_fetch "$T3_CHECKSUMS_URL" "$T3_STAGING/SHA256SUMS" @@T3_ARCHIVE_CHECKSUMS_SECONDS@@
-  t3_fetch "$T3_ARCHIVE_URL" "$T3_STAGING/$T3_ARCHIVE" @@T3_ARCHIVE_DOWNLOAD_SECONDS@@
+  t3_fetch "$T3_CHECKSUMS_URL" "$T3_STAGING/SHA256SUMS" @@T3_ARCHIVE_CHECKSUMS_SECONDS@@ "$T3_CHECKSUMS_DISPLAY_URL"
+  t3_fetch "$T3_ARCHIVE_URL" "$T3_STAGING/$T3_ARCHIVE" @@T3_ARCHIVE_DOWNLOAD_SECONDS@@ "$T3_ARCHIVE_DISPLAY_URL"
   T3_EXPECTED="$(grep " \\*\\{0,1\\}$T3_ARCHIVE$" "$T3_STAGING/SHA256SUMS" | cut -d' ' -f1)"
   if command -v sha256sum >/dev/null 2>&1; then
     T3_ACTUAL="$(sha256sum < "$T3_STAGING/$T3_ARCHIVE" | cut -d' ' -f1)"
@@ -1143,17 +1144,34 @@ export function buildRemoteT3RunnerScript(input?: RemoteT3RunnerOptions): string
     shellSingleQuote(
       cliReleaseAssetUrl(archiveVersion, fileName, input?.releaseBaseUrl ?? undefined),
     );
+  // A mirror's userinfo or query can carry its access token; keep both out of error output.
+  const displayUrl = (fileName: string) => {
+    const url = new URL(
+      cliReleaseAssetUrl(archiveVersion, fileName, input?.releaseBaseUrl ?? undefined),
+    );
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return shellSingleQuote(url.toString());
+  };
   return stripTrailingNewlines(
     applyScriptPlaceholders(REMOTE_RUNNER_SCRIPT, {
       T3_NODE_SCRIPT_PATH: shellSingleQuote(nodeScriptPath),
       T3_ARCHIVE_VERSION: shellSingleQuote(archiveVersion),
       T3_CHECKSUMS_URL: assetUrl(CLI_RELEASE_CHECKSUMS_FILE),
+      T3_CHECKSUMS_DISPLAY_URL: displayUrl(CLI_RELEASE_CHECKSUMS_FILE),
       T3_DARWIN_ARM64_ARCHIVE_URL: assetUrl(cliArchiveFileName(archiveVersion, "darwin-arm64")),
-      T3_LINUX_ARM64_ARCHIVE_URL: assetUrl(cliArchiveFileName(archiveVersion, "linux-arm64")),
-      T3_LINUX_X64_ARCHIVE_URL: assetUrl(cliArchiveFileName(archiveVersion, "linux-x64")),
-      T3_INSTALL_SH_URL: shellSingleQuote(
-        cliReleaseAssetUrl(archiveVersion, CLI_INSTALL_SH_FILE, input?.releaseBaseUrl ?? undefined),
+      T3_DARWIN_ARM64_ARCHIVE_DISPLAY_URL: displayUrl(
+        cliArchiveFileName(archiveVersion, "darwin-arm64"),
       ),
+      T3_LINUX_ARM64_ARCHIVE_URL: assetUrl(cliArchiveFileName(archiveVersion, "linux-arm64")),
+      T3_LINUX_ARM64_ARCHIVE_DISPLAY_URL: displayUrl(
+        cliArchiveFileName(archiveVersion, "linux-arm64"),
+      ),
+      T3_LINUX_X64_ARCHIVE_URL: assetUrl(cliArchiveFileName(archiveVersion, "linux-x64")),
+      T3_LINUX_X64_ARCHIVE_DISPLAY_URL: displayUrl(cliArchiveFileName(archiveVersion, "linux-x64")),
+      T3_INSTALL_SH_DISPLAY_URL: displayUrl(CLI_INSTALL_SH_FILE),
       T3_ARCHIVE_LOCK_WAIT_SECONDS: String(REMOTE_ARCHIVE_LOCK_WAIT_SECONDS),
       T3_ARCHIVE_DOWNLOAD_SECONDS: String(REMOTE_ARCHIVE_DOWNLOAD_SECONDS),
       T3_ARCHIVE_CHECKSUMS_SECONDS: String(REMOTE_ARCHIVE_CHECKSUMS_SECONDS),

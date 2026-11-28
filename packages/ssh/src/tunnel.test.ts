@@ -327,7 +327,8 @@ describe("ssh tunnel scripts", () => {
       { host: "Linux x64 mirror", system: "Linux", machine: "x86_64", platform: "linux-x64" },
     ].map((host) => ({
       ...host,
-      releaseBaseUrl: "https://mirror.example/releases/download?fixture=issue67",
+      releaseBaseUrl:
+        "https://mirror-user:userinfo-secret@mirror.example/releases/download?token=query-secret",
       downloads: true,
     })),
   ])(
@@ -338,6 +339,7 @@ describe("ssh tunnel scripts", () => {
         const bin = NodePath.join(root, "bin");
         NodeFS.mkdirSync(bin);
         NodeFS.mkdirSync(NodePath.join(root, "home"));
+        const downloadLog = NodePath.join(root, "downloads.log");
         NodeFS.writeFileSync(
           NodePath.join(bin, "uname"),
           `#!/bin/sh\ncase "$1" in -s) echo ${system} ;; -m) echo ${machine} ;; esac\n`,
@@ -345,7 +347,7 @@ describe("ssh tunnel scripts", () => {
         );
         NodeFS.writeFileSync(
           NodePath.join(bin, "curl"),
-          '#!/bin/sh\nfor arg; do case "$arg" in http*) url="$arg" ;; esac; done\necho "download attempt: $url" >&2\ncase "$url" in *SHA256SUMS|*SHA256SUMS\\?fixture=issue67) for last; do :; done; : > "$last"; exit 0 ;; esac\necho "curl: (6) Could not resolve host" >&2\nexit 6\n',
+          '#!/bin/sh\nfor arg; do case "$arg" in http*) url="$arg" ;; esac; done\necho "$url" >> "$DOWNLOAD_LOG"\ncase "$url" in *SHA256SUMS|*SHA256SUMS\\?*) for last; do :; done; : > "$last"; exit 0 ;; esac\necho "curl: (6) Could not resolve host" >&2\nexit 6\n',
           { mode: 0o755 },
         );
         const runner = NodePath.join(root, "run-t3.sh");
@@ -358,24 +360,34 @@ describe("ssh tunnel scripts", () => {
         );
         const result = NodeChildProcess.spawnSync("sh", [runner, "--version"], {
           encoding: "utf8",
-          env: { HOME: NodePath.join(root, "home"), PATH: `${bin}:${process.env.PATH ?? ""}` },
+          env: {
+            HOME: NodePath.join(root, "home"),
+            PATH: `${bin}:${process.env.PATH ?? ""}`,
+            DOWNLOAD_LOG: downloadLog,
+          },
         });
         assert.notEqual(result.status, 0);
         if (downloads) {
-          assert.include(result.stderr, "download attempt");
+          const release = `/releases/download/v${ARCHIVE.archiveVersion}`;
+          const archive = `${release}/t3-${ARCHIVE.archiveVersion}-${platform}.tar.gz`;
+          const mirror = releaseBaseUrl !== undefined;
+          const origin = mirror ? "https://mirror.example" : "https://github.com/YmSaki/t3codeJP";
+          const credentials = mirror ? "mirror-user:userinfo-secret@" : "";
+          const query = mirror ? "?token=query-secret" : "";
+          // The mirror still receives its credentials; the error output never shows them.
+          assert.include(
+            NodeFS.readFileSync(downloadLog, "utf8"),
+            `${origin.replace("://", `://${credentials}`)}${archive}${query}\n`,
+          );
           // A bare curl error does not tell the user that t3 itself could not be downloaded.
-          assert.include(result.stderr, ARCHIVE.archiveVersion);
-          const base =
-            releaseBaseUrl?.split("?")[0] ?? "https://github.com/YmSaki/t3codeJP/releases/download";
-          const query = releaseBaseUrl === undefined ? "" : "?fixture=issue67";
-          assert.include(result.stderr, `${base}/v${ARCHIVE.archiveVersion}/SHA256SUMS${query}`);
           assert.include(
             result.stderr,
-            `${base}/v${ARCHIVE.archiveVersion}/t3-${ARCHIVE.archiveVersion}-${platform}.tar.gz${query}`,
+            `Could not download t3 ${ARCHIVE.archiveVersion} from ${origin}${archive}.`,
           );
-          assert.include(result.stderr, `${base}/v${ARCHIVE.archiveVersion}/install.sh${query}`);
+          assert.include(result.stderr, `with ${origin}${release}/install.sh (`);
+          assert.notInclude(result.stderr, "secret");
         } else {
-          assert.notInclude(result.stderr, "download attempt");
+          assert.isFalse(NodeFS.existsSync(downloadLog));
           assert.include(result.stderr, "has no t3 release archive.");
         }
       } finally {
