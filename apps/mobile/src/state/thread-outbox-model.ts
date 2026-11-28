@@ -12,12 +12,14 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EnvironmentId,
   IsoDateTime,
+  MessageDispatchMode,
   MessageId,
   ModelSelection,
   OrchestrationMessageContext,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
+  ThreadEnvMode,
   ThreadId,
   type ModelSelection as ModelSelectionType,
   type ProjectId as ProjectIdType,
@@ -30,7 +32,6 @@ import * as Schema from "effect/Schema";
 
 import { DraftComposerAttachmentSchema } from "../lib/composer-image-schema";
 import { withImplicitFastModeSelection } from "../lib/providerOptions";
-import type { ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
 import type { DraftComposerAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 
@@ -42,7 +43,7 @@ const QueuedThreadCreationSchema = Schema.Struct({
   projectId: ProjectId,
   projectTitle: Schema.optional(Schema.String),
   projectCwd: Schema.optional(Schema.String),
-  workspaceMode: Schema.Literals(["local", "worktree"]),
+  workspaceMode: ThreadEnvMode,
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
   startFromOrigin: Schema.optional(Schema.Boolean),
@@ -62,7 +63,7 @@ export const QueuedThreadMessageSchema = Schema.Struct({
   context: Schema.optional(OrchestrationMessageContext),
   attachments: Schema.Array(DraftComposerAttachmentSchema),
   modelSelection: Schema.optional(ModelSelection),
-  dispatchMode: Schema.optional(Schema.Literals(["auto", "queue", "steer", "restart"])),
+  dispatchMode: Schema.optional(MessageDispatchMode),
   compactBeforeSend: Schema.optional(Schema.Boolean),
   freshContext: Schema.optional(Schema.Boolean),
   runtimeMode: Schema.optional(RuntimeMode),
@@ -78,7 +79,7 @@ export interface QueuedThreadCreation {
   readonly projectId: ProjectIdType;
   readonly projectTitle?: string;
   readonly projectCwd?: string;
-  readonly workspaceMode: "local" | "worktree";
+  readonly workspaceMode: ThreadEnvMode;
   readonly branch: string | null;
   readonly worktreePath: string | null;
   readonly startFromOrigin?: boolean;
@@ -102,7 +103,7 @@ export interface QueuedThreadMessage {
   readonly runtimeMode?: RuntimeModeType;
   readonly interactionMode?: ProviderInteractionModeType;
   /** Captured at enqueue because draining may occur long after the tap. */
-  readonly dispatchMode?: ComposerDispatchMode;
+  readonly dispatchMode?: MessageDispatchMode;
   /** Sends "When you return"'s `/compact` ahead of the message, which queues behind it. */
   readonly compactBeforeSend?: boolean;
   /** Starts a new provider session (`/clear`). */

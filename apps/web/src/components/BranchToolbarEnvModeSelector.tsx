@@ -3,12 +3,12 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
 import { memo, type MouseEvent as ReactMouseEvent } from "react";
 import { T, useGT, useMessages } from "gt-react";
+import type { ThreadEnvMode } from "@t3tools/contracts";
 
 import {
   resolveCurrentWorkspaceLabel,
   resolveEnvModeLabel,
   resolveLockedWorkspaceLabel,
-  type EnvMode,
 } from "./BranchToolbar.logic";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { PreviousWorktreeItemContent } from "./PreviousWorktreeItemContent";
@@ -30,9 +30,9 @@ const PREVIOUS_WORKTREE_SELECT_VALUE = "previous-worktree";
 interface BranchToolbarEnvModeSelectorProps {
   forceNewWorktree?: boolean;
   envLocked: boolean;
-  effectiveEnvMode: EnvMode;
+  effectiveEnvMode: ThreadEnvMode;
   activeWorktreePath: string | null;
-  onEnvModeChange: (mode: EnvMode) => void;
+  onEnvModeChange: (mode: ThreadEnvMode) => void;
   previousWorktreeLabel?: string | null;
   previousWorktreeBranch?: string | null;
   onUsePreviousWorktree?: () => void;
@@ -116,7 +116,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
           onUsePreviousWorktree?.();
           return;
         }
-        onEnvModeChange(value as EnvMode);
+        onEnvModeChange(value as ThreadEnvMode);
       }}
       items={envModeItems}
     >

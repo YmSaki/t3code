@@ -10,6 +10,7 @@ import {
   type ModelSelection,
   ProviderInstanceId,
   type ServerProvider,
+  type ThreadEnvMode,
   type ThreadId,
   RuntimeMode,
 } from "@t3tools/contracts";
@@ -24,12 +25,7 @@ import {
   resolveNewDraftStartFromOrigin,
   threadHasStarted,
 } from "../../lib/chatThreadActions";
-import {
-  composerTargetKey,
-  type DraftThreadEnvMode,
-  isSameModel,
-  useComposerDraftStore,
-} from "../../composerDraftStore";
+import { composerTargetKey, isSameModel, useComposerDraftStore } from "../../composerDraftStore";
 import { cancelHeldComposerSend } from "./preparingComposerImages";
 import {
   getStartedThreadModelChangeBlockReason,
@@ -54,7 +50,7 @@ interface ComposerSelectionInput {
   readonly isLocalDraftThread: boolean;
   readonly canOverrideServerThreadEnvMode: boolean;
   readonly setPendingServerThreadEnvModeEntry: Dispatch<
-    SetStateAction<{ readonly threadId: ThreadId; readonly mode: DraftThreadEnvMode } | null>
+    SetStateAction<{ readonly threadId: ThreadId; readonly mode: ThreadEnvMode } | null>
   >;
   readonly setPendingServerThreadStartFromOriginByThreadId: Dispatch<
     SetStateAction<Record<string, boolean>>
@@ -242,7 +238,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     if (options?.focusComposer !== false) scheduleComposerFocus();
   };
   const onProviderModelSelectStable = useStableCallback(onProviderModelSelect);
-  const onEnvModeChange = (mode: DraftThreadEnvMode) => {
+  const onEnvModeChange = (mode: ThreadEnvMode) => {
     if (multipleModelSelections !== null) return;
     cancelHeldComposerSend(composerTargetKey(composerDraftTarget));
     if (canOverrideServerThreadEnvMode) {

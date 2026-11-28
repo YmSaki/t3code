@@ -3,13 +3,17 @@ import {
   scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import { DEFAULT_SERVER_SETTINGS, type ScopedProjectRef, type ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  type ScopedProjectRef,
+  type ThreadEnvMode,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { type AnyRouter, useRouter } from "@tanstack/react-router";
 import {
   composerDraftHasUserContent,
   markPromotedDraftThreadByRef,
   type DraftId,
-  type DraftThreadEnvMode,
   type DraftThreadState,
   useComposerDraftStore,
 } from "../composerDraftStore";
@@ -69,7 +73,7 @@ export function readLastUsedProjectKey(): string | null {
 interface NewThreadWorkspaceOptions {
   branch?: string | null;
   worktreePath?: string | null;
-  envMode?: DraftThreadEnvMode;
+  envMode?: ThreadEnvMode;
   startFromOrigin?: boolean;
 }
 
@@ -99,7 +103,7 @@ export function createNewThreadHandler(router: AnyRouter) {
     options?: {
       branch?: string | null;
       worktreePath?: string | null;
-      envMode?: DraftThreadEnvMode;
+      envMode?: ThreadEnvMode;
       startFromOrigin?: boolean;
       replace?: boolean;
       /** Composer text for the draft, set before it shows. A draft with user text keeps it. */
@@ -199,7 +203,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           currentRouteTarget?.kind === "draft" ? currentRouteTarget.draftId : null,
         destinationDraftId,
       });
-    const resolveDefaultEnvMode = async (): Promise<DraftThreadEnvMode> => {
+    const resolveDefaultEnvMode = async (): Promise<ThreadEnvMode> => {
       // Environment queries wait for a connection, so reading the project file on an
       // offline machine would never settle and the draft would never open.
       const consultProjectFile =

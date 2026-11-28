@@ -22,6 +22,8 @@ import {
   type OrchestrationV2ForceStopThreadResult,
   type ModelSelection,
   type OrchestrationV2Actor,
+  isActiveRunStatus,
+  type MessageDispatchMode,
   type OrchestrationV2Command,
   type OrchestrationV2GetTurnItemResult,
   type OrchestrationV2ServerCommand,
@@ -74,8 +76,6 @@ import * as LegacyV1ThreadImporter from "./legacy/LegacyV1ThreadImporter.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { ThreadWorktreeRestore } from "../workspace/restoreMissingWorktree.ts";
 import { checkOutput, outputRequestProblem } from "./runOutput.ts";
-
-export type ThreadManagementSendMode = "auto" | "queue" | "steer" | "restart";
 
 export interface ThreadManagementProvenance {
   readonly createdBy: OrchestrationV2Actor;
@@ -159,7 +159,7 @@ export interface ThreadManagementSendInput {
   readonly text: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly modelSelection?: ModelSelection;
-  readonly mode: ThreadManagementSendMode;
+  readonly mode: MessageDispatchMode;
   /** Start a new provider session; the orchestrator queues it instead of steering. */
   readonly freshContext?: boolean;
   /** Ask the run for a result as data matching this JSON Schema; it is queued, never steered. */
@@ -566,15 +566,8 @@ export class ThreadManagementService extends Context.Service<
   ThreadManagementServiceShape
 >()("t3/orchestration-v2/ThreadManagementService") {}
 
-export const ACTIVE_RUN_STATUSES = [
-  "preparing",
-  "starting",
-  "running",
-  "waiting",
-] as const satisfies ReadonlyArray<OrchestrationV2Run["status"]>;
-
 export function isActiveRun(run: OrchestrationV2Run): boolean {
-  return (ACTIVE_RUN_STATUSES as ReadonlyArray<OrchestrationV2Run["status"]>).includes(run.status);
+  return isActiveRunStatus(run.status);
 }
 
 export function isTerminalRunStatus(

@@ -6,7 +6,6 @@ import {
   makeQueuedRunEditStore,
   makeQueuedRunsAtom,
 } from "@t3tools/client-runtime/queued-run-edit";
-import type { ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { deriveThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
 import {
@@ -16,6 +15,7 @@ import {
   type EnvironmentContextRecord,
   type ResponseContextRecord,
   type EnvironmentId,
+  type MessageDispatchMode,
   type MessageId,
   type OrchestrationMessageContext,
   type PreviewAnnotationPayload,
@@ -383,7 +383,7 @@ export function useQueuedRunEdit(input: {
     content: QueuedRunEditContent,
     setThreadError: (threadId: ThreadId, error: string | null) => void,
     submission?: {
-      readonly dispatchMode: ComposerDispatchMode;
+      readonly dispatchMode: MessageDispatchMode;
       readonly submissionIntent: ComposerSubmissionIntent;
     },
   ) => {

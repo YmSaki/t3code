@@ -20,6 +20,7 @@ import {
   type ProjectIconOverride,
   type ProjectScript,
   type ProjectTrackedFolder,
+  type MessageDispatchMode,
   type ProviderApprovalDecision,
   type ProviderInteractionMode,
   type ProviderUserInputAnswers,
@@ -206,7 +207,7 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
   readonly interactionMode: ProviderInteractionMode;
   readonly bootstrap?: StartThreadBootstrap;
   readonly sourceProposedPlan?: { readonly threadId: ThreadId; readonly planId: PlanId };
-  readonly dispatchMode?: "auto" | "queue" | "steer" | "restart" | "start";
+  readonly dispatchMode?: MessageDispatchMode | "start";
   /** Start a new provider session; needs the server's `freshContext` capability. */
   readonly freshContext?: boolean;
   /** Defaults to true. Callers with their own retry queue opt out so a dead socket fails fast. */

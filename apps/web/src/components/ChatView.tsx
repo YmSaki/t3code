@@ -82,6 +82,7 @@ import {
   ProviderInstanceId,
   type ServerProvider,
   type ScopedThreadRef,
+  type ThreadEnvMode,
   type ThreadId,
   ProviderInteractionMode,
   resolveIdleCompaction,
@@ -254,7 +255,6 @@ import {
   composerDraftHasUserContent,
   type ComposerFileAttachment,
   type ComposerImageAttachment,
-  type DraftThreadEnvMode,
   composerTargetKey,
   useComposerDraftStore,
   DraftId,
@@ -762,7 +762,7 @@ export default function ChatView(props: ChatViewProps) {
   // Overrides chosen before a server thread's first turn; they belong to that thread only.
   const [pendingServerThreadEnvModeEntry, setPendingServerThreadEnvModeEntry] = useState<{
     readonly threadId: ThreadId;
-    readonly mode: DraftThreadEnvMode;
+    readonly mode: ThreadEnvMode;
   } | null>(null);
   const [pendingServerThreadBranchEntry, setPendingServerThreadBranchEntry] = useState<{
     readonly threadId: ThreadId;
@@ -2301,7 +2301,7 @@ export default function ChatView(props: ChatViewProps) {
   }
 
   const activeWorktreePath = activeThread?.worktreePath ?? null;
-  const derivedEnvMode: DraftThreadEnvMode = resolveEffectiveEnvMode({
+  const derivedEnvMode: ThreadEnvMode = resolveEffectiveEnvMode({
     activeWorktreePath,
     hasServerThread: isServerThread,
     draftThreadEnvMode: isLocalDraftThread ? draftThread?.envMode : undefined,
@@ -2333,7 +2333,7 @@ export default function ChatView(props: ChatViewProps) {
   const setPendingServerThreadBranch = (branch: string | null) => {
     if (activeThread) setPendingServerThreadBranchEntry({ threadId: activeThread.id, branch });
   };
-  const envMode: DraftThreadEnvMode = canOverrideServerThreadEnvMode
+  const envMode: ThreadEnvMode = canOverrideServerThreadEnvMode
     ? (pendingServerThreadEnvMode ?? draftThread?.envMode ?? derivedEnvMode)
     : derivedEnvMode;
   const activeThreadBranch =

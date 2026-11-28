@@ -21,6 +21,7 @@ import {
   type ProviderOptionSelection,
   type RuntimeMode,
   type ScopedThreadRef,
+  ThreadEnvMode,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -468,7 +469,7 @@ export interface ComposerDraftContent {
 }
 
 export interface ComposerDraftWorkspaceSelection {
-  readonly mode: "local" | "worktree";
+  readonly mode: ThreadEnvMode;
   readonly branch: string | null;
   readonly worktreePath: string | null;
   readonly startFromOrigin?: boolean;
@@ -497,7 +498,7 @@ export type ComposerDraftSettingsUpdate = Pick<
 >;
 
 const ComposerDraftWorkspaceSelectionSchema = Schema.Struct({
-  mode: Schema.Literals(["local", "worktree"]),
+  mode: ThreadEnvMode,
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
   startFromOrigin: Schema.optional(Schema.Boolean),

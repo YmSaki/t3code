@@ -5,8 +5,9 @@ import type {
   ModelSelection,
   ProjectId,
   ScopedProjectRef,
+  ThreadEnvMode,
 } from "@t3tools/contracts";
-import type { ComposerThreadDraftState, DraftThreadEnvMode } from "../composerDraftStore";
+import type { ComposerThreadDraftState } from "../composerDraftStore";
 
 type ComposerModelSelectionState = Pick<
   ComposerThreadDraftState,
@@ -24,7 +25,7 @@ interface NewThreadHandler {
     options?: {
       branch?: string | null;
       worktreePath?: string | null;
-      envMode?: DraftThreadEnvMode;
+      envMode?: ThreadEnvMode;
       startFromOrigin?: boolean;
     },
   ): Promise<unknown>;
@@ -38,7 +39,7 @@ export interface ChatThreadActionContext {
 }
 
 export function resolveNewDraftStartFromOrigin(input: {
-  envMode: DraftThreadEnvMode;
+  envMode: ThreadEnvMode;
   newWorktreesStartFromOrigin: boolean;
 }): boolean {
   return input.envMode === "worktree" && input.newWorktreesStartFromOrigin;

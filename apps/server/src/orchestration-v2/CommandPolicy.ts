@@ -1,6 +1,7 @@
 import {
   type ChatAttachment,
   CommandId,
+  isActiveRunStatus,
   type OrchestrationV2Command,
   OrchestrationV2ProviderCapabilities,
   type OrchestrationV2GoalCommand,
@@ -146,12 +147,7 @@ export function resolveMessageDispatchIntent(
 
 /** A run that still owns the thread's provider turn. */
 export function isActiveRun(run: OrchestrationV2Run): boolean {
-  return (
-    run.status === "preparing" ||
-    run.status === "starting" ||
-    run.status === "running" ||
-    run.status === "waiting"
-  );
+  return isActiveRunStatus(run.status);
 }
 
 /**
