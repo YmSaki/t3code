@@ -11,8 +11,7 @@ import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
-export interface RelayClientConfig {
-  readonly url: string | undefined;
+export interface RelayClientTracingConfig {
   readonly mobileTracingUrl: string;
   readonly mobileTracingDataset: string;
   readonly mobileTracingToken: Redacted.Redacted<string>;
@@ -21,6 +20,11 @@ export interface RelayClientConfig {
   readonly clientTracingToken: Redacted.Redacted<string>;
   /** Alchemy hashes JSON inputs; Redacted hides token rotation, so hash the tokens without persisting secrets. */
   readonly tokenDigest: string;
+}
+
+export interface RelayClientConfig {
+  readonly url: string | undefined;
+  readonly tracing?: RelayClientTracingConfig;
 }
 
 export class RelayUrlUnavailableError extends Schema.TaggedError<RelayUrlUnavailableError>()(
@@ -32,16 +36,21 @@ export class RelayUrlUnavailableError extends Schema.TaggedError<RelayUrlUnavail
   }
 }
 
-const relayClientConfigEnv = (config: RelayClientConfig & { readonly url: string }) =>
-  ({
-    T3CODE_RELAY_URL: config.url,
-    T3CODE_MOBILE_OTLP_TRACES_URL: config.mobileTracingUrl,
-    T3CODE_MOBILE_OTLP_TRACES_DATASET: config.mobileTracingDataset,
-    T3CODE_MOBILE_OTLP_TRACES_TOKEN: Redacted.value(config.mobileTracingToken),
-    T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: config.clientTracingUrl,
-    T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: config.clientTracingDataset,
-    T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: Redacted.value(config.clientTracingToken),
-  }) as const;
+const relayClientConfigEnv = (
+  config: RelayClientConfig & { readonly url: string },
+): Readonly<Record<string, string | undefined>> => ({
+  T3CODE_RELAY_URL: config.url,
+  T3CODE_MOBILE_OTLP_TRACES_URL: config.tracing?.mobileTracingUrl,
+  T3CODE_MOBILE_OTLP_TRACES_DATASET: config.tracing?.mobileTracingDataset,
+  T3CODE_MOBILE_OTLP_TRACES_TOKEN: config.tracing
+    ? Redacted.value(config.tracing.mobileTracingToken)
+    : undefined,
+  T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: config.tracing?.clientTracingUrl,
+  T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: config.tracing?.clientTracingDataset,
+  T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: config.tracing
+    ? Redacted.value(config.tracing.clientTracingToken)
+    : undefined,
+});
 
 export class EnvValueNotSingleLineError extends Schema.TaggedError<EnvValueNotSingleLineError>()(
   "EnvValueNotSingleLineError",
@@ -55,7 +64,7 @@ export class EnvValueNotSingleLineError extends Schema.TaggedError<EnvValueNotSi
 /** Remove every duplicate: parseEnv takes the last value, which could otherwise override the update. */
 export function reconcileEnvFile(
   contents: string,
-  entries: Readonly<Record<string, string>>,
+  entries: Readonly<Record<string, string | undefined>>,
 ): string {
   const lines = contents === "" ? [] : contents.replace(/\n$/u, "").split("\n");
   const assignment = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/u;
@@ -83,10 +92,14 @@ export function reconcileEnvFile(
     const value = pending.get(name);
     if (value !== undefined) {
       out.push(`${name}=${value}`);
-      pending.delete(name);
+    }
+    pending.delete(name);
+  }
+  for (const [name, value] of pending) {
+    if (value !== undefined) {
+      out.push(`${name}=${value}`);
     }
   }
-  for (const [name, value] of pending) out.push(`${name}=${value}`);
   return out.length === 0 ? "" : `${out.join("\n")}\n`;
 }
 
@@ -101,16 +114,18 @@ export const PublishClientConfig = Alchemy.Action(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const override = yield* Config.String("T3CODE_RELAY_CLIENT_CONFIG_ENV").pipe(Config.option);
     const repoRootEnv = path.fromFileUrl(new URL("../../../.env", import.meta.url));
-    const target = Option.isSome(override) ? override.value : yield* repoRootEnv;
     return Effect.fn(function* (input: RelayClientConfig) {
       const url = input.url;
       if (url === undefined) return yield* new RelayUrlUnavailableError();
+      const override = yield* Config.String("T3CODE_RELAY_CLIENT_CONFIG_ENV").pipe(Config.option);
+      const target = Option.isSome(override) ? override.value : yield* repoRootEnv;
       const entries = relayClientConfigEnv({ ...input, url });
       // Reject line breaks in provider values to prevent injected assignments.
       for (const [name, value] of Object.entries(entries)) {
-        if (/[\r\n]/u.test(value)) return yield* new EnvValueNotSingleLineError({ key: name });
+        if (value !== undefined && /[\r\n]/u.test(value)) {
+          return yield* new EnvValueNotSingleLineError({ key: name });
+        }
       }
       const existing = (yield* fs.exists(target)) ? yield* fs.readFileString(target) : "";
       yield* fs.writeFileString(target, reconcileEnvFile(existing, entries));

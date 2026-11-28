@@ -216,22 +216,6 @@ export const layer = Api.make(
       },
     });
     const hookInboxes = yield* HookInboxObject.HookInboxObject;
-    const mobileTelemetryRateLimit = yield* Cloudflare.RateLimit("MOBILE_TELEMETRY_RATE_LIMIT", {
-      namespaceId: 1003,
-      simple: {
-        limit: MobileTelemetry.MOBILE_TELEMETRY_RATE_LIMIT.limit,
-        period: MobileTelemetry.MOBILE_TELEMETRY_RATE_LIMIT.periodSeconds,
-      },
-    });
-    const mobileSourceMaps = yield* Cloudflare.R2.ReadBucket(observability.mobileSourceMaps);
-    const mobileTelemetryToken = yield* observability.mobileTelemetryIngestToken.token;
-    const mobileTracesUrl = yield* observability.traces.otelTracesEndpoint;
-    const mobileTracesDataset = yield* observability.traces.name;
-    const mobileLogsUrl = yield* observability.mobileLogs.otelLogsEndpoint;
-    const mobileLogsDataset = yield* observability.mobileLogs.name;
-    const mobileMetricsUrl = yield* observability.mobileMetrics.otelMetricsEndpoint;
-    const mobileMetricsDataset = yield* observability.mobileMetrics.name;
-
     const alchemyRuntimeContext: Alchemy.BaseRuntimeContext = yield* Cloudflare.Worker;
 
     const loadSettings = Effect.gen(function* () {
@@ -380,56 +364,90 @@ export const layer = Api.make(
       allowEndpoint: allowWith(hookEndpointRateLimit),
     });
 
-    // `fetch` rebuilds its layers per request; the source map cache must outlive one.
-    const mobileSourceMapLookups = yield* MobileTelemetry.SourceMaps.pipe(
-      Effect.provide(MobileTelemetry.layerSourceMaps),
-      Effect.provideService(MobileTelemetry.SourceMapObjects, {
-        get: (key) =>
-          mobileSourceMaps.get(key).pipe(
-            Effect.map((object) =>
-              object === null
-                ? undefined
-                : {
-                    size: object.size,
-                    text: object.text().pipe(
-                      Effect.provideService(Alchemy.RuntimeContext, alchemyRuntimeContext),
-                      Effect.mapError(
-                        (cause) => new MobileTelemetry.SourceMapObjectError({ key, cause }),
-                      ),
-                    ),
-                  },
-            ),
-            Effect.provideService(Alchemy.RuntimeContext, alchemyRuntimeContext),
-            Effect.mapError((cause) => new MobileTelemetry.SourceMapObjectError({ key, cause })),
-          ),
-      }),
-    );
-    const layerMobileTelemetry = MobileTelemetry.layer.pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          Layer.effect(
-            MobileTelemetry.MobileTelemetrySettings,
-            Effect.gen(function* () {
-              return MobileTelemetry.MobileTelemetrySettings.of({
-                axiomToken: yield* mobileTelemetryToken,
-                destinations: {
-                  traces: { url: yield* mobileTracesUrl, dataset: yield* mobileTracesDataset },
-                  logs: { url: yield* mobileLogsUrl, dataset: yield* mobileLogsDataset },
-                  metrics: { url: yield* mobileMetricsUrl, dataset: yield* mobileMetricsDataset },
-                },
-              });
+    const layerMobileTelemetry = Option.isSome(observability)
+      ? yield* Effect.gen(function* () {
+          const enabledObservability = observability.value;
+          const mobileTelemetryRateLimit = yield* Cloudflare.RateLimit(
+            "MOBILE_TELEMETRY_RATE_LIMIT",
+            {
+              namespaceId: 1003,
+              simple: {
+                limit: MobileTelemetry.MOBILE_TELEMETRY_RATE_LIMIT.limit,
+                period: MobileTelemetry.MOBILE_TELEMETRY_RATE_LIMIT.periodSeconds,
+              },
+            },
+          );
+          const mobileSourceMaps = yield* Cloudflare.R2.ReadBucket(
+            enabledObservability.mobileSourceMaps,
+          );
+          const mobileTelemetryToken = yield* enabledObservability.mobileTelemetryIngestToken.token;
+          const mobileTracesUrl = yield* enabledObservability.traces.otelTracesEndpoint;
+          const mobileTracesDataset = yield* enabledObservability.traces.name;
+          const mobileLogsUrl = yield* enabledObservability.mobileLogs.otelLogsEndpoint;
+          const mobileLogsDataset = yield* enabledObservability.mobileLogs.name;
+          const mobileMetricsUrl = yield* enabledObservability.mobileMetrics.otelMetricsEndpoint;
+          const mobileMetricsDataset = yield* enabledObservability.mobileMetrics.name;
+
+          // `fetch` rebuilds its layers per request; the source map cache must outlive one.
+          const mobileSourceMapLookups = yield* MobileTelemetry.SourceMaps.pipe(
+            Effect.provide(MobileTelemetry.layerSourceMaps),
+            Effect.provideService(MobileTelemetry.SourceMapObjects, {
+              get: (key) =>
+                mobileSourceMaps.get(key).pipe(
+                  Effect.map((object) =>
+                    object === null
+                      ? undefined
+                      : {
+                          size: object.size,
+                          text: object.text().pipe(
+                            Effect.provideService(Alchemy.RuntimeContext, alchemyRuntimeContext),
+                            Effect.mapError(
+                              (cause) => new MobileTelemetry.SourceMapObjectError({ key, cause }),
+                            ),
+                          ),
+                        },
+                  ),
+                  Effect.provideService(Alchemy.RuntimeContext, alchemyRuntimeContext),
+                  Effect.mapError(
+                    (cause) => new MobileTelemetry.SourceMapObjectError({ key, cause }),
+                  ),
+                ),
             }),
-          ),
-          Layer.succeed(MobileTelemetry.MobileTelemetryRateLimiter, {
-            allow: allowWith(
-              mobileTelemetryRateLimit,
-              "relay.mobile_telemetry.rate_limiter_failed_open",
+          );
+          return MobileTelemetry.layer.pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                Layer.effect(
+                  MobileTelemetry.MobileTelemetrySettings,
+                  Effect.gen(function* () {
+                    return MobileTelemetry.MobileTelemetrySettings.of({
+                      axiomToken: yield* mobileTelemetryToken,
+                      destinations: {
+                        traces: {
+                          url: yield* mobileTracesUrl,
+                          dataset: yield* mobileTracesDataset,
+                        },
+                        logs: { url: yield* mobileLogsUrl, dataset: yield* mobileLogsDataset },
+                        metrics: {
+                          url: yield* mobileMetricsUrl,
+                          dataset: yield* mobileMetricsDataset,
+                        },
+                      },
+                    });
+                  }),
+                ),
+                Layer.succeed(MobileTelemetry.MobileTelemetryRateLimiter, {
+                  allow: allowWith(
+                    mobileTelemetryRateLimit,
+                    "relay.mobile_telemetry.rate_limiter_failed_open",
+                  ),
+                }),
+                Layer.succeed(MobileTelemetry.SourceMaps, mobileSourceMapLookups),
+              ),
             ),
-          }),
-          Layer.succeed(MobileTelemetry.SourceMaps, mobileSourceMapLookups),
-        ),
-      ),
-    );
+          );
+        })
+      : MobileTelemetry.layerDisabled;
 
     const layerApp = Layer.mergeAll(
       layerRelayApi,
@@ -573,11 +591,16 @@ export const layer = Api.make(
         ),
         Layer.provideMerge(
           Layer.unwrap(
-            Effect.map(RelayObservability, (observability) =>
-              Axiom.Telemetry({
-                serviceName: "t3code-relay",
-                token: observability.workerIngestToken,
-                traces: observability.traces,
+            Effect.map(
+              RelayObservability,
+              Option.match({
+                onNone: () => Layer.empty,
+                onSome: (observability) =>
+                  Axiom.Telemetry({
+                    serviceName: "t3code-relay",
+                    token: observability.workerIngestToken,
+                    traces: observability.traces,
+                  }),
               }),
             ),
           ),

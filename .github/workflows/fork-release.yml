@@ -66,6 +66,7 @@ jobs:
       publish: ${{ steps.plan.outputs.publish }}
       require_signing: ${{ steps.plan.outputs.require_signing }}
       distribution: ${{ steps.plan.outputs.distribution }}
+      relay_observability_enabled: ${{ steps.plan.outputs.relay_observability_enabled }}
     steps:
       # actions/checkout's credential cleanup enumerates orphaned submodules in .repos.
       - name: Checkout
@@ -98,6 +99,10 @@ jobs:
           T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
           T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
           T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+          T3CODE_RELAY_OBSERVABILITY_ENABLED: ${{ vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true' && 'true' || 'false' }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ${{ vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ${{ vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN_CONFIGURED: ${{ secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN != '' }}
           T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
           T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
           T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
@@ -123,14 +128,16 @@ jobs:
               core.notice(plan.reason);
               return;
             }
-            const { resolveForkConnectConfig } = require('./scripts/lib/public-config.ts');
+            const { resolveForkConnectConfig, resolveForkClientObservability } = require('./.github/scripts/fork-release-connect.cjs');
             const { resolveForkWebRouting } = require('./.github/scripts/fork-release-web.cjs');
             const connect = resolveForkConnectConfig(process.env);
+            const observability = resolveForkClientObservability(process.env);
             const routing = resolveForkWebRouting(process.env);
             const deployWeb = plan.publish && !plan.draft && process.env.WEB_PUBLISH_ENABLED === 'true';
             if ((connect.relayUrl || deployWeb) && !routing) {
               throw new Error('Set the three fork hosted Web repository variables before enabling Connect or publishing hosted Web.');
             }
+            core.setOutput('relay_observability_enabled', String(observability.enabled));
 
             for (const [key, value] of Object.entries({
               ref: plan.ref,
@@ -170,6 +177,42 @@ jobs:
           T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
         run: node -e 'require("./.github/scripts/fork-release-policy.cjs").assertForkReleaseSigningConfiguration(process.env)'
 
+      - name: Stage relay client tracing config
+        if: >-
+          steps.plan.outputs.should_build == 'true' &&
+          steps.plan.outputs.relay_observability_enabled == 'true' &&
+          steps.plan.outputs.distribution == 'all'
+        shell: bash
+        env:
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ${{ vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ${{ vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ${{ secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN" ]]; then
+            echo "Missing T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN secret." >&2
+            exit 1
+          fi
+          echo "::add-mask::$T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN"
+          {
+            echo "T3CODE_RELAY_OBSERVABILITY_ENABLED=true"
+            echo "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL=$T3CODE_RELAY_CLIENT_OTLP_TRACES_URL"
+            echo "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET=$T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET"
+            echo "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=$T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN"
+          } > "$RUNNER_TEMP/relay-client-tracing.env"
+
+      - name: Upload relay client tracing config
+        if: >-
+          steps.plan.outputs.should_build == 'true' &&
+          steps.plan.outputs.relay_observability_enabled == 'true' &&
+          steps.plan.outputs.distribution == 'all'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: relay-client-tracing-config
+          path: ${{ runner.temp }}/relay-client-tracing.env
+          if-no-files-found: error
+          retention-days: 1
+
   build_bundle:
     name: Build fork JavaScript bundle
     needs: preflight
@@ -189,9 +232,10 @@ jobs:
       T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
       T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
       T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
-      T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ""
-      T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ""
-      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ""
+      T3CODE_RELAY_OBSERVABILITY_ENABLED: ${{ needs.preflight.outputs.relay_observability_enabled }}
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ${{ needs.preflight.outputs.relay_observability_enabled == 'true' && vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL || '' }}
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ${{ needs.preflight.outputs.relay_observability_enabled == 'true' && vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET || '' }}
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ${{ needs.preflight.outputs.relay_observability_enabled == 'true' && secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN || '' }}
       VITE_RELAY_OTLP_TRACES_URL: ""
       VITE_RELAY_OTLP_TRACES_DATASET: ""
       VITE_RELAY_OTLP_TRACES_TOKEN: ""
@@ -424,7 +468,7 @@ jobs:
       linux_executable_name: t3codejp
       require_signing: ${{ needs.preflight.outputs.require_signing == 'true' }}
       skip_windows_signing_tools: ${{ needs.preflight.outputs.require_signing != 'true' }}
-      relay_client_tracing: false
+      relay_client_tracing: ${{ needs.preflight.outputs.relay_observability_enabled == 'true' }}
       clerk_publishable_key: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
       clerk_jwt_template: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
       clerk_cli_oauth_client_id: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
@@ -459,6 +503,8 @@ jobs:
             arch: arm64
             rust_target: aarch64-pc-windows-msvc
     uses: ./.github/workflows/release-cli.yml
+    secrets:
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ${{ needs.preflight.outputs.relay_observability_enabled == 'true' && secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN || '' }}
     with:
       runner: ${{ matrix.runner }}
       platform: ${{ matrix.platform }}
@@ -466,6 +512,7 @@ jobs:
       rust_target: ${{ matrix.rust_target }}
       ref: ${{ needs.preflight.outputs.ref }}
       version: ${{ needs.preflight.outputs.version }}
+      relay_observability_enabled: ${{ needs.preflight.outputs.relay_observability_enabled == 'true' }}
 
   collect:
     name: Validate fork release assets
@@ -647,3 +694,4 @@ jobs:
       T3CODEJP_WEB_VERCEL_TOKEN: ${{ secrets.T3CODEJP_WEB_VERCEL_TOKEN }}
       T3CODEJP_WEB_VERCEL_ORG_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_ORG_ID }}
       T3CODEJP_WEB_VERCEL_PROJECT_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_PROJECT_ID }}
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ${{ needs.preflight.outputs.relay_observability_enabled == 'true' && secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN || '' }}

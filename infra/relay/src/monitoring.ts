@@ -224,7 +224,10 @@ const timeSeries = (id: string, name: string, apl: string): QueryChart => ({
   query: { apl },
 });
 
-const relayDashboardCharts = (dataset: string): ReadonlyArray<QueryChart> => {
+const relayDashboardCharts = (
+  dataset: string,
+  relayPublicOrigin = "https://relay.t3.codes",
+): ReadonlyArray<QueryChart> => {
   const source = `['${dataset}']`;
   const linkRequests = `${source}\n| where kind == "server" and ['attributes.http.request.method'] == "POST" and ['attributes.http.route'] == ${LINK_ROUTE}`;
   const tunnelRequests = `${source}\n| where kind == "server" and ['attributes.http.request.method'] == "POST" and ['attributes.http.route'] in (${TUNNEL_ROUTES})`;
@@ -330,7 +333,7 @@ const relayDashboardCharts = (dataset: string): ReadonlyArray<QueryChart> => {
           `    name == "ConnectionDriver.checkRoute", "0. Direct route check, before any relay fallback",`,
           `    name == "relay.connection.cloudSessionToken.resolve", "1. Clerk session token",`,
           `    name == "clientRuntime.managedRelay.exchangeAccessToken", "2. Relay token exchange",`,
-          `    kind == "client" and url startswith "https://relay.t3.codes/v1/environments/" and url endswith "/connect", "3. Relay connect, minting a host credential",`,
+          `    kind == "client" and url startswith "${relayPublicOrigin}/v1/environments/" and url endswith "/connect", "3. Relay connect, minting a host credential",`,
           `    name == "environment.authorization.descriptor", "4. Host descriptor",`,
           `    name == "environment.authorization.accessToken.exchange", "5. Host token exchange",`,
           `    name == "clientRuntime.connection.remote.createDpopSocketUrl", "6. Socket ticket",`,
@@ -363,7 +366,10 @@ export const notifierConfig = (name: string) =>
  * dashboard. Warnings go to their own notifier when one is set, and are only
  * visible in Axiom otherwise.
  */
-export const RelayMonitoring = Effect.fn("RelayMonitoring")(function* (traces: Axiom.Dataset) {
+export const RelayMonitoring = Effect.fn("RelayMonitoring")(function* (
+  traces: Axiom.Dataset,
+  relayPublicOrigin = "https://relay.t3.codes",
+) {
   const { stage } = yield* Alchemy.Stack;
   const page = yield* notifierConfig("RELAY_ALERT_NOTIFIER_ID");
   if (Option.isNone(page)) return;
@@ -390,7 +396,7 @@ export const RelayMonitoring = Effect.fn("RelayMonitoring")(function* (traces: A
 
   yield* Axiom.Dashboard("RelayHealthDashboard", {
     dashboard: Output.map(traces.name, (dataset) => {
-      const charts = relayDashboardCharts(dataset);
+      const charts = relayDashboardCharts(dataset, relayPublicOrigin);
       return {
         name: relayResourceNameForStage("t3-code-relay-health", stage),
         // Shared with the whole org. An empty owner only means that for API

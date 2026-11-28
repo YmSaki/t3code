@@ -4,7 +4,11 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
-import { resolveProductConfig } from "@t3tools/shared/productConfig";
+import {
+  requireTelemetrySurface,
+  resolveProductConfig,
+  type TelemetrySurface,
+} from "@t3tools/shared/productConfig";
 
 export interface T3CodePublicConfig {
   readonly clerkPublishableKey: string | undefined;
@@ -26,16 +30,23 @@ const REPO_ROOT = NodePath.resolve(NodeURL.fileURLToPath(import.meta.url), "../.
 export function loadRepoEnv({
   baseEnv = process.env,
   repoRoot = REPO_ROOT,
+  surface = "relayClient",
 }: {
   readonly baseEnv?: Environment;
   readonly repoRoot?: string;
+  /** The monitoring surface this build ships; enabled monitoring must configure it. */
+  readonly surface?: TelemetrySurface;
 } = {}): Record<string, string | undefined> {
   const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
   const env = { ...rootEnv, ...localEnv, ...baseEnv };
-  const { connect } = resolveProductConfig(env);
+  const { connect, telemetry } = resolveProductConfig(env);
   const forkConnect = connect.kind !== "unmanaged";
-  const config = {
+  const managedTelemetry = telemetry.kind !== "unmanaged";
+  requireTelemetrySurface(telemetry, surface);
+  const traces = (surfaceName: TelemetrySurface) =>
+    telemetry.kind === "enabled" ? telemetry[surfaceName] : null;
+  const config: T3CodePublicConfig = {
     ...resolvePublicConfig(baseEnv, localEnv, rootEnv),
     ...(connect.kind === "enabled"
       ? {
@@ -45,13 +56,18 @@ export function loadRepoEnv({
           relayUrl: connect.relayUrl,
         }
       : connect.kind === "disabled"
-        ? {
-            clerkPublishableKey: "",
-            clerkJwtTemplate: "",
-            clerkCliOAuthClientId: "",
-            relayUrl: "",
-          }
+        ? { clerkPublishableKey: "", clerkJwtTemplate: "", clerkCliOAuthClientId: "", relayUrl: "" }
         : {}),
+    ...(managedTelemetry
+      ? {
+          mobileOtlpTracesUrl: traces("mobile")?.tracesUrl ?? "",
+          mobileOtlpTracesDataset: traces("mobile")?.tracesDataset ?? "",
+          mobileOtlpTracesToken: traces("mobile")?.tracesToken ?? "",
+          relayClientOtlpTracesUrl: traces("relayClient")?.tracesUrl ?? "",
+          relayClientOtlpTracesDataset: traces("relayClient")?.tracesDataset ?? "",
+          relayClientOtlpTracesToken: traces("relayClient")?.tracesToken ?? "",
+        }
+      : {}),
   };
 
   return {
@@ -82,37 +98,37 @@ export function loadRepoEnv({
           VITE_T3CODE_RELAY_URL: config.relayUrl,
         }
       : {}),
-    ...(config.mobileOtlpTracesUrl
+    ...(managedTelemetry || config.mobileOtlpTracesUrl
       ? {
           T3CODE_MOBILE_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
           EXPO_PUBLIC_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
         }
       : {}),
-    ...(config.mobileOtlpTracesDataset
+    ...(managedTelemetry || config.mobileOtlpTracesDataset
       ? {
           T3CODE_MOBILE_OTLP_TRACES_DATASET: config.mobileOtlpTracesDataset,
           EXPO_PUBLIC_OTLP_TRACES_DATASET: config.mobileOtlpTracesDataset,
         }
       : {}),
-    ...(config.mobileOtlpTracesToken
+    ...(managedTelemetry || config.mobileOtlpTracesToken
       ? {
           T3CODE_MOBILE_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
           EXPO_PUBLIC_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
         }
       : {}),
-    ...(config.relayClientOtlpTracesUrl
+    ...(managedTelemetry || config.relayClientOtlpTracesUrl
       ? {
           T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
           VITE_RELAY_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
         }
       : {}),
-    ...(config.relayClientOtlpTracesDataset
+    ...(managedTelemetry || config.relayClientOtlpTracesDataset
       ? {
           T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
           VITE_RELAY_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
         }
       : {}),
-    ...(config.relayClientOtlpTracesToken
+    ...(managedTelemetry || config.relayClientOtlpTracesToken
       ? {
           T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
           VITE_RELAY_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,

@@ -14,6 +14,9 @@ vi.mock("../../scripts/lib/public-config.ts", () => ({
           key === "T3CODE_DISTRIBUTION" ||
           key.startsWith("T3CODE_WEB_") ||
           key.startsWith("T3CODE_MOBILE_") ||
+          key.startsWith("T3CODE_RELAY_") ||
+          key.startsWith("T3CODE_CLERK_") ||
+          key.startsWith("EXPO_PUBLIC_OTLP_") ||
           key.startsWith("T3CODE_IOS_PERSONAL_TEAM"),
       ),
     ),
@@ -100,8 +103,54 @@ it.each([
     expect(config.updates?.url).toBeUndefined();
     expect(config.extra?.eas.projectId).toBeUndefined();
     expect(config.extra?.hostedAppUrl).toBe("");
+    expect(config.extra?.observability).toEqual({
+      tracesUrl: null,
+      tracesDataset: null,
+      tracesToken: null,
+    });
+    expect(config.extra?.eas?.observe?.endpointUrl).toBe("https://observe.invalid");
   },
 );
+
+function stubForkConnect() {
+  vi.stubEnv("T3CODE_CLERK_PUBLISHABLE_KEY", `pk_live_${btoa("accounts.fork.example.test$")}`);
+  vi.stubEnv("T3CODE_CLERK_JWT_TEMPLATE", "template");
+  vi.stubEnv("T3CODE_CLERK_CLI_OAUTH_CLIENT_ID", "client");
+  vi.stubEnv("T3CODE_RELAY_URL", "https://relay.fork.example.test");
+}
+
+it("does not fall back to upstream Axiom or enable Observe when fork monitoring is disabled", async () => {
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
+  stubForkConnect();
+  const config = await loadConfig("production");
+  expect(config.extra?.observability).toEqual({
+    tracesUrl: null,
+    tracesDataset: null,
+    tracesToken: null,
+  });
+  expect(config.extra?.eas?.observe?.endpointUrl).toBe("https://observe.invalid");
+});
+
+it("wires fork OTLP tracing and Observe when fork monitoring is explicitly enabled", async () => {
+  vi.stubEnv("T3CODE_DISTRIBUTION", "fork");
+  stubForkConnect();
+  vi.stubEnv("T3CODE_MOBILE_OTLP_TRACES_URL", "https://traces.fork.example.test/v1/traces");
+  vi.stubEnv("T3CODE_MOBILE_OTLP_TRACES_DATASET", "fork-mobile-traces");
+  vi.stubEnv("T3CODE_MOBILE_OTLP_TRACES_TOKEN", "fork-mobile-token");
+  vi.stubEnv("T3CODE_RELAY_OBSERVABILITY_ENABLED", "true");
+  vi.stubEnv("EXPO_PUBLIC_OTLP_TRACES_URL", "https://traces.fork.example.test/v1/traces");
+  vi.stubEnv("EXPO_PUBLIC_OTLP_TRACES_DATASET", "fork-mobile-traces");
+  vi.stubEnv("EXPO_PUBLIC_OTLP_TRACES_TOKEN", "fork-mobile-token");
+  const config = await loadConfig("production");
+  expect(config.extra?.observability).toEqual({
+    tracesUrl: "https://traces.fork.example.test/v1/traces",
+    tracesDataset: "fork-mobile-traces",
+    tracesToken: "fork-mobile-token",
+  });
+  expect(config.extra?.eas?.observe?.endpointUrl).toBe(
+    "https://relay.fork.example.test/v1/mobile/observe",
+  );
+});
 
 it.each(["fork-android", "fork-ios"] as const)(
   "binds %s to the fork's EAS project",

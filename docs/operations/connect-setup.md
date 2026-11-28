@@ -36,7 +36,8 @@ depend on. The stack's `PublishClientConfig` action writes the resulting relay U
 
 ## T3CodeJP production
 
-Use a separate Clerk instance and fork-owned Cloudflare, PlanetScale, and Axiom resources. Add
+Use a separate Clerk instance and fork-owned Cloudflare and PlanetScale resources. Monitoring
+with Axiom is optional and disabled by default. Add
 the four public application settings above as GitHub **repository variables** for T3CodeJP.
 The Desktop, standalone CLI and hosted Web release jobs all read them there. Set the same values
 in the fork Expo project's production environment for mobile builds and OTA updates.
@@ -58,10 +59,18 @@ Clerk publishable key from the repository variable. Enable deployments by settin
 deploy `prod`. Dispatch **Deploy T3 Connect relay** on `main` after changing
 provider variables or credentials.
 
-The relay uses the fork's Axiom project for monitoring. Leave the APNs switch,
-FCM credentials, and T3 Chat link credential unset for an initial deployment without push
-notifications or T3 Chat linking. To enable APNs later, configure the fork's Apple credentials
+An initial fork deployment runs without Axiom credentials, push notifications, or T3 Chat linking:
+leave `T3CODEJP_RELAY_OBSERVABILITY_ENABLED`, `T3CODEJP_RELAY_APNS_ENABLED`, `FCM_SERVICE_ACCOUNT`,
+and `T3CHAT_LINK_SECRET` unset. To enable APNs later, configure the fork's Apple credentials
 and set `T3CODEJP_RELAY_APNS_ENABLED=true`.
+
+To enable Axiom monitoring and client trace exports later, set `T3CODEJP_RELAY_OBSERVABILITY_ENABLED=true`,
+configure `AXIOM_ORG_ID` and `AXIOM_TOKEN` for the relay deployment, and set
+`T3CODE_RELAY_CLIENT_OTLP_TRACES_URL`, `T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET`, and secret
+`T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN` for Desktop, CLI, and hosted Web release builds.
+For mobile builds, set `T3CODE_RELAY_OBSERVABILITY_ENABLED=true`, `T3CODE_MOBILE_OTLP_TRACES_URL`,
+`T3CODE_MOBILE_OTLP_TRACES_DATASET`, and `T3CODE_MOBILE_OTLP_TRACES_TOKEN` in the fork Expo
+environment.
 
 To move an existing environment, keep a direct pairing route to the host. While it still
 uses the old deployment, sign out of Connect on the host or run `t3 connect logout`

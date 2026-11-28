@@ -55,6 +55,16 @@ describe("reconcileEnvFile", () => {
   it("leaves a commented-out assignment alone", () => {
     expect(reconcileEnvFile("#A=old\n", { A: "new" })).toBe("#A=old\nA=new\n");
   });
+
+  it("removes existing assignments mapped to undefined", () => {
+    expect(
+      reconcileEnvFile(
+        'KEEP=yes\nREMOVE_ME=old\n  export REMOVE_ME = stale\nMULTILINE="one\ntwo"\nKEEP2=no\n',
+        { KEEP: "still-yes", REMOVE_ME: undefined, MULTILINE: undefined, MISSING: undefined },
+      ),
+    ).toBe("KEEP=still-yes\nKEEP2=no\n");
+    expect(reconcileEnvFile("REMOVE_ME=old\n", { REMOVE_ME: undefined })).toBe("");
+  });
 });
 
 const { test } = Test.make({
@@ -64,13 +74,15 @@ const { test } = Test.make({
 
 const clientConfig = (token: string) => ({
   url: "https://relay.example.com",
-  mobileTracingUrl: "https://axiom.example.com/v1/traces",
-  mobileTracingDataset: "relay-traces",
-  mobileTracingToken: Redacted.make(`mobile-${token}`),
-  clientTracingUrl: "https://axiom.example.com/v1/traces",
-  clientTracingDataset: "relay-traces",
-  clientTracingToken: Redacted.make(`client-${token}`),
-  tokenDigest: tokenDigest([Redacted.make(`mobile-${token}`), Redacted.make(`client-${token}`)]),
+  tracing: {
+    mobileTracingUrl: "https://axiom.example.com/v1/traces",
+    mobileTracingDataset: "relay-traces",
+    mobileTracingToken: Redacted.make(`mobile-${token}`),
+    clientTracingUrl: "https://axiom.example.com/v1/traces",
+    clientTracingDataset: "relay-traces",
+    clientTracingToken: Redacted.make(`client-${token}`),
+    tokenDigest: tokenDigest([Redacted.make(`mobile-${token}`), Redacted.make(`client-${token}`)]),
+  },
 });
 
 describe("PublishClientConfig", () => {
@@ -134,11 +146,15 @@ describe("PublishClientConfig", () => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-relay-client-config-" });
       const target = path.join(dir, "client.env");
+      const base = clientConfig("v1");
       const exit = yield* stack
         .deploy(
           PublishClientConfig({
-            ...clientConfig("v1"),
-            clientTracingDataset: "relay-traces\nINJECTED=1",
+            ...base,
+            tracing: {
+              ...base.tracing,
+              clientTracingDataset: "relay-traces\nINJECTED=1",
+            },
           }),
         )
         .pipe(
@@ -152,5 +168,33 @@ describe("PublishClientConfig", () => {
       expect(exit._tag).toBe("Failure");
       expect(yield* fs.exists(target)).toBe(false);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  test.provider(
+    "writes only the relay URL and clears stale tracing entries when tracing is omitted",
+    (stack) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-relay-client-config-" });
+        const target = path.join(dir, "client.env");
+        yield* fs.writeFileString(
+          target,
+          "KEEP=yes\nT3CODE_MOBILE_OTLP_TRACES_TOKEN=old-mobile\nT3CODE_RELAY_CLIENT_OTLP_TRACES_URL=https://old.invalid/traces\nT3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET=old-ds\nT3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=old-client\n",
+        );
+
+        yield* stack
+          .deploy(PublishClientConfig({ url: "https://relay.example.com" }))
+          .pipe(
+            Effect.provide(
+              ConfigProvider.layer(
+                ConfigProvider.fromUnknown({ T3CODE_RELAY_CLIENT_CONFIG_ENV: target }),
+              ),
+            ),
+          );
+
+        const updated = yield* fs.readFileString(target);
+        expect(updated).toBe("KEEP=yes\nT3CODE_RELAY_URL=https://relay.example.com\n");
+      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

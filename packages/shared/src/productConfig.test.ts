@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveProductConfig } from "./productConfig.ts";
+import { requireTelemetrySurface, resolveProductConfig } from "./productConfig.ts";
 
 const forkKey = `pk_live_${btoa("accounts.fork.example.test$")}`;
 const web = {
@@ -113,5 +113,78 @@ describe("resolveProductConfig", () => {
     ]) {
       expect(() => resolveProductConfig({ ...fork, ...settings })).toThrow();
     }
+  });
+
+  describe("telemetry", () => {
+    const traces = {
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://traces.fork.example.test/v1/traces",
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "client",
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "token",
+    };
+
+    it("is disabled unless explicitly enabled and ignores supplied values", () => {
+      expect(resolveProductConfig({ ...fork, ...connect, ...traces }).telemetry).toEqual({
+        kind: "disabled",
+      });
+      expect(
+        resolveProductConfig({
+          ...fork,
+          ...connect,
+          ...traces,
+          T3CODE_RELAY_OBSERVABILITY_ENABLED: "false",
+        }).telemetry,
+      ).toEqual({ kind: "disabled" });
+      expect(resolveProductConfig({}).telemetry.kind).toBe("unmanaged");
+    });
+
+    it("enables each configured surface and requires the surface a build ships", () => {
+      const { telemetry } = resolveProductConfig({
+        ...fork,
+        ...connect,
+        ...traces,
+        T3CODE_RELAY_OBSERVABILITY_ENABLED: "true",
+      });
+      expect(requireTelemetrySurface(telemetry, "relayClient")).toMatchObject({
+        tracesDataset: "client",
+      });
+      expect(() => requireTelemetrySurface(telemetry, "mobile")).toThrow(
+        "T3CODE_MOBILE_OTLP_TRACES_URL",
+      );
+    });
+
+    it.each([
+      [{ T3CODE_RELAY_OBSERVABILITY_ENABLED: "maybe" }, "true or false"],
+      [
+        {
+          T3CODE_RELAY_OBSERVABILITY_ENABLED: "true",
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: traces.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL,
+        },
+        "Missing fork tracing configuration",
+      ],
+      [
+        {
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "http://traces.fork.example.test/",
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "d",
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "t",
+        },
+        "non-upstream HTTPS",
+      ],
+      [
+        {
+          T3CODE_MOBILE_OTLP_TRACES_URL: "https://traces.t3.codes/",
+          T3CODE_MOBILE_OTLP_TRACES_DATASET: "d",
+          T3CODE_MOBILE_OTLP_TRACES_TOKEN: "t",
+        },
+        "non-upstream HTTPS",
+      ],
+    ])("rejects invalid monitoring settings %#", (settings, message) => {
+      expect(() => resolveProductConfig({ ...fork, ...connect, ...settings })).toThrow(message);
+    });
+
+    it("refuses monitoring without Connect", () => {
+      expect(() =>
+        resolveProductConfig({ ...fork, T3CODE_RELAY_OBSERVABILITY_ENABLED: "true", ...traces }),
+      ).toThrow("Configure fork Connect settings");
+    });
   });
 });

@@ -22,6 +22,8 @@ on:
         required: true
       T3CODEJP_WEB_VERCEL_PROJECT_ID:
         required: true
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -44,6 +46,7 @@ jobs:
       T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
       T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
       T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+      T3CODE_RELAY_OBSERVABILITY_ENABLED: ${{ vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true' && 'true' || 'false' }}
     steps:
       - name: Checkout deployment workflow
         shell: bash
@@ -65,10 +68,13 @@ jobs:
           T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
           T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
           T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ${{ vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ${{ vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN_CONFIGURED: ${{ secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN != '' }}
         with:
           script: |
-            const { resolveForkConnectConfig } = require('./scripts/lib/public-config.ts');
-            resolveForkConnectConfig(process.env);
+            const { resolveForkClientObservability } = require('./.github/scripts/fork-release-connect.cjs');
+            resolveForkClientObservability(process.env);
             const { planForkWebRelease } = require('./.github/scripts/fork-release-web.cjs');
             const plan = await planForkWebRelease({
               github,
@@ -116,6 +122,9 @@ jobs:
           T3CODE_WEB_ROUTER_URL: ${{ steps.release.outputs.routerUrl }}
           T3CODE_WEB_LATEST_DOMAIN: ${{ steps.release.outputs.latestDomain }}
           T3CODE_WEB_NIGHTLY_DOMAIN: ${{ steps.release.outputs.nightlyDomain }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ${{ vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true' && vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL || '' }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ${{ vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true' && vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET || '' }}
+          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ${{ vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true' && secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN || '' }}
           VERCEL_TOKEN: ${{ secrets.T3CODEJP_WEB_VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.T3CODEJP_WEB_VERCEL_PROJECT_ID }}

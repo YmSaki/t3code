@@ -37,7 +37,8 @@ jobs:
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
-      AXIOM_ORG_ID: ${{ vars.AXIOM_ORG_ID }}
+      RELAY_OBSERVABILITY_ENABLED: ${{ (github.repository == 'pingdotgg/t3code' || vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true') && 'true' || 'false' }}
+      AXIOM_ORG_ID: ${{ (github.repository == 'pingdotgg/t3code' || vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true') && vars.AXIOM_ORG_ID || '' }}
       RELAY_TUNNEL_CLEANUP_MODE: ${{ vars.RELAY_TUNNEL_CLEANUP_MODE }}
       RELAY_LEGACY_TUNNEL_CLEANUP_MODE: ${{ vars.RELAY_LEGACY_TUNNEL_CLEANUP_MODE }}
       RELAY_ALERT_NOTIFIER_ID: ${{ vars.RELAY_ALERT_NOTIFIER_ID }}
@@ -72,28 +73,14 @@ jobs:
           T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
           RELAY_API_ZONE_NAME: ${{ vars.RELAY_API_ZONE_NAME }}
           RELAY_TUNNEL_ZONE_NAME: ${{ vars.RELAY_TUNNEL_ZONE_NAME }}
+          AXIOM_TOKEN_CONFIGURED: ${{ secrets.AXIOM_TOKEN != '' }}
         with:
           script: |
-            const { resolveForkConnectConfig } = require('./scripts/lib/public-config.ts');
-            const config = resolveForkConnectConfig(process.env);
-            if (!config.relayUrl || !process.env.CLERK_JWT_AUDIENCE?.trim()) {
-              throw new Error('Configure the fork Connect client settings and Clerk JWT audience before deploying.');
-            }
-            const host = new URL(config.relayUrl).hostname;
-            const [apiZone, tunnelZone] = ['RELAY_API_ZONE_NAME', 'RELAY_TUNNEL_ZONE_NAME']
-              .map(name => process.env[name]?.trim().toLowerCase() ?? '');
-            for (const zone of [apiZone, tunnelZone]) {
-              if (!/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(zone) ||
-                  zone === 't3.codes' || zone.endsWith('.t3.codes')) {
-                throw new Error('Set both relay DNS zones to fork-owned Cloudflare zones.');
-              }
-            }
-            if (config.relayUrl !== `https://${host}` || (host !== apiZone && !host.endsWith(`.${apiZone}`))) {
-              throw new Error('The fork relay origin must use standard HTTPS on a hostname in the relay API zone.');
-            }
-            core.setOutput('domain', host);
-            core.setOutput('apiZone', apiZone);
-            core.setOutput('tunnelZone', tunnelZone);
+            const { resolveForkRelayDeployConfig } = require('./.github/scripts/fork-release-connect.cjs');
+            const config = resolveForkRelayDeployConfig(process.env);
+            core.setOutput('domain', config.domain);
+            core.setOutput('apiZone', config.apiZone);
+            core.setOutput('tunnelZone', config.tunnelZone);
             core.setOutput('clerkPublishableKey', config.clerkPublishableKey);
 
       - name: Setup Vite+
@@ -118,7 +105,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           PLANETSCALE_API_TOKEN_ID: ${{ secrets.PLANETSCALE_API_TOKEN_ID }}
           PLANETSCALE_API_TOKEN: ${{ secrets.PLANETSCALE_API_TOKEN }}
-          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          AXIOM_TOKEN: ${{ (github.repository == 'pingdotgg/t3code' || vars.T3CODEJP_RELAY_OBSERVABILITY_ENABLED == 'true') && secrets.AXIOM_TOKEN || '' }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
           FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}

@@ -24,6 +24,12 @@ on:
       validate_update:
         default: false
         type: boolean
+      relay_observability_enabled:
+        default: false
+        type: boolean
+    secrets:
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -47,9 +53,10 @@ jobs:
       T3CODE_WEB_ROUTER_URL: ${{ !inputs.validate_update && vars.T3CODE_WEB_ROUTER_URL || '' }}
       T3CODE_WEB_LATEST_DOMAIN: ${{ !inputs.validate_update && vars.T3CODE_WEB_LATEST_DOMAIN || '' }}
       T3CODE_WEB_NIGHTLY_DOMAIN: ${{ !inputs.validate_update && vars.T3CODE_WEB_NIGHTLY_DOMAIN || '' }}
-      T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ""
-      T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ""
-      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ""
+      T3CODE_RELAY_OBSERVABILITY_ENABLED: ${{ !inputs.validate_update && inputs.relay_observability_enabled && 'true' || 'false' }}
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: ${{ !inputs.validate_update && inputs.relay_observability_enabled && vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_URL || '' }}
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: ${{ !inputs.validate_update && inputs.relay_observability_enabled && vars.T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET || '' }}
+      T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: ${{ !inputs.validate_update && inputs.relay_observability_enabled && secrets.T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN || '' }}
       VITE_RELAY_OTLP_TRACES_URL: ""
       VITE_RELAY_OTLP_TRACES_DATASET: ""
       VITE_RELAY_OTLP_TRACES_TOKEN: ""

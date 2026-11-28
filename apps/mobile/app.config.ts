@@ -1,6 +1,9 @@
 import type { ExpoConfig } from "expo/config";
 
-import { resolveProductConfig } from "../../packages/shared/src/productConfig.ts";
+import {
+  requireTelemetrySurface,
+  resolveProductConfig,
+} from "../../packages/shared/src/productConfig.ts";
 import {
   DESKTOP_APP_ID,
   PRODUCT_NAME,
@@ -11,7 +14,7 @@ import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 type AppVariant = "development" | "preview" | "production";
 
-const repoEnv = loadRepoEnv();
+const repoEnv = loadRepoEnv({ surface: "mobile" });
 Object.assign(process.env, repoEnv);
 // Expo's TypeScript setup otherwise installs `typescript` on every start; we typecheck with tsrs.
 process.env.EXPO_NO_TYPESCRIPT_SETUP = "1";
@@ -19,6 +22,7 @@ process.env.EXPO_NO_TYPESCRIPT_SETUP = "1";
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const product = resolveProductConfig(repoEnv);
 const release = { ...product.mobile, fork: product.distribution === "fork" };
+requireTelemetrySurface(product.telemetry, "mobile");
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
@@ -29,9 +33,11 @@ const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 // Compiled into the native project. Without a relay, Observe's native side could dispatch to
 // Expo's own ingest before observe.ts turns it off; `.invalid` never resolves (RFC 6761).
-const observeEndpointUrl = repoEnv.T3CODE_RELAY_URL?.trim()
-  ? new URL("/v1/mobile/observe", repoEnv.T3CODE_RELAY_URL.trim()).toString()
-  : "https://observe.invalid";
+const observeEnabled = product.telemetry.kind !== "disabled";
+const observeEndpointUrl =
+  observeEnabled && repoEnv.T3CODE_RELAY_URL?.trim()
+    ? new URL("/v1/mobile/observe", repoEnv.T3CODE_RELAY_URL.trim()).toString()
+    : "https://observe.invalid";
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
 const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
@@ -512,9 +518,11 @@ const config: ExpoConfig = {
     EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
     EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
     observability: {
-      tracesUrl: repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL ?? "https://api.axiom.co/v1/traces",
-      tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
-      tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
+      tracesUrl: release.fork
+        ? repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL?.trim() || null
+        : repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL?.trim() || "https://api.axiom.co/v1/traces",
+      tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET?.trim() || null,
+      tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN?.trim() || null,
     },
     eas: {
       ...(release.projectId ? { projectId: release.projectId } : {}),

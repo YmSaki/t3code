@@ -379,4 +379,32 @@ describe("MobileTelemetry", () => {
       expect(secondSawFirstDone).toBe(true);
     }),
   );
+
+  it.effect("returns 503 mobile_telemetry_disabled without outbound calls when disabled", () =>
+    Effect.gen(function* () {
+      const sent: Array<HttpClientRequest.HttpClientRequest> = [];
+      const httpEffect = HttpRouter.toHttpEffect(
+        HttpApiBuilder.layer(HttpApi.make("RelayApi").add(RelayApi.groups.mobileTelemetry)).pipe(
+          Layer.provide(
+            MobileTelemetry.layerApi.pipe(Layer.provide(MobileTelemetry.layerDisabled)),
+          ),
+          Layer.provide([NodeServices.layer, NodeHttpPlatform.layer, Etag.layerWeak]),
+        ),
+      ).pipe(Effect.provideService(HttpRouter.RouterConfig, RELAY_HTTP_ROUTER_CONFIG));
+
+      const handler = yield* httpEffect;
+      const deferred = yield* Deferred.make<HttpServerResponse.HttpServerResponse>();
+      yield* HttpEffect.toHandled(handler, (_request, value) =>
+        Deferred.succeed(deferred, value),
+      ).pipe(
+        Effect.provideService(
+          HttpServerRequest.HttpServerRequest,
+          HttpServerRequest.fromWeb(ingest("logs", "{}")),
+        ),
+      );
+      const response = yield* Deferred.await(deferred);
+      expect(response.status).toBe(503);
+      expect(sent).toEqual([]);
+    }),
+  );
 });

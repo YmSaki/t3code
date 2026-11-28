@@ -6,6 +6,7 @@ import * as Axiom from "@alchemy.run/axiom";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Output from "alchemy/Output";
 import * as Cause from "effect/Cause";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
@@ -16,6 +17,11 @@ import * as Tracer from "effect/Tracer";
 import { relayResourceNameForStage } from "./deploymentConfig.ts";
 import { MobileMonitoring } from "./mobileTelemetry/monitoring.ts";
 import { RelayMonitoring } from "./monitoring.ts";
+import { RelayDeploymentConfig } from "./zone.ts";
+
+export const relayObservabilityEnabledConfig = Config.Boolean("RELAY_OBSERVABILITY_ENABLED").pipe(
+  Config.withDefault(true),
+);
 
 const relayRecentSpansQuery = (dataset: string) =>
   [
@@ -29,7 +35,11 @@ const relayRecentSpansQuery = (dataset: string) =>
   ].join("\n");
 
 export const RelayObservability = Effect.gen(function* () {
+  if (!(yield* relayObservabilityEnabledConfig)) {
+    return Option.none();
+  }
   const { stage } = yield* Alchemy.Stack;
+  const { relayPublicOrigin } = yield* RelayDeploymentConfig;
   const traces = yield* Axiom.Dataset("RelayTracesDataset", {
     name: relayResourceNameForStage("t3-code-relay-traces", stage),
     kind: "otel:traces:v1",
@@ -100,10 +110,10 @@ export const RelayObservability = Effect.gen(function* () {
     aplQuery: Output.map(traces.name, relayRecentSpansQuery),
   });
 
-  yield* RelayMonitoring(traces);
+  yield* RelayMonitoring(traces, relayPublicOrigin);
   yield* MobileMonitoring(mobileLogs, traces);
 
-  return {
+  return Option.some({
     traces,
     workerIngestToken,
     mobileIngestToken,
@@ -112,7 +122,7 @@ export const RelayObservability = Effect.gen(function* () {
     mobileMetrics,
     mobileTelemetryIngestToken,
     mobileSourceMaps,
-  } as const;
+  } as const);
 });
 
 const mobileSourceMapsBucketName = (stage: string) =>
