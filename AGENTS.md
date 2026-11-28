@@ -40,12 +40,57 @@ The rest of this document is meant to help you navigate the codebase and make ch
 
 Of note: Most T3 Code contributions will come from T3 Code itself, often controlled remotely. This means you should be careful about accessing data, killing dev servers, and other things that may damage the T3 Code instance that the contributor is using.
 
+## T3CodeJP governance (Hard rules)
+
+H1–H6 are hard rules for this fork. The earlier "good defaults" paragraph does not weaken them. They take precedence over conflicting repository defaults, including "One request is one PR"; non-conflicting instructions still apply. Do not infer permission to split work, create PRs, or publish comments.
+
+### Hard rules
+
+- **H1. Single owner per fact.** Every domain concept, durable state, and configuration fact has one authoritative owner; never re-decide or re-interpret it in another layer.
+- **H2. Preserve architectural boundaries.** Pure decisions belong in core, I/O in shell, external differences in adapters; transports stay thin and hold no domain logic.
+- **H3. Centralize configuration resolution.** Read, validate, and resolve precedence once at the startup or build boundary; pass typed values inward and never scatter env reads or ad-hoc fallbacks.
+- **H4. Fail closed across trust boundaries.** Missing required configuration, invalid values, or unsupported combinations must reject the operation rather than silently switching to another product, environment, or unsigned mode.
+- **H5. Pass the Design Gate before gated edits.** Never invent undecided requirements, specifications, or design decisions during implementation; gated changes require agreed design artifacts before edits, reusing existing agreement while its scope and assumptions hold.
+- **H6. Cohesive PRs with invariant proof.** Scope each PR to one cohesive, independently reviewable outcome and prove its affected paths and invariants at the lowest layer that fails (including integration tests for cross-component invariants).
+
+### Design Gate
+
+Apply the gate when a change would:
+
+- Introduce or move domain responsibility or a Core/Shell/Adapter boundary.
+- Change authoritative data ownership, lifecycle, or resolution precedence.
+- Change authorization, secret handling, or product/environment isolation.
+- Change external-integration contracts or release/deployment trust boundaries.
+- Change client/server contracts or compatibility guarantees.
+- Proceed while requirements, product specifications, or material design decisions remain undecided.
+
+Before implementing a gated design, agree on the design artifacts required by [Engineering process](docs/internals/engineering-process.md), including explicit stage decisions for large cross-cutting changes. Use an existing issue or PR when available; explicit agreement in the active conversation also counts. Any necessary PR split must be explicitly included in that agreement. Read-only investigation may continue while gated implementation waits.
+
+### Required reading
+
+Before designing, implementing, or reviewing code changes, read all four foundational documents. Read them before classifying the task for the Design Gate or deciding its scope; perceived local relevance is not a reason to skip them.
+
+- [Design principles](docs/internals/design-principles.md): Design philosophy, trade-offs, and principles.
+- [Engineering process](docs/internals/engineering-process.md): Staged design process and Design Gate workflow.
+- [Domain model](docs/internals/domain-model.md): Domain concepts, relationships, and modeling rules.
+- [Overview](docs/internals/overview.md): Architecture, package dependencies, and durable state.
+
+In addition, read the following documents when the task meets the stated conditions; these are requirements, not optional suggestions:
+
+- Product identity, releases, configuration, secrets, or fork isolation: [Product configuration](docs/internals/product-configuration.md).
+- Domain logic, pure decisions, or I/O boundaries: [Functional core](docs/internals/functional-core-shell.md).
+- Services, side effects, or transport boundaries: [Effect services](docs/internals/effect-services.md).
+- Behavior changes, tests, or verification: [Testing](docs/internals/testing.md).
+- Design or code review: [Review](docs/internals/review.md).
+
+Keep hard-rule definitions here; linked documents explain their application.
+
 ## A small glossary
 
 We need to be on the same page with terminology. When communicating, use this language:
 
 - **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean Theo, Julius and the people building T3 Code. These are who you are talking to now.
+- **we, us, and maintainers** mean YmSaki and r-fallingstar, the maintainers of T3CodeJP. Design and hard-rule exception approvals belong to these fork maintainers. The separate requirement for YmSaki's approval before merging into `main` still applies.
 - **user** means the person using T3 Code to direct coding agents.
 - **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
 - **provider** means the agent runtime or harness T3 Code talks to, such as Codex, Claude, Cursor, or OpenCode.

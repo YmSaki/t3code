@@ -1,4 +1,4 @@
-import { utf8ByteLength } from "./workerBrief.core.ts";
+import { utf8ByteLength } from "./String.ts";
 
 const TOOL_OUTPUT_MAX_LINES = 80;
 const TOOL_OUTPUT_MAX_BYTES = 8_000;

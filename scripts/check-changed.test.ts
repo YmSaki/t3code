@@ -49,6 +49,13 @@ describe("check:changed", () => {
     assert.deepStrictEqual(decide(["docs/user/install.md"], packages, false).affected, []);
   });
 
+  it("runs the desktop tests that drive the compile cache afterPack hook", () => {
+    assert.include(
+      decide(["scripts/prepare-server-compile-cache.cjs"], readWorkspace(), false).affected,
+      "@t3tools/desktop",
+    );
+  });
+
   it.effect(
     "keeps weighted steps within the budget, in order, and serial steps one at a time",
     () =>

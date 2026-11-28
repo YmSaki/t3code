@@ -6,6 +6,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { BellIcon, BellRingIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,8 +17,11 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import {
   detectIosSafariPwaState,
   getWebPushSupportStatus,
+  pushSubscriptionApplicationServerKey,
   sendLocalTestPushNotification,
   subscribeBrowserPush,
+  vapidPublicKeysMatch,
+  WebPushVapidKeyMismatchError,
   webPushEnvironment,
 } from "~/state/webPush";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
@@ -28,6 +32,8 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
+
+const isWebPushVapidKeyMismatchError = Schema.is(WebPushVapidKeyMismatchError);
 
 export function WebPushSettingsSection({
   environmentId,
@@ -57,9 +63,15 @@ export function WebPushSettingsSection({
   const [iosStatus] = useState(() => detectIosSafariPwaState());
   const [supportStatus, setSupportStatus] = useState(() => getWebPushSupportStatus());
   const [deviceLabel, setDeviceLabel] = useState("");
-  const [subscribedEndpoint, setSubscribedEndpoint] = useState<string | null>();
+  const [browserSubscription, setBrowserSubscription] = useState<{
+    readonly endpoint: string;
+    readonly vapidPublicKey: string | null;
+  } | null>();
   const [busy, setBusy] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<{
+    readonly environmentId: EnvironmentId;
+    readonly message: string;
+  } | null>(null);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- hydrates existing browser PushSubscription from ServiceWorker PushManager on mount
   useEffect(() => {
@@ -70,10 +82,17 @@ export function WebPushSettingsSection({
         const registration = await navigator.serviceWorker.getRegistration("/");
         const existing = await registration?.pushManager.getSubscription();
         if (!cancelled) {
-          setSubscribedEndpoint(existing?.endpoint ?? null);
+          setBrowserSubscription(
+            existing
+              ? {
+                  endpoint: existing.endpoint,
+                  vapidPublicKey: pushSubscriptionApplicationServerKey(existing),
+                }
+              : null,
+          );
         }
       } catch {
-        if (!cancelled) setSubscribedEndpoint(null);
+        if (!cancelled) setBrowserSubscription(null);
       }
     })();
     return () => {
@@ -81,47 +100,63 @@ export function WebPushSettingsSection({
     };
   }, [supportStatus.supported]);
 
-  const isSubscribed = subscriptions.some(
-    (sub) => sub.endpoint === subscribedEndpoint && sub.enabled,
-  );
-  const error = statusError ?? subscriptionsQuery.error;
+  const vapidKey = vapidQuery.data?.publicKey ?? null;
+  const matchesEnvironmentKey =
+    browserSubscription != null &&
+    vapidKey !== null &&
+    browserSubscription.vapidPublicKey !== null &&
+    vapidPublicKeysMatch(browserSubscription.vapidPublicKey, vapidKey);
+  const isSubscribed =
+    matchesEnvironmentKey &&
+    subscriptions.some((sub) => sub.endpoint === browserSubscription.endpoint && sub.enabled);
+  const error =
+    (statusError?.environmentId === environmentId ? statusError.message : null) ??
+    subscriptionsQuery.error;
 
   const handleSubscribeToggle = async (nextChecked: boolean) => {
     setStatusError(null);
     if (!nextChecked) {
-      if (!subscribedEndpoint) return;
+      if (!browserSubscription) return;
       setBusy(true);
       // The browser subscription can also be registered with other environments.
       const rpcResult = await unsubscribeRpc({
         environmentId,
-        input: { endpoint: subscribedEndpoint },
+        input: { endpoint: browserSubscription.endpoint },
       });
       if (rpcResult._tag === "Failure" && !isAtomCommandInterrupted(rpcResult)) {
         const error = squashAtomCommandFailure(rpcResult);
-        setStatusError(
-          error instanceof Error
-            ? (thrownErrorMessage(error, m) ?? error.message)
-            : m(msg("Could not unsubscribe from Web Push.")),
-        );
+        setStatusError({
+          environmentId,
+          message:
+            error instanceof Error
+              ? (thrownErrorMessage(error, m) ?? error.message)
+              : m(msg("Could not unsubscribe from Web Push.")),
+        });
       }
       setBusy(false);
       return;
     }
 
-    const vapidKey = vapidQuery.data?.publicKey;
     if (!vapidKey) {
-      setStatusError(gt("VAPID public key is not available from this server yet."));
+      setStatusError({
+        environmentId,
+        message: gt("VAPID public key is not available from this server yet."),
+      });
       return;
     }
 
     setBusy(true);
     const pushResult = await settlePromise(() => subscribeBrowserPush(vapidKey));
     if (pushResult._tag === "Failure") {
-      setStatusError(
-        pushResult.cause instanceof Error
-          ? pushResult.cause.message
-          : gt("Could not enable browser push notifications."),
-      );
+      const pushError = squashAtomCommandFailure(pushResult);
+      const message = isWebPushVapidKeyMismatchError(pushError)
+        ? gt(
+            "This browser already has a Web Push subscription for another environment with a different VAPID key. Enabling it here would replace that subscription and stop its notifications.",
+          )
+        : pushError instanceof Error
+          ? pushError.message
+          : gt("Could not enable browser push notifications.");
+      setStatusError({ environmentId, message });
       setSupportStatus(getWebPushSupportStatus());
       setBusy(false);
       return;
@@ -143,16 +178,21 @@ export function WebPushSettingsSection({
     if (rpcResult._tag === "Failure") {
       if (!isAtomCommandInterrupted(rpcResult)) {
         const error = squashAtomCommandFailure(rpcResult);
-        setStatusError(
-          error instanceof Error
-            ? (thrownErrorMessage(error, m) ?? error.message)
-            : m(msg("Could not register Web Push subscription on the server.")),
-        );
+        setStatusError({
+          environmentId,
+          message:
+            error instanceof Error
+              ? (thrownErrorMessage(error, m) ?? error.message)
+              : m(msg("Could not register Web Push subscription on the server.")),
+        });
       }
       return;
     }
 
-    setSubscribedEndpoint(pushResult.value.endpoint);
+    setBrowserSubscription({
+      endpoint: pushResult.value.endpoint,
+      vapidPublicKey: vapidKey,
+    });
     toastManager.add(
       stackedThreadToast({
         type: "success",
@@ -174,11 +214,14 @@ export function WebPushSettingsSection({
     setBusy(false);
 
     if (testResult._tag === "Failure") {
-      setStatusError(
-        testResult.cause instanceof Error
-          ? testResult.cause.message
-          : gt("Could not display a test notification."),
-      );
+      const testError = squashAtomCommandFailure(testResult);
+      setStatusError({
+        environmentId,
+        message:
+          testError instanceof Error
+            ? testError.message
+            : gt("Could not display a test notification."),
+      });
       return;
     }
     toastManager.add(
@@ -230,7 +273,7 @@ export function WebPushSettingsSection({
               busy ||
               !canManage ||
               !supportStatus.supported ||
-              subscribedEndpoint === undefined ||
+              browserSubscription === undefined ||
               vapidQuery.data === null ||
               !subscriptionsQuery.isSuccess ||
               subscriptionsQuery.isPending
